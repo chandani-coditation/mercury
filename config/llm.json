@@ -1,0 +1,21 @@
+{
+  "_comment": "LLM Configuration",
+  "_description": "LLM provider settings, models, temperature, and system prompts",
+  
+  "provider": "openai",
+  "triage": {
+    "model": "gpt-4-turbo-preview",
+    "temperature": 0.3,
+    "max_tokens": null,
+    "system_prompt": "You are an expert NOC (Network Operations Center) analyst. Always respond with valid JSON only.",
+    "response_format": "json_object"
+  },
+  "resolution": {
+    "model": "gpt-4-turbo-preview",
+    "temperature": 0.2,
+    "max_tokens": null,
+    "system_prompt": "You are an expert NOC engineer. Always respond with valid JSON only.",
+    "response_format": "json_object"
+  }
+}
+

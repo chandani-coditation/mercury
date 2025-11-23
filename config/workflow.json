@@ -1,0 +1,9 @@
+{
+  "_comment": "Workflow Configuration",
+  "_description": "Workflow behavior settings (feedback timing, policy evaluation, etc.)",
+  
+  "feedback_before_policy": false,
+  "feedback_timeout_secs": 0,
+  "resolution_requires_approval": false
+}
+

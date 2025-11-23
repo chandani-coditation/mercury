@@ -1,0 +1,43 @@
+{
+  "_comment": "Guardrails Configuration",
+  "_description": "Validation rules and constraints for triage and resolution outputs",
+  
+  "triage": {
+    "required_fields": ["severity", "category", "confidence", "summary", "likely_cause", "affected_services", "recommended_actions"],
+    "severity_values": ["low", "medium", "high", "critical"],
+    "category_values": ["database", "network", "application", "infrastructure", "security", "other"],
+    "confidence_range": [0.0, 1.0],
+    "max_summary_length": 500,
+    "max_likely_cause_length": 300,
+    "max_affected_services": 50,
+    "max_recommended_actions": 50
+  },
+  "resolution": {
+    "required_fields": ["resolution_steps", "estimated_time_minutes", "risk_level", "requires_approval"],
+    "risk_level_values": ["low", "medium", "high"],
+    "min_estimated_time_minutes": 1,
+    "max_estimated_time_minutes": 1440,
+    "min_resolution_steps": 1,
+    "max_resolution_steps": 20,
+    "dangerous_commands": [
+      "rm -rf",
+      "dd if=",
+      "mkfs",
+      "fdisk",
+      "format",
+      "drop database",
+      "truncate table",
+      "delete from",
+      "kill -9"
+    ],
+    "destructive_patterns": [
+      "\\b(drop|delete|truncate|format|rm|remove)\\b",
+      "\\b(kill|terminate|shutdown)\\b",
+      "\\b(clear|purge|wipe)\\b"
+    ],
+    "require_rollback_for_risk_levels": ["high", "critical"],
+    "max_commands": 10,
+    "max_rollback_steps": 10
+  }
+}
+

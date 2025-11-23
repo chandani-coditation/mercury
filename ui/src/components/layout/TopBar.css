@@ -1,0 +1,54 @@
+.filter-select {
+  background: var(--color-surface);
+  border: 1px solid var(--color-panel-border);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 1rem;
+  min-width: 160px;
+  font-size: 0.9rem;
+  transition: border-color 0.15s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.filter-select option {
+  color: #111;
+}
+
+.topbar-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.workspace-tabs {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-1);
+  gap: var(--spacing-1);
+}
+
+.workspace-tab {
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.workspace-tab.active {
+  background: var(--color-panel);
+  color: var(--color-text);
+  border: 1px solid var(--color-primary);
+}
+

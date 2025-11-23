@@ -1,0 +1,45 @@
+{
+  "_comment": "Policy Gate Configuration",
+  "_description": "Defines policy bands (AUTO/PROPOSE/REVIEW) and their conditions/actions",
+  
+  "bands": {
+    "AUTO": {
+      "conditions": [
+        {"severity": ["low"]},
+        {"confidence": "> 0.9"}
+      ],
+      "actions": {
+        "can_auto_apply": true,
+        "requires_approval": false,
+        "notification_required": false,
+        "rollback_required": false
+      }
+    },
+    "PROPOSE": {
+      "conditions": [
+        {"severity": ["medium", "high"]},
+        {"confidence": ">= 0.7"}
+      ],
+      "actions": {
+        "can_auto_apply": false,
+        "requires_approval": true,
+        "notification_required": false,
+        "rollback_required": false
+      }
+    },
+    "REVIEW": {
+      "conditions": [
+        {"severity": ["critical"]},
+        {"confidence": "< 0.7"}
+      ],
+      "actions": {
+        "can_auto_apply": false,
+        "requires_approval": true,
+        "notification_required": true,
+        "rollback_required": true
+      }
+    }
+  },
+  "evaluation_order": ["AUTO", "PROPOSE", "REVIEW"]
+}
+

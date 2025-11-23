@@ -1,0 +1,21 @@
+{
+  "_comment": "Retrieval Configuration",
+  "_description": "Hybrid search settings for context retrieval (vector + full-text search)",
+  
+  "triage": {
+    "method": "hybrid_search",
+    "limit": 5,
+    "vector_weight": 0.7,
+    "fulltext_weight": 0.3,
+    "filters": ["service", "component"]
+  },
+  "resolution": {
+    "method": "hybrid_search",
+    "limit": 10,
+    "vector_weight": 0.6,
+    "fulltext_weight": 0.4,
+    "filters": ["service", "component"],
+    "prefer_types": ["runbook", "past_incident", "sop"]
+  }
+}
+

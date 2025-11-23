@@ -1,0 +1,40 @@
+{
+  "_comment": "Schema Definitions",
+  "_description": "Data schema definitions for historical data inputs and alert metadata",
+  
+  "historical_data_inputs": {
+    "alerts": {
+      "description": "Historical alerts for pattern learning",
+      "supported_formats": ["JSON (structured)", "Prometheus alert format"],
+      "fields": ["alert_id", "source", "title", "description", "labels", "severity", "ts", "resolution_status", "resolution_notes"]
+    },
+    "incidents": {
+      "description": "Past incident reports with resolutions",
+      "supported_formats": ["JSON (structured)", "Free-text incident reports"],
+      "fields": ["incident_id", "alert_id", "title", "description", "severity", "category", "resolution_steps", "root_cause", "affected_services", "timestamp"]
+    },
+    "runbooks": {
+      "description": "Standard operating procedures and runbooks",
+      "supported_formats": ["Structured JSON", "Markdown", "Plain text"],
+      "fields": ["title", "service", "component", "steps", "prerequisites", "rollback_procedures"]
+    },
+    "logs": {
+      "description": "Relevant log snippets and error logs",
+      "supported_formats": ["Plain text logs", "JSON logs", "Structured log formats (syslog, etc.)"],
+      "fields": ["timestamp", "level", "message", "service", "component", "context"]
+    }
+  },
+  
+  "alert_metadata": {
+    "required_fields": ["alert_id", "source", "title", "description", "ts"],
+    "optional_fields": ["labels", "severity", "tags", "annotations"],
+    "labels_structure": {
+      "service": "string",
+      "component": "string",
+      "environment": "string",
+      "severity": "string",
+      "alertname": "string"
+    }
+  }
+}
+
