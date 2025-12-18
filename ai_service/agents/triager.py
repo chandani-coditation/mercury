@@ -125,7 +125,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     vector_weight = retrieval_cfg.get("vector_weight", 0.7)
     fulltext_weight = retrieval_cfg.get("fulltext_weight", 0.3)
     
-    # Retrieve context
+    # Retrieve context (primary pass: service/component filtered, all doc types, runbook-preferred via config)
     context_chunks = hybrid_search(
         query_text=query_text,
         service=service_val,
@@ -161,7 +161,48 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"InfluxDB log retrieval not available or failed: {str(e)}")
     
-    logger.debug(f"Retrieved {len(context_chunks)} context chunks for triage")
+    logger.debug(f"Retrieved {len(context_chunks)} context chunks for triage (primary search)")
+    
+    # If no context found, attempt a broader runbook-focused fallback search before giving up
+    # This ensures we still try to propose a resolution grounded in runbooks when possible.
+    fallback_used = False
+    if not context_chunks:
+        logger.info(
+            "No context found in primary triage search; attempting runbook-focused fallback search "
+            "with relaxed service/component filters."
+        )
+        try:
+            # Broaden search by dropping service/component filters, but keep query text the same.
+            fallback_chunks = hybrid_search(
+                query_text=query_text,
+                service=None,
+                component=None,
+                limit=retrieval_limit * 2,
+                vector_weight=vector_weight,
+                fulltext_weight=fulltext_weight
+            )
+            # Re-apply retrieval preferences (runbooks will be preferred if configured)
+            fallback_chunks = apply_retrieval_preferences(fallback_chunks, retrieval_cfg)
+            # Keep only runbook chunks for this fallback; incidents/logs are still useful but
+            # runbooks are the primary source of resolution steps.
+            runbook_chunks = [
+                ch for ch in fallback_chunks
+                if (ch.get("doc_type") or (ch.get("metadata") or {}).get("doc_type")) == "runbook"
+            ]
+            if runbook_chunks:
+                context_chunks = runbook_chunks
+                fallback_used = True
+                logger.info(
+                    f"Runbook-focused fallback search succeeded; using {len(context_chunks)} "
+                    "runbook chunk(s) as context for triage."
+                )
+            else:
+                logger.info(
+                    "Runbook-focused fallback search did not find any matching runbooks; "
+                    "proceeding with empty context and generic REVIEW."
+                )
+        except Exception as e:
+            logger.warning(f"Runbook-focused fallback search failed: {e}")
     
     # Check if we have evidence - allow REVIEW fallback when missing
     evidence_warning = None
@@ -194,7 +235,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 "Proceeding with REVIEW and confidence=0.0. Please align service/component metadata or ingest matching data."
             )
 
-    # If we have context, go through normal LLM path
+    # If we have context (primary or runbook-fallback), go through normal LLM path
     if not context_missing:
         logger.info(f"Context validation passed: {len(context_chunks)} chunks retrieved for triage")
 
@@ -219,9 +260,24 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             policy_band = "PENDING"
             logger.info("Policy evaluation deferred until feedback received")
         else:
-            policy_decision = get_policy_from_config(triage_output)
-            policy_band = policy_decision.get("policy_band", "REVIEW")
-            logger.info(f"Policy decision: {policy_band}")
+            # If we had to rely on the runbook-only fallback context, force REVIEW band and approval
+            # even if policy.json would otherwise allow AUTO/PROPOSE. This keeps fallback-driven
+            # resolutions under human-in-the-loop control.
+            if fallback_used:
+                policy_decision = {
+                    "policy_band": "REVIEW",
+                    "can_auto_apply": False,
+                    "requires_approval": True,
+                    "notification_required": False,
+                    "rollback_required": False,
+                    "policy_reason": "Runbook-only fallback context used; manual review required."
+                }
+                policy_band = "REVIEW"
+                logger.info("Policy decision overridden to REVIEW due to runbook-only fallback context")
+            else:
+                policy_decision = get_policy_from_config(triage_output)
+                policy_band = policy_decision.get("policy_band", "REVIEW")
+                logger.info(f"Policy decision: {policy_band}")
 
         triage_evidence = format_evidence_chunks(
             context_chunks,

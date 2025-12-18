@@ -36,6 +36,7 @@ IMPORTANT CONSTRAINTS:
 
 CRITICAL CONSTRAINTS:
 - You MUST base your response ONLY on the context provided above. 
+- If runbooks are present in the context, you MUST derive recommended_actions primarily from the runbook steps and commands (and you MAY cross-check with historical incidents/logs for validation).
 - If no context is provided (context_text is empty), you MUST set confidence to 0.0 and indicate in the summary that no historical evidence was found.
 - Do NOT use general knowledge, training data, or external information. Only use the specific ServiceNow tickets, runbooks, and logs provided in the context.
 - If the context does not contain relevant information for routing, affected_services, or recommended_actions, indicate this clearly in your response.

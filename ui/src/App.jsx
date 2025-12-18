@@ -1,22 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { postTriage, getIncident, putFeedback, postResolution } from "./api/client";
 
 const allowedCategories = ["database", "network", "application", "infrastructure", "security", "other"];
 
 const emptyLabels = {
-  service: "database",
-  component: "sql-server",
+  service: "Database",
+  component: "Alerts",
   cmdb_ci: "Database-SQL",
   category: "database",
 };
 
+// Initial dummy alert matching tests/sample_alerts_for_ui.json (lines 2–14)
 const makeInitialAlert = () => ({
-  alert_id: "test-alert-001",
-  title: "Database connection pool exhausted",
-  description: "Application unable to connect to database. Error: connection pool exhausted.",
-  source: "monitoring",
+  alert_id: "sample-match-1",
+  title: "MATCHES_KB__Database_Alerts_High_Disk",
+  description:
+    "Database disk usage on primary SQL server has exceeded 90% for the last 20 minutes. Multiple I/O wait alerts observed on the database volume.",
+  source: "prometheus",
   category: emptyLabels.category,
-  labels: { ...emptyLabels },
+  labels: {
+    ...emptyLabels,
+    environment: "production",
+    severity: "high",
+    alertname: "DatabaseDiskUsageHigh",
+  },
   ts: new Date().toISOString(),
 });
 
@@ -38,11 +45,9 @@ function App() {
   const [policyStatus, setPolicyStatus] = useState("idle");
   const [resolutionStatus, setResolutionStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [polling, setPolling] = useState(false);
   const [sideOpen, setSideOpen] = useState(true);
   const [resultTab, setResultTab] = useState("triage");
   const hasResults = triage || policy || retrieval || resolution;
-  const autoOpened = useRef(false);
 
   const needsApproval = useMemo(() => {
     const band = policy?.policy_band || policy?.policy?.policy_band || triage?.policy_band;
@@ -52,31 +57,15 @@ function App() {
     return band === "PROPOSE" || band === "REVIEW" || requiresApproval === true || canAutoApply === false;
   }, [policy, triage]);
 
-  // Poll incident status when enabled
+  // Auto-open results drawer the first time new results arrive (triage/policy/retrieval/resolution),
+  // but still respect manual user toggling afterwards.
   useEffect(() => {
-    if (!incidentId || !polling) return;
-    const id = setInterval(() => {
-      getIncident(incidentId)
-        .then((data) => {
-          setTriage(data.triage_output || triage);
-          setPolicy({ policy_band: data.policy_band, policy_decision: data.policy_decision });
-        })
-        .catch((err) => setError(err.message || String(err)));
-    }, 5000);
-    return () => clearInterval(id);
-  }, [incidentId, polling, triage]);
-
-  // Auto-open results drawer when new data arrives
-  useEffect(() => {
-    if (hasResults && !autoOpened.current) {
+    if (triage || policy || retrieval || resolution) {
       setSideOpen(true);
-      autoOpened.current = true;
-    }
-    if (!hasResults) {
+    } else {
       setSideOpen(false);
-      autoOpened.current = false;
     }
-  }, [hasResults]);
+  }, [triage, policy, retrieval, resolution]);
 
   // Pick the first available tab when results change
   useEffect(() => {
@@ -128,12 +117,10 @@ function App() {
       setRetrieval(data.evidence_chunks);
       setTriageStatus("success");
       setPolicyStatus("success");
-      setPolling(true);
     } catch (err) {
       setError(err.message || String(err));
       setTriageStatus("error");
       setPolicyStatus("error");
-      setPolling(false);
     }
   };
 
@@ -153,7 +140,6 @@ function App() {
       setTriage(refreshed.triage_output || triage);
       setPolicy({ policy_band: refreshed.policy_band, policy_decision: refreshed.policy_decision });
       setPolicyStatus("success");
-      setPolling(true);
     } catch (err) {
       setError(err.message || String(err));
       setPolicyStatus("error");
@@ -173,7 +159,6 @@ function App() {
       }
       setResolution(data.resolution || data);
       setResolutionStatus("success");
-      setPolling(false);
     } catch (err) {
       setError(err.message || String(err));
       setResolutionStatus("error");
@@ -244,8 +229,7 @@ function App() {
           <div className="progress-strip">
             {(triageStatus === "loading" ||
               policyStatus === "loading" ||
-              resolutionStatus === "loading" ||
-              polling) && <div className="spinner" aria-label="loading" />}
+              resolutionStatus === "loading") && <div className="spinner" aria-label="loading" />}
             <div className="progress-chip">
               <span>Triage</span>
               <span className={statusPill(triageStatus)}>{triageStatus}</span>
@@ -258,12 +242,6 @@ function App() {
               <span>Resolution</span>
               <span className={statusPill(resolutionStatus)}>{resolutionStatus}</span>
             </div>
-            <div className="progress-chip">
-              <span>Polling</span>
-              <span className={statusPill(polling ? "loading" : "idle")}>
-                {polling ? "running" : "idle"}
-              </span>
-            </div>
             <div className="progress-note-inline">
               {triageStatus === "loading"
                 ? "Submitting triage…"
@@ -271,8 +249,6 @@ function App() {
                 ? "Evaluating policy…"
                 : resolutionStatus === "loading"
                 ? "Generating resolution…"
-                : polling
-                ? "Polling every 5s…"
                 : "Idle"}
             </div>
           </div>
@@ -391,16 +367,6 @@ function App() {
             <div className="card">
               <div className="section-title">Controls & Status</div>
               <div className="row">
-                <div>
-                  <div className="label">Polling</div>
-                  <button
-                    className="button secondary"
-                    onClick={() => setPolling((p) => !p)}
-                    disabled={!incidentId}
-                  >
-                    {polling ? "Stop polling" : "Start polling"}
-                  </button>
-                </div>
                 <div>
                   <div className="label">Approval</div>
                   <button
