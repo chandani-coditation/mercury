@@ -1,0 +1,233 @@
+{
+  "_comment": "Field Mappings Configuration",
+  "_description": "Maps source data fields (ServiceNow CSV, Runbooks) to internal models. Update this file when source data structure changes - no code changes needed.",
+  
+  "servicenow_csv": {
+    "_description": "ServiceNow ticket CSV column mappings",
+    "_source_columns": [
+      "number",
+      "problem_id",
+      "opened_at",
+      "u_next_action_due_date",
+      "short_description",
+      "cmdb_ci",
+      "category",
+      "state",
+      "assignment_group",
+      "opened_by",
+      "impact",
+      "urgency",
+      "sys_updated_on",
+      "description",
+      "u_reopen_count"
+    ],
+    "field_mappings": {
+      "incident_id": {
+        "source_column": "number",
+        "description": "ServiceNow incident number",
+        "required": true
+      },
+      "problem_id": {
+        "source_column": "problem_id",
+        "description": "Related problem ID",
+        "required": false
+      },
+      "title": {
+        "source_column": "short_description",
+        "description": "Incident title/summary",
+        "required": true
+      },
+      "description": {
+        "source_column": "description",
+        "description": "Full incident description",
+        "required": true
+      },
+      "category": {
+        "source_column": "category",
+        "description": "Incident category (e.g., Monitoring/Alert, Performance)",
+        "required": true
+      },
+      "severity": {
+        "source_columns": ["impact", "urgency"],
+        "description": "Derived from impact and urgency (1-5 scale)",
+        "mapping_function": "derive_severity",
+        "required": true
+      },
+      "timestamp": {
+        "source_column": "opened_at",
+        "description": "Incident opened timestamp",
+        "required": true,
+        "date_format": "DD/MM/YYYY HH:mm or MM/DD/YYYY HH:mm (auto-detected, also supports ISO format)"
+      },
+      "assignment_group": {
+        "source_column": "assignment_group",
+        "description": "Team/group assigned (e.g., SE DBA SQL, NOC)",
+        "required": true,
+        "maps_to_triage": "routing"
+      },
+      "affected_services": {
+        "source_column": "cmdb_ci",
+        "description": "Affected CI/service (e.g., Database-SQL, Server)",
+        "required": false,
+        "maps_to_triage": "affected_services"
+      },
+      "state": {
+        "source_column": "state",
+        "description": "Incident state (New, Resolved, etc.)",
+        "required": false
+      },
+      "opened_by": {
+        "source_column": "opened_by",
+        "description": "User who opened the incident",
+        "required": false
+      },
+      "impact": {
+        "source_column": "impact",
+        "description": "Impact level (1-5 scale)",
+        "required": false
+      },
+      "urgency": {
+        "source_column": "urgency",
+        "description": "Urgency level (1-5 scale)",
+        "required": false
+      },
+      "sys_updated_on": {
+        "source_column": "sys_updated_on",
+        "description": "Last update timestamp",
+        "required": false
+      },
+      "u_reopen_count": {
+        "source_column": "u_reopen_count",
+        "description": "Number of times incident was reopened",
+        "required": false
+      },
+      "u_next_action_due_date": {
+        "source_column": "u_next_action_due_date",
+        "description": "Next action due date",
+        "required": false
+      }
+    },
+    "triage_output_mappings": {
+      "_description": "How ServiceNow fields map to TriageOutput fields",
+      "routing": {
+        "source_field": "assignment_group",
+        "required": true
+      },
+      "category": {
+        "source_field": "category",
+        "required": true
+      },
+      "summary": {
+        "source_field": "short_description",
+        "required": true
+      },
+      "affected_services": {
+        "source_field": "cmdb_ci",
+        "required": false,
+        "transform": "list_from_string"
+      },
+      "severity": {
+        "source_fields": ["impact", "urgency"],
+        "transform": "derive_severity_from_impact_urgency",
+        "required": true
+      },
+      "likely_cause": {
+        "source_field": "description",
+        "transform": "infer_from_description",
+        "required": false
+      }
+    }
+  },
+  
+  "runbook_docx": {
+    "_description": "Runbook DOCX structure mappings",
+    "_expected_sections": [
+      "title",
+      "steps",
+      "commands",
+      "prerequisites",
+      "rollback_procedures",
+      "service",
+      "component"
+    ],
+    "field_mappings": {
+      "title": {
+        "source_section": "title",
+        "description": "Runbook title",
+        "required": true
+      },
+      "steps": {
+        "source_section": "steps",
+        "description": "Ordered list of resolution steps",
+        "required": true,
+        "maps_to_resolution": "steps[]"
+      },
+      "commands": {
+        "source_section": "commands",
+        "description": "Terminal commands (may be embedded in steps or separate section)",
+        "required": false,
+        "maps_to_resolution": "commands_by_step"
+      },
+      "rollback_procedures": {
+        "source_section": "rollback_procedures",
+        "description": "Rollback steps",
+        "required": false,
+        "maps_to_resolution": "rollback_plan"
+      },
+      "prerequisites": {
+        "source_section": "prerequisites",
+        "description": "Required conditions before execution",
+        "required": false
+      },
+      "service": {
+        "source_section": "service",
+        "description": "Service name",
+        "required": false
+      },
+      "component": {
+        "source_section": "component",
+        "description": "Component name",
+        "required": false
+      }
+    },
+    "resolution_output_mappings": {
+      "_description": "How runbook fields map to ResolutionOutput fields",
+      "steps[]": {
+        "source_field": "steps",
+        "required": true
+      },
+      "commands_by_step": {
+        "source_field": "commands",
+        "transform": "group_by_step",
+        "required": false
+      },
+      "rollback_plan": {
+        "source_field": "rollback_procedures",
+        "required": false
+      }
+    }
+  },
+  
+  "severity_mapping": {
+    "_description": "Maps ServiceNow impact/urgency (1-5) to severity levels",
+    "impact_urgency_to_severity": {
+      "1-1": "critical",
+      "1-2": "critical",
+      "1-3": "high",
+      "2-1": "critical",
+      "2-2": "high",
+      "2-3": "high",
+      "3-1": "high",
+      "3-2": "medium",
+      "3-3": "medium",
+      "4-1": "medium",
+      "4-2": "medium",
+      "4-3": "low",
+      "5-1": "low",
+      "5-2": "low",
+      "5-3": "low"
+    },
+    "default_severity": "medium"
+  }
+}
+

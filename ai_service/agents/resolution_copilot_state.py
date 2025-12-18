@@ -8,19 +8,7 @@ from ai_service.agents.triager import format_evidence_chunks, apply_retrieval_pr
 from ai_service.core import (
     get_logger,
     get_retrieval_config,
-    IncidentNotFoundError,
-    resolution_requests_total,
-    resolution_duration_seconds,
-    retrieval_requests_total,
-    retrieval_duration_seconds,
-    retrieval_chunks_returned,
-    llm_requests_total,
-    llm_request_duration_seconds,
-    policy_decisions_total,
-    agent_state_emitted_total,
-    hitl_actions_total,
-    hitl_actions_pending,
-    MetricsTimer,
+    IncidentNotFoundError
 )
 from ai_service.guardrails import validate_resolution_output
 from ai_service.llm_client import call_llm_for_resolution
@@ -49,14 +37,6 @@ async def resolution_agent_state(
     if not incident_id:
         raise ValueError("State-based resolution requires an incident_id")
 
-    with MetricsTimer(resolution_duration_seconds):
-        return await _resolution_agent_state_internal(
-            incident_id=incident_id,
-            alert=alert,
-            use_state_bus=use_state_bus,
-        )
-
-
 async def _resolution_agent_state_internal(
     incident_id: str,
     alert: Optional[Dict[str, Any]] = None,
@@ -67,7 +47,6 @@ async def _resolution_agent_state_internal(
     try:
         incident = repository.get_by_id(incident_id)
     except IncidentNotFoundError:
-        resolution_requests_total.labels(status="not_found", policy_band="unknown").inc()
         raise
 
     alert_dict = incident.get("raw_alert") or alert or {}
@@ -100,7 +79,6 @@ async def _resolution_agent_state_internal(
         except Exception as exc:  # pragma: no cover - best-effort update
             logger.warning("Failed to persist policy decision: %s", exc)
             policy_decision = state.policy_decision
-        policy_decisions_total.labels(policy_band=state.policy_band).inc()
     else:
         policy_decision = state.policy_decision
 
@@ -111,7 +89,6 @@ async def _resolution_agent_state_internal(
     state.current_step = AgentStep.RETRIEVING_CONTEXT
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="retrieving_context").inc()
 
     retrieval_cfg_all = get_retrieval_config() or {}
     resolution_cfg = retrieval_cfg_all.get("resolution", {})
@@ -124,18 +101,6 @@ async def _resolution_agent_state_internal(
         f"{alert_dict.get('description', '')} resolution steps runbook"
     )
     labels = alert_dict.get("labels") or {}
-
-    with MetricsTimer(retrieval_duration_seconds, {"agent_type": "resolution"}):
-        context_chunks = hybrid_search(
-            query_text=query_text,
-            service=labels.get("service") if isinstance(labels, dict) else None,
-            component=labels.get("component") if isinstance(labels, dict) else None,
-            limit=retrieval_limit,
-            vector_weight=vector_weight,
-            fulltext_weight=fulltext_weight,
-        )
-        retrieval_requests_total.labels(agent_type="resolution", status="success").inc()
-        retrieval_chunks_returned.labels(agent_type="resolution").observe(len(context_chunks))
 
     context_chunks = apply_retrieval_preferences(context_chunks, resolution_cfg)
     state.context_chunks = context_chunks
@@ -159,59 +124,35 @@ async def _resolution_agent_state_internal(
                     "No historical data found in knowledge base for resolution. "
                     "Generated without contextual evidence."
                 )
-                resolution_requests_total.labels(
-                    status="no_data",
-                    policy_band=state.policy_band or "unknown",
-                ).inc()
             else:
                 resolution_warning = (
                     "No matching runbooks/incidents found. "
                     "Resolution generated without relevant evidence."
                 )
-                resolution_requests_total.labels(
-                    status="no_matching_context",
-                    policy_band=state.policy_band or "unknown",
-                ).inc()
         except Exception as exc:  # pragma: no cover - diagnostic path
             resolution_warning = f"Cannot verify database state: {exc}"
-            resolution_requests_total.labels(
-                status="warning",
-                policy_band=state.policy_band or "unknown",
-            ).inc()
-        state.warning = resolution_warning
+    
+    state.warning = resolution_warning
 
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="context_retrieved").inc()
 
     # LLM call
     state.current_step = AgentStep.CALLING_LLM
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="calling_llm").inc()
 
-    with MetricsTimer(
-        llm_request_duration_seconds,
-        {"agent_type": "resolution", "model": "gpt-4-turbo-preview"},
-    ):
-        resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
-        llm_requests_total.labels(
-            agent_type="resolution",
-            model="gpt-4-turbo-preview",
-            status="success",
-        ).inc()
+    resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
 
     state.current_step = AgentStep.LLM_COMPLETED
     state.resolution_output = resolution_output
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="llm_completed").inc()
 
     # Validation
     state.current_step = AgentStep.VALIDATING
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="validating").inc()
 
     is_valid, validation_errors = validate_resolution_output(resolution_output)
     if not is_valid:
@@ -219,22 +160,18 @@ async def _resolution_agent_state_internal(
         state.error = f"Resolution validation failed: {', '.join(validation_errors)}"
         if use_state_bus:
             await state_bus.emit_state(state)
-        resolution_requests_total.labels(
             status="validation_error",
             policy_band=state.policy_band or "unknown",
-        ).inc()
         raise ValueError(state.error)
 
     state.current_step = AgentStep.VALIDATION_COMPLETE
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="validation_complete").inc()
 
     # Policy evaluation (mostly informational for resolution stage)
     state.current_step = AgentStep.POLICY_EVALUATING
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="policy_evaluating").inc()
 
     if not policy_decision:
         policy_decision = get_resolution_policy(
@@ -243,7 +180,6 @@ async def _resolution_agent_state_internal(
         )
         state.policy_decision = policy_decision
         state.policy_band = policy_decision.get("policy_band", state.policy_band or "REVIEW")
-        policy_decisions_total.labels(policy_band=state.policy_band).inc()
 
     state.can_auto_apply = bool(state.policy_decision.get("can_auto_apply", False))
     state.requires_approval = bool(state.policy_decision.get("requires_approval", True))
@@ -251,7 +187,6 @@ async def _resolution_agent_state_internal(
     state.current_step = AgentStep.POLICY_EVALUATED
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="policy_evaluated").inc()
 
     # Evidence packaging
     resolution_evidence = format_evidence_chunks(
@@ -270,7 +205,6 @@ async def _resolution_agent_state_internal(
     state.current_step = AgentStep.STORING
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="storing").inc()
 
     repository.update_resolution(
         incident_id=incident_id,
@@ -295,8 +229,6 @@ async def _resolution_agent_state_internal(
             },
             timeout_minutes=30,
         )
-        hitl_actions_total.labels(action_type="review_resolution", status="created").inc()
-        hitl_actions_pending.labels(action_type="review_resolution").inc()
 
         result = {
             "incident_id": incident_id,
@@ -320,12 +252,9 @@ async def _resolution_agent_state_internal(
     state.completed_at = datetime.utcnow()
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="resolution", step="completed").inc()
 
-    resolution_requests_total.labels(
         status="success",
         policy_band=state.policy_band or "unknown",
-    ).inc()
 
     result = {
         "incident_id": incident_id,

@@ -1,4 +1,5 @@
 """Triage endpoints."""
+import os
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from ai_service.models import Alert
@@ -10,9 +11,16 @@ from ai_service.api.error_utils import format_user_friendly_error
 logger = get_logger(__name__)
 router = APIRouter()
 
+# Feature flag for LangGraph (can be enabled via environment variable)
+USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
+
 
 @router.post("/triage")
-async def triage(alert: Alert, use_state: bool = Query(False, description="Use state-based HITL workflow")):
+async def triage(
+    alert: Alert, 
+    use_state: bool = Query(False, description="Use state-based HITL workflow"),
+    use_langgraph: bool = Query(None, description="Use LangGraph framework (overrides env var)")
+):
     """
     Triage an alert.
     
@@ -33,17 +41,30 @@ async def triage(alert: Alert, use_state: bool = Query(False, description="Use s
     - evidence_chunks: Retrieved context chunks used for triage
     - policy_band: Policy decision (AUTO/PROPOSE/REVIEW)
     """
-    logger.info(f"Triage request received: alert={alert.title}, use_state={use_state}")
+    # Determine if LangGraph should be used
+    use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH
+    
+    logger.info(f"Triage request received: alert={alert.title}, use_state={use_state}, use_langgraph={use_lg}")
     
     try:
         # Convert alert to dict
         alert_dict = alert.model_dump()
-        alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
+        # Handle ts: use provided timestamp or default to current time
+        if alert.ts:
+            alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
+        else:
+            alert_dict["ts"] = datetime.utcnow().isoformat()
         
-        # Call triager agent (state-based or synchronous)
-        if use_state:
+        # Call triager agent (LangGraph, state-based, or synchronous)
+        if use_lg:
+            # Use LangGraph
+            from ai_service.agents.langgraph_wrapper import run_triage_graph
+            result = run_triage_graph(alert_dict)
+        elif use_state:
+            # Use state-based HITL workflow
             result = await triage_agent_state(alert_dict, use_state_bus=True)
         else:
+            # Use synchronous agent (backward compatible)
             result = triage_agent(alert_dict)
         
         logger.info(

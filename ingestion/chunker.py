@@ -6,9 +6,9 @@ from typing import List
 
 def chunk_text(
     text: str,
-    min_tokens: int = 120,
-    max_tokens: int = 360,
-    target_tokens: int = 240,
+    min_tokens: int = 180,
+    max_tokens: int = 320,
+    target_tokens: int = 250,
     overlap: int = 30
 ) -> List[str]:
     """
@@ -150,6 +150,7 @@ def chunk_text(
                     chunks[-1] = chunks[-1] + ' ' + sub_chunk
         elif chunk_tokens >= min_tokens:
             chunks.append(chunk_text)
+        # Note: min_tokens is now 180 (target: 180-320), but we still accept chunks >= 120 for edge cases
         elif chunks:
             # Merge with last chunk if too small
             chunks[-1] = chunks[-1] + ' ' + chunk_text
@@ -172,8 +173,11 @@ def chunk_text(
     return final_chunks
 
 
-def add_chunk_header(chunk: str, doc_type: str, service: str = None, component: str = None, title: str = None) -> str:
-    """Add metadata header to chunk for context."""
+def add_chunk_header(chunk: str, doc_type: str, service: str = None, component: str = None, title: str = None, last_reviewed_at: str = None) -> str:
+    """Add compact metadata header to chunk for context.
+    
+    Headers are auto-appended with: doc type, service/component, title, last_reviewed_at
+    """
     header_parts = []
     if doc_type:
         header_parts.append(f"Type: {doc_type}")
@@ -183,6 +187,8 @@ def add_chunk_header(chunk: str, doc_type: str, service: str = None, component: 
         header_parts.append(f"Component: {component}")
     if title:
         header_parts.append(f"Title: {title}")
+    if last_reviewed_at:
+        header_parts.append(f"Last Reviewed: {last_reviewed_at}")
     
     if header_parts:
         header = " | ".join(header_parts) + "\n\n"

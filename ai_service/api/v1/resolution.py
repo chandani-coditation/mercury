@@ -1,4 +1,5 @@
 """Resolution endpoints."""
+import os
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from ai_service.models import Alert
@@ -10,12 +11,16 @@ from ai_service.api.error_utils import format_user_friendly_error
 logger = get_logger(__name__)
 router = APIRouter()
 
+# Feature flag for LangGraph (can be enabled via environment variable)
+USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
+
 
 @router.post("/resolution")
 async def resolution(
     incident_id: str = None,
     alert: Alert = None,
     use_state: bool = Query(False, description="Use state-based HITL workflow"),
+    use_langgraph: bool = Query(None, description="Use LangGraph framework (overrides env var)"),
 ):
     """
     Generate resolution for an incident.
@@ -44,7 +49,10 @@ async def resolution(
     - policy_band: Policy decision
     - evidence_chunks: Retrieved context chunks
     """
-    logger.info(f"Resolution request received: incident_id={incident_id}")
+    # Determine if LangGraph should be used
+    use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH
+    
+    logger.info(f"Resolution request received: incident_id={incident_id}, use_state={use_state}, use_langgraph={use_lg}")
     
     try:
         # Convert alert to dict if provided
@@ -53,8 +61,12 @@ async def resolution(
             alert_dict = alert.model_dump()
             alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
         
-        # Call resolution agent
-        if use_state:
+        # Call resolution agent (LangGraph, state-based, or synchronous)
+        if use_lg:
+            # Use LangGraph
+            from ai_service.agents.langgraph_wrapper import run_resolution_graph
+            result = run_resolution_graph(incident_id=incident_id, alert=alert_dict)
+        elif use_state:
             if not incident_id:
                 raise HTTPException(
                     status_code=400,
@@ -67,12 +79,13 @@ async def resolution(
                 use_state_bus=True,
             )
         else:
+            # Use synchronous agent (backward compatible)
             result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
         
         logger.info(
             f"Resolution completed: incident_id={result['incident_id']}, "
             f"risk_level={result['resolution'].get('risk_level')}, "
-            f"steps={len(result['resolution'].get('resolution_steps', []))}"
+            f"steps={len(result['resolution'].get('steps', result['resolution'].get('resolution_steps', [])))}"
         )
         
         return result

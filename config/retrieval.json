@@ -15,7 +15,7 @@
     "vector_weight": 0.6,
     "fulltext_weight": 0.4,
     "filters": ["service", "component"],
-    "prefer_types": ["runbook", "past_incident", "sop"]
+    "prefer_types": ["runbook", "log", "past_incident", "sop"]
   }
 }
 

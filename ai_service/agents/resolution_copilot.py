@@ -7,11 +7,7 @@ from ai_service.core import IncidentNotFoundError
 from ai_service.policy import get_policy_from_config, get_resolution_policy
 from ai_service.guardrails import validate_triage_output, validate_resolution_output
 from ai_service.core import (
-    get_retrieval_config, get_workflow_config, get_logger, ApprovalRequiredError,
-    resolution_requests_total, resolution_duration_seconds,
-    retrieval_requests_total, retrieval_duration_seconds, retrieval_chunks_returned,
-    llm_requests_total, llm_request_duration_seconds,
-    policy_decisions_total, MetricsTimer
+    get_retrieval_config, get_workflow_config, get_logger, ApprovalRequiredError
 )
 from retrieval.hybrid_search import hybrid_search
 from ai_service.agents.triager import format_evidence_chunks, apply_retrieval_preferences
@@ -45,9 +41,7 @@ def resolution_copilot_agent(
     Returns:
         Dictionary with incident_id, resolution output, evidence, and policy information
     """
-    # Track overall resolution duration
-    with MetricsTimer(resolution_duration_seconds):
-        return _resolution_copilot_agent_internal(incident_id, alert)
+    return _resolution_copilot_agent_internal(incident_id, alert)
 
 
 def _resolution_copilot_agent_internal(
@@ -68,7 +62,6 @@ def _resolution_copilot_agent_internal(
             incident = repository.get_by_id(incident_id)
         except IncidentNotFoundError as e:
             logger.error(f"Incident not found: {incident_id}")
-            resolution_requests_total.labels(status="not_found", policy_band="unknown").inc()
             raise
         alert_dict = incident["raw_alert"]
         triage_output = incident["triage_output"]
@@ -79,7 +72,6 @@ def _resolution_copilot_agent_internal(
     else:
         if not alert:
             logger.error("Resolution called without incident_id or alert")
-            resolution_requests_total.labels(status="validation_error", policy_band="unknown").inc()
             raise ValueError("Either incident_id or alert required")
         alert_dict = alert.copy()
         if isinstance(alert_dict.get("ts"), datetime):
@@ -131,7 +123,6 @@ def _resolution_copilot_agent_internal(
                         "Use: python scripts/data/generate_fake_data.py --all --count 20"
                     )
                     logger.warning(evidence_warning)
-                    resolution_requests_total.labels(status="no_data", policy_band="unknown").inc()
                 else:
                     # Data exists but no matching chunks found
                     evidence_warning = (
@@ -141,12 +132,10 @@ def _resolution_copilot_agent_internal(
                         "Please ensure relevant historical data is ingested for better results."
                     )
                     logger.warning(evidence_warning)
-                    resolution_requests_total.labels(status="no_matching_context", policy_band="unknown").inc()
             except Exception as e:
                 # If we can't check the database, proceed with warning
                 evidence_warning = f"Cannot verify database state: {e}. Proceeding without evidence validation."
                 logger.warning(evidence_warning)
-                resolution_requests_total.labels(status="warning", policy_band="unknown").inc()
         
         triage_output = call_llm_for_triage(alert_dict, context_chunks)
         
@@ -154,13 +143,11 @@ def _resolution_copilot_agent_internal(
         is_valid, validation_errors = validate_triage_output(triage_output)
         if not is_valid:
             logger.error(f"Triage validation failed during resolution: {validation_errors}")
-            resolution_requests_total.labels(status="validation_error", policy_band="unknown").inc()
             raise ValueError(f"Triage output validation failed: {', '.join(validation_errors)}")
         
         # Run policy gate after triage
         policy_decision = get_policy_from_config(triage_output)
         existing_policy_band = policy_decision.get("policy_band", "REVIEW")
-        policy_decisions_total.labels(policy_band=existing_policy_band).inc()
         
         incident_id = repository.create(
             alert=alert_dict,
@@ -220,7 +207,6 @@ def _resolution_copilot_agent_internal(
             f"Please review the triage results for incident {incident_id} and approve before requesting resolution."
         )
         logger.info(error_msg)
-        resolution_requests_total.labels(status="approval_required", policy_band=existing_policy_band or "unknown").inc()
         raise ApprovalRequiredError(error_msg)
     
     # Get retrieval config for resolution
@@ -241,27 +227,49 @@ def _resolution_copilot_agent_internal(
         f"limit={retrieval_limit}, vector_weight={vector_weight}, fulltext_weight={fulltext_weight}"
     )
     
-    # Retrieve context with metrics
-    with MetricsTimer(retrieval_duration_seconds, {"agent_type": "resolution"}):
-        context_chunks = hybrid_search(
-            query_text=query_text,
-            service=labels.get("service") if isinstance(labels, dict) else None,
-            component=labels.get("component") if isinstance(labels, dict) else None,
-            limit=retrieval_limit,
-            vector_weight=vector_weight,
-            fulltext_weight=fulltext_weight
-        )
-        retrieval_requests_total.labels(agent_type="resolution", status="success").inc()
-        retrieval_chunks_returned.labels(agent_type="resolution").observe(len(context_chunks))
+    # Retrieve context
+    context_chunks = hybrid_search(
+        query_text=query_text,
+        service=labels.get("service") if isinstance(labels, dict) else None,
+        component=labels.get("component") if isinstance(labels, dict) else None,
+        limit=retrieval_limit,
+        vector_weight=vector_weight,
+        fulltext_weight=fulltext_weight
+    )
     
     # Apply retrieval preferences (prefer_types, max_per_type)
     context_chunks = apply_retrieval_preferences(context_chunks, retrieval_config)
     
+    # Optionally retrieve logs from InfluxDB if configured
+    try:
+        from retrieval.influxdb_client import get_influxdb_client
+        influxdb_client = get_influxdb_client()
+        if influxdb_client.is_configured():
+            logs = influxdb_client.get_logs_for_context(
+                query_text=query_text,
+                service=service_val,
+                component=component_val,
+                limit=5  # Small limit for logs
+            )
+            # Convert logs to chunk-like format for consistency
+            for log_content in logs:
+                if log_content:
+                    context_chunks.append({
+                        "chunk_id": f"influxdb_log_{len(context_chunks)}",
+                        "content": f"[Log Entry]\n{log_content}",
+                        "doc_type": "log",
+                        "source": "influxdb"
+                    })
+    except Exception as e:
+        logger.debug(f"InfluxDB log retrieval not available or failed: {str(e)}")
+    
     logger.debug(f"Retrieved {len(context_chunks)} context chunks for resolution")
     
-    # Check if we have evidence for resolution - if not, proceed with warning
-    resolution_evidence_warning = None
-    if len(context_chunks) == 0:
+    # Check if we have evidence for resolution - STRICT VALIDATION: Require minimum context
+    # Resolution requires runbooks, so we need at least 1 chunk (preferably runbook)
+    MIN_REQUIRED_CHUNKS = 1  # Require at least 1 chunk for resolution
+    
+    if len(context_chunks) < MIN_REQUIRED_CHUNKS:
         from db.connection import get_db_connection
         try:
             conn = get_db_connection()
@@ -272,46 +280,98 @@ def _resolution_copilot_agent_internal(
             conn.close()
             
             if doc_count == 0:
-                # No data in database at all
-                resolution_evidence_warning = (
-                    "No historical data found in knowledge base for resolution. "
-                    "Resolution generated without context. "
-                    "Please ingest historical data (alerts, incidents, runbooks, logs) for better results. "
-                    "Use: python scripts/data/generate_fake_data.py --all --count 20"
+                # No data in database at all - FAIL
+                error_msg = (
+                    "Cannot generate resolution without context. "
+                    "No historical data found in knowledge base. "
+                    "Please ingest runbooks and historical incidents first. "
+                    "Use: python scripts/data/ingest_runbooks.py and python scripts/data/ingest_servicenow_tickets.py"
                 )
-                logger.warning(resolution_evidence_warning)
-                resolution_requests_total.labels(status="no_data", policy_band=existing_policy_band or "unknown").inc()
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             else:
-                # Data exists but no matching chunks found
-                resolution_evidence_warning = (
-                    f"No matching evidence found for resolution. "
+                # Data exists but no matching chunks found - FAIL
+                error_msg = (
+                    f"Cannot generate resolution without context. "
                     f"Database has {doc_count} documents, but none match the resolution context. "
-                    "Resolution generated without relevant historical evidence (runbooks, similar incidents). "
-                    "Please ensure relevant historical data is ingested for better results."
+                    "Resolution requires runbooks or similar historical incidents. "
+                    "This may be due to metadata mismatch (service/component filters). "
+                    "Please ensure relevant runbooks are ingested with matching metadata, "
+                    "or adjust the alert labels to match existing document metadata."
                 )
-                logger.warning(resolution_evidence_warning)
-                resolution_requests_total.labels(status="no_matching_context", policy_band=existing_policy_band or "unknown").inc()
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        except ValueError:
+            # Re-raise ValueError (our validation errors)
+            raise
         except Exception as e:
-            # If we can't check the database, proceed with warning
-            resolution_evidence_warning = f"Cannot verify database state: {e}. Proceeding without evidence validation."
-            logger.warning(resolution_evidence_warning)
-            resolution_requests_total.labels(status="warning", policy_band=existing_policy_band or "unknown").inc()
+            # If we can't check the database, fail safely
+            error_msg = f"Cannot verify database state: {e}. Cannot proceed without context validation."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
-    # Call LLM for resolution with metrics
-    with MetricsTimer(llm_request_duration_seconds, {"agent_type": "resolution", "model": "gpt-4-turbo-preview"}):
-        resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
-        llm_requests_total.labels(agent_type="resolution", model="gpt-4-turbo-preview", status="success").inc()
+    logger.info(f"Context validation passed: {len(context_chunks)} chunks retrieved for resolution")
+    
+    # Call LLM for resolution
+    resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
+    
+    # ENFORCE provenance: Must reference actual chunks from context
+    # If LLM didn't provide provenance, auto-populate from context chunks
+    if not resolution_output.get("provenance"):
+        if context_chunks:
+            resolution_output["provenance"] = [
+                {
+                    "doc_id": chunk.get("document_id", ""),
+                    "chunk_id": chunk.get("chunk_id", "")
+                }
+                for chunk in context_chunks[:10]  # Include top chunks
+                if chunk.get("chunk_id") and chunk.get("document_id")
+            ]
+        else:
+            # This should never happen due to validation above, but safety check
+            logger.warning("No provenance and no context chunks - this should not happen after validation")
+            resolution_output["provenance"] = []
+    
+    # Validate provenance references exist in context chunks
+    if resolution_output.get("provenance"):
+        valid_provenance = []
+        context_chunk_ids = {chunk.get("chunk_id") for chunk in context_chunks if chunk.get("chunk_id")}
+        context_doc_ids = {chunk.get("document_id") for chunk in context_chunks if chunk.get("document_id")}
+        
+        for prov in resolution_output["provenance"]:
+            prov_chunk_id = prov.get("chunk_id")
+            prov_doc_id = prov.get("doc_id")
+            if prov_chunk_id in context_chunk_ids and prov_doc_id in context_doc_ids:
+                valid_provenance.append(prov)
+            else:
+                logger.warning(
+                    f"Invalid provenance reference: chunk_id={prov_chunk_id}, doc_id={prov_doc_id} "
+                    f"not found in context chunks"
+                )
+        
+        # If no valid provenance, use all context chunks
+        if not valid_provenance and context_chunks:
+            resolution_output["provenance"] = [
+                {
+                    "doc_id": chunk.get("document_id", ""),
+                    "chunk_id": chunk.get("chunk_id", "")
+                }
+                for chunk in context_chunks[:10]
+                if chunk.get("chunk_id") and chunk.get("document_id")
+            ]
+        else:
+            resolution_output["provenance"] = valid_provenance
     
     logger.debug(
         f"LLM resolution completed: risk_level={resolution_output.get('risk_level')}, "
-        f"steps={len(resolution_output.get('resolution_steps', []))}"
+        f"steps={len(resolution_output.get('steps', resolution_output.get('resolution_steps', [])))}, "
+        f"provenance_chunks={len(resolution_output.get('provenance', []))}"
     )
     
     # Validate resolution output with guardrails
     is_valid, validation_errors = validate_resolution_output(resolution_output)
     if not is_valid:
         logger.error(f"Resolution validation failed: {validation_errors}")
-        resolution_requests_total.labels(status="validation_error", policy_band=existing_policy_band or "unknown").inc()
         raise ValueError(f"Resolution output validation failed: {', '.join(validation_errors)}")
     
     # Policy decision already exists from triage
@@ -355,7 +415,6 @@ def _resolution_copilot_agent_internal(
         f"steps={len(resolution_output.get('resolution_steps', []))}, "
         f"policy_band={policy_band}"
     )
-    resolution_requests_total.labels(status="success", policy_band=policy_band).inc()
     
     result = {
         "incident_id": incident_id,

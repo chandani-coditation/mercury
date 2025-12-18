@@ -9,14 +9,34 @@
       "fields": ["alert_id", "source", "title", "description", "labels", "severity", "ts", "resolution_status", "resolution_notes"]
     },
     "incidents": {
-      "description": "Past incident reports with resolutions",
-      "supported_formats": ["JSON (structured)", "Free-text incident reports"],
-      "fields": ["incident_id", "alert_id", "title", "description", "severity", "category", "resolution_steps", "root_cause", "affected_services", "timestamp"]
+      "description": "Past incident reports with resolutions - ServiceNow CSV format",
+      "supported_formats": ["CSV (ServiceNow export)", "JSON (structured)", "Free-text incident reports"],
+      "servicenow_csv_columns": [
+        "number",
+        "problem_id",
+        "opened_at",
+        "u_next_action_due_date",
+        "short_description",
+        "cmdb_ci",
+        "category",
+        "state",
+        "assignment_group",
+        "opened_by",
+        "impact",
+        "urgency",
+        "sys_updated_on",
+        "description",
+        "u_reopen_count"
+      ],
+      "internal_fields": ["incident_id", "alert_id", "title", "description", "severity", "category", "resolution_steps", "root_cause", "affected_services", "timestamp"],
+      "field_mapping_config": "config/field_mappings.json"
     },
     "runbooks": {
-      "description": "Standard operating procedures and runbooks",
-      "supported_formats": ["Structured JSON", "Markdown", "Plain text"],
-      "fields": ["title", "service", "component", "steps", "prerequisites", "rollback_procedures"]
+      "description": "Standard operating procedures and runbooks - DOCX format",
+      "supported_formats": ["DOCX (Microsoft Word)", "Structured JSON", "Markdown", "Plain text"],
+      "docx_sections": ["title", "steps", "commands", "prerequisites", "rollback_procedures", "service", "component"],
+      "internal_fields": ["title", "service", "component", "steps", "prerequisites", "rollback_procedures"],
+      "field_mapping_config": "config/field_mappings.json"
     },
     "logs": {
       "description": "Relevant log snippets and error logs",

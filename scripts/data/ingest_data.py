@@ -64,7 +64,7 @@ def ingest_file(file_path: Path, doc_type: str):
                     item = json.loads(line)
                     items.append(item)
                 except json.JSONDecodeError as e:
-                    print(f"  ⚠ Warning: Skipping invalid JSON on line {line_num}: {e}")
+                    print(f"   Warning: Skipping invalid JSON on line {line_num}: {e}")
                     continue
             
             if items:
@@ -77,13 +77,13 @@ def ingest_file(file_path: Path, doc_type: str):
                 )
                 if response.status_code == 200:
                     result = response.json()
-                    print(f"✓ Ingested {len(items)} items from JSONL file")
+                    print(f" Ingested {len(items)} items from JSONL file")
                     return True
                 else:
-                    print(f"✗ Error: {response.status_code} - {response.text}")
+                    print(f" Error: {response.status_code} - {response.text}")
                     return False
             else:
-                print(f"✗ No valid JSON objects found in file")
+                print(f" No valid JSON objects found in file")
                 return False
     
     # If not JSONL, try as regular JSON
@@ -101,10 +101,10 @@ def ingest_file(file_path: Path, doc_type: str):
             )
             if response.status_code == 200:
                 result = response.json()
-                print(f"✓ Ingested {len(data)} items")
+                print(f" Ingested {len(data)} items")
                 return True
             else:
-                print(f"✗ Error: {response.status_code} - {response.text}")
+                print(f" Error: {response.status_code} - {response.text}")
                 return False
         else:
             # Single item - use specific endpoint
@@ -139,10 +139,10 @@ def ingest_file(file_path: Path, doc_type: str):
             
             if response.status_code == 200:
                 result = response.json()
-                print(f"✓ Ingested: {result.get('document_id', 'N/A')}")
+                print(f" Ingested: {result.get('document_id', 'N/A')}")
                 return True
             else:
-                print(f"✗ Error: {response.status_code} - {response.text}")
+                print(f" Error: {response.status_code} - {response.text}")
                 return False
     except json.JSONDecodeError:
         # Unstructured text - use batch endpoint
@@ -153,10 +153,10 @@ def ingest_file(file_path: Path, doc_type: str):
         )
         if response.status_code == 200:
             result = response.json()
-            print(f"✓ Ingested as text document")
+            print(f" Ingested as text document")
             return True
         else:
-            print(f"✗ Error: {response.status_code} - {response.text}")
+            print(f" Error: {response.status_code} - {response.text}")
             return False
 
 
@@ -174,18 +174,18 @@ def ingest_directory(directory: Path, doc_type: str, pattern: str = "*"):
                     success += 1
                 else:
                     failed += 1
-                    print(f"  ✗ Failed to ingest {file_path.name}")
+                    print(f"   Failed to ingest {file_path.name}")
             except requests.exceptions.ReadTimeout as e:
                 failed += 1
-                print(f"  ✗ Timeout ingesting {file_path.name}: {e}")
+                print(f"   Timeout ingesting {file_path.name}: {e}")
                 print(f"     This file may be too large. Try ingesting it separately with a longer timeout.")
             except Exception as e:
                 failed += 1
-                print(f"  ✗ Error ingesting {file_path.name}: {e}")
+                print(f"   Error ingesting {file_path.name}: {e}")
     
-    print(f"\n✓ Successfully ingested {success}/{len(files)} files")
+    print(f"\n Successfully ingested {success}/{len(files)} files")
     if failed > 0:
-        print(f"✗ Failed to ingest {failed} files")
+        print(f" Failed to ingest {failed} files")
     return success
 
 
@@ -225,17 +225,17 @@ Examples:
     try:
         response = requests.get(f"{INGESTION_SERVICE_URL}/health", timeout=5)
         if response.status_code != 200:
-            print(f"✗ Ingestion service not healthy: {response.status_code}")
+            print(f" Ingestion service not healthy: {response.status_code}")
             sys.exit(1)
     except Exception as e:
-        print(f"✗ Cannot connect to ingestion service at {INGESTION_SERVICE_URL}: {e}")
+        print(f" Cannot connect to ingestion service at {INGESTION_SERVICE_URL}: {e}")
         sys.exit(1)
     
-    print(f"✓ Connected to ingestion service at {INGESTION_SERVICE_URL}\n")
+    print(f" Connected to ingestion service at {INGESTION_SERVICE_URL}\n")
     
     if args.file:
         if not args.file.exists():
-            print(f"✗ File not found: {args.file}")
+            print(f" File not found: {args.file}")
             sys.exit(1)
         
         # Auto-detect type from filename if not provided
@@ -259,7 +259,7 @@ Examples:
     
     elif args.dir:
         if not args.dir.exists():
-            print(f"✗ Directory not found: {args.dir}")
+            print(f" Directory not found: {args.dir}")
             sys.exit(1)
         
         # If no type specified, process all types
@@ -282,7 +282,7 @@ Examples:
                     total_ingested += success
             
             print(f"\n{'='*60}")
-            print(f"✅ Total files ingested: {total_ingested}")
+            print(f" Total files ingested: {total_ingested}")
             print(f"{'='*60}")
             sys.exit(0 if total_ingested > 0 else 1)
         else:

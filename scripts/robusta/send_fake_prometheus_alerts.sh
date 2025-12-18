@@ -18,7 +18,7 @@ echo ""
 ROBUSTA_SVC=$(kubectl get svc -n $ROBUSTA_NAMESPACE -l app=robusta-runner -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
 if [ -z "$ROBUSTA_SVC" ]; then
-    echo "❌ Robusta service not found. Is Robusta installed?"
+    echo " Robusta service not found. Is Robusta installed?"
     echo ""
     echo "Run: ./scripts/setup_robusta.sh"
     exit 1
@@ -36,7 +36,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "✓ Connected to Robusta"
+echo " Connected to Robusta"
 echo ""
 
 # Alert templates
@@ -80,16 +80,16 @@ EOF
     BODY=$(echo "$RESPONSE" | head -n-1)
     
     if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
-        echo "  ✓ Alert sent successfully"
+        echo "   Alert sent successfully"
     else
-        echo "  ⚠️  Alert sent (HTTP $HTTP_CODE)"
+        echo "    Alert sent (HTTP $HTTP_CODE)"
     fi
     
     sleep 1
 done
 
 echo ""
-echo "✅ Sent $ALERT_COUNT fake alerts to Robusta"
+echo " Sent $ALERT_COUNT fake alerts to Robusta"
 echo ""
 echo "Check Robusta logs:"
 echo "  kubectl logs -n $ROBUSTA_NAMESPACE -l app=robusta-runner -f"

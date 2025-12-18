@@ -28,6 +28,7 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
     - retrieval.json
     - workflow.json
     - schemas.json
+    - field_mappings.json
     
     Args:
         config_dir: Optional path to config directory. If None, uses default location.
@@ -55,6 +56,8 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
         "llm": "llm.json",
         "retrieval": "retrieval.json",
         "workflow": "workflow.json",
+        "field_mappings": "field_mappings.json",
+        "embeddings": "embeddings.json",
         "historical_data_inputs": "schemas.json",  # Will extract this key
         "alert_metadata": "schemas.json"  # Will extract this key
     }
@@ -134,4 +137,16 @@ def get_llm_config() -> Dict:
     """Get LLM configuration (model, temperature, etc.)."""
     config = load_config()
     return config.get("llm", {})
+
+
+def get_field_mappings_config() -> Dict:
+    """Get field mappings configuration (CSV columns, DOCX sections to internal models)."""
+    config = load_config()
+    return config.get("field_mappings", {})
+
+
+def get_embeddings_config() -> Dict:
+    """Get embeddings configuration (model, dimensions, etc.)."""
+    config = load_config()
+    return config.get("embeddings", {})
 

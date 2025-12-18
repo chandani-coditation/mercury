@@ -3,22 +3,24 @@
   "_description": "Validation rules and constraints for triage and resolution outputs",
   
   "triage": {
-    "required_fields": ["severity", "category", "confidence", "summary", "likely_cause", "affected_services", "recommended_actions"],
+    "required_fields": ["severity", "category", "confidence", "summary", "likely_cause", "routing", "affected_services", "recommended_actions"],
     "severity_values": ["low", "medium", "high", "critical"],
     "category_values": ["database", "network", "application", "infrastructure", "security", "other"],
     "confidence_range": [0.0, 1.0],
     "max_summary_length": 500,
     "max_likely_cause_length": 300,
+    "max_routing_length": 100,
     "max_affected_services": 50,
     "max_recommended_actions": 50
   },
   "resolution": {
-    "required_fields": ["resolution_steps", "estimated_time_minutes", "risk_level", "requires_approval"],
+    "required_fields": ["steps", "estimated_time_minutes", "risk_level", "requires_approval"],
     "risk_level_values": ["low", "medium", "high"],
     "min_estimated_time_minutes": 1,
     "max_estimated_time_minutes": 1440,
     "min_resolution_steps": 1,
     "max_resolution_steps": 20,
+    "max_reasoning_length": 1000,
     "dangerous_commands": [
       "rm -rf",
       "dd if=",

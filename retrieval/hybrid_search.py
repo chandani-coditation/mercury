@@ -57,14 +57,20 @@ def hybrid_search(
         service_val = service if service and str(service).strip() else None
         component_val = component if component and str(component).strip() else None
         
-        # Build filter conditions
+        # Build filter conditions with case-insensitive partial matching
+        # This allows matching "database" with "Database-SQL", "Database", etc.
         filters = []
+        filter_params = []
         
         if service_val:
-            filters.append("c.metadata->>'service' = %s")
+            # Case-insensitive partial match: "database" matches "Database-SQL", "Database", etc.
+            filters.append("LOWER(c.metadata->>'service') LIKE LOWER(%s)")
+            filter_params.append(f"%{service_val}%")
         
         if component_val:
-            filters.append("c.metadata->>'component' = %s")
+            # Case-insensitive partial match: "sql-server" matches "sql-server", "SQL Server", etc.
+            filters.append("LOWER(c.metadata->>'component') LIKE LOWER(%s)")
+            filter_params.append(f"%{component_val}%")
         
         filter_clause = " AND " + " AND ".join(filters) if filters else ""
         
@@ -164,10 +170,9 @@ def hybrid_search(
         exec_params.append(query_embedding_str)  # 1: vector_score embedding
         exec_params.append(query_embedding_str)  # 2: vector_rank embedding
         # Filters for vector_results (if any) - these come BEFORE ORDER BY
-        if service_val:
-            exec_params.append(service_val)
-        if component_val:
-            exec_params.append(component_val)
+        # Use filter_params which already have the LIKE patterns
+        for param in filter_params:
+            exec_params.append(param)
         exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
         exec_params.append(limit * 2)  # 4: vector_results limit
         
@@ -176,10 +181,9 @@ def hybrid_search(
         exec_params.append(query_text)  # 6: fulltext_rank text
         exec_params.append(query_text)  # 7: WHERE text
         # Filters for fulltext_results (if any) - these come BEFORE ORDER BY
-        if service_val:
-            exec_params.append(service_val)
-        if component_val:
-            exec_params.append(component_val)
+        # Use same filter_params again (each filter appears twice in query)
+        for param in filter_params:
+            exec_params.append(param)
         exec_params.append(query_text)  # 8: ORDER BY text
         exec_params.append(limit * 2)  # 9: fulltext_results limit
         
@@ -189,7 +193,7 @@ def hybrid_search(
         # CRITICAL: Verify we have exactly the right number of parameters
         # Base: 10 params (no filters)
         # Each filter adds 2 params (one in vector_results, one in fulltext_results)
-        expected_params = 10 + (2 if service_val else 0) + (2 if component_val else 0)
+        expected_params = 10 + (2 * len(filter_params))
         
         if len(exec_params) != expected_params:
             raise ValueError(
@@ -236,6 +240,27 @@ def hybrid_search(
         duration = time.time() - start_time
         logger.debug(
             f"Hybrid search completed: found {len(results)} results in {duration:.3f}s"
+        )
+
+        # Diagnostic: log top fused hits to verify RRF/MMR behavior
+        top_preview = []
+        for row in results[:3]:
+            top_preview.append(
+                {
+                    "doc_id": str(row["document_id"]),
+                    "doc_type": row["doc_type"],
+                    "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
+                    "fulltext_score": float(row["fulltext_score"]) if row["fulltext_score"] else 0.0,
+                    "rrf_score": float(row["rrf_score"]),
+                    "title": (row["doc_title"] or "")[:80],
+                }
+            )
+        logger.info(
+            "HYBRID_SEARCH TOP RESULTS: "
+            f"count={len(results)}, duration_sec={duration:.3f}, "
+            f"service={repr(service_val)}, component={repr(component_val)}, "
+            f"vector_weight={vector_weight}, fulltext_weight={fulltext_weight}, "
+            f"preview={top_preview}"
         )
         
         # Convert to list of dicts

@@ -6,11 +6,7 @@ from ai_service.repositories import IncidentRepository
 from ai_service.policy import get_policy_from_config
 from ai_service.guardrails import validate_triage_output
 from ai_service.core import (
-    get_retrieval_config, get_workflow_config, get_logger,
-    triage_requests_total, triage_duration_seconds,
-    retrieval_requests_total, retrieval_duration_seconds, retrieval_chunks_returned,
-    llm_requests_total, llm_request_duration_seconds,
-    policy_decisions_total, MetricsTimer
+    get_retrieval_config, get_workflow_config, get_logger
 )
 from retrieval.hybrid_search import hybrid_search
 
@@ -101,13 +97,11 @@ def triage_agent(alert: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with incident_id, triage output, evidence, and policy information
     """
-    # Track overall triage duration
-    with MetricsTimer(triage_duration_seconds):
-        return _triage_agent_internal(alert)
+    return _triage_agent_internal(alert)
 
 
 def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
-    """Internal triage agent implementation (called by triage_agent with metrics)."""
+    """Internal triage agent implementation."""
     # Convert alert timestamp if needed
     if isinstance(alert.get("ts"), datetime):
         alert["ts"] = alert["ts"].isoformat()
@@ -131,102 +125,158 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     vector_weight = retrieval_cfg.get("vector_weight", 0.7)
     fulltext_weight = retrieval_cfg.get("fulltext_weight", 0.3)
     
-    # Retrieve context with metrics
-    with MetricsTimer(retrieval_duration_seconds, {"agent_type": "triage"}):
-        context_chunks = hybrid_search(
-            query_text=query_text,
-            service=service_val,
-            component=component_val,
-            limit=retrieval_limit,
-            vector_weight=vector_weight,
-            fulltext_weight=fulltext_weight
-        )
-        retrieval_requests_total.labels(agent_type="triage", status="success").inc()
-        retrieval_chunks_returned.labels(agent_type="triage").observe(len(context_chunks))
+    # Retrieve context
+    context_chunks = hybrid_search(
+        query_text=query_text,
+        service=service_val,
+        component=component_val,
+        limit=retrieval_limit,
+        vector_weight=vector_weight,
+        fulltext_weight=fulltext_weight
+    )
     
     # Apply retrieval preferences (prefer_types, max_per_type)
     context_chunks = apply_retrieval_preferences(context_chunks, retrieval_cfg)
     
+    # Optionally retrieve logs from InfluxDB if configured
+    try:
+        from retrieval.influxdb_client import get_influxdb_client
+        influxdb_client = get_influxdb_client()
+        if influxdb_client.is_configured():
+            logs = influxdb_client.get_logs_for_context(
+                query_text=query_text,
+                service=service_val,
+                component=component_val,
+                limit=5  # Small limit for logs
+            )
+            # Convert logs to chunk-like format for consistency
+            for log_content in logs:
+                if log_content:
+                    context_chunks.append({
+                        "chunk_id": f"influxdb_log_{len(context_chunks)}",
+                        "content": f"[Log Entry]\n{log_content}",
+                        "doc_type": "log",
+                        "source": "influxdb"
+                    })
+    except Exception as e:
+        logger.debug(f"InfluxDB log retrieval not available or failed: {str(e)}")
+    
     logger.debug(f"Retrieved {len(context_chunks)} context chunks for triage")
     
-    # Check if we have evidence - if not, proceed with warning but still create incident
+    # Check if we have evidence - allow REVIEW fallback when missing
     evidence_warning = None
-    if len(context_chunks) == 0:
-        from db.connection import get_db_connection
+    MIN_REQUIRED_CHUNKS = 1
+    context_missing = len(context_chunks) < MIN_REQUIRED_CHUNKS
+
+    doc_count = None
+    if context_missing:
         try:
+            from db.connection import get_db_connection
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) as count FROM documents")
             result = cur.fetchone()
             doc_count = result["count"] if isinstance(result, dict) else result[0]
             conn.close()
-            
-            if doc_count == 0:
-                # No data in database at all
-                evidence_warning = (
-                    "No historical data found in knowledge base. "
-                    "Triage performed without context. "
-                    "Please ingest historical data (alerts, incidents, runbooks, logs) for better results. "
-                    "Use: python scripts/data/generate_fake_data.py --all --count 20"
-                )
-                logger.warning(evidence_warning)
-                triage_requests_total.labels(status="no_data").inc()
-            else:
-                # Data exists but no matching chunks found
-                evidence_warning = (
-                    f"No matching evidence found for this alert. "
-                    f"Database has {doc_count} documents, but none match the alert context. "
-                    "Triage performed without relevant historical evidence. "
-                    "Please ensure relevant historical data is ingested for better results."
-                )
-                logger.warning(evidence_warning)
-                triage_requests_total.labels(status="no_matching_context").inc()
         except Exception as e:
-            # If we can't check the database, proceed with warning
-            evidence_warning = f"Cannot verify database state: {e}. Proceeding without evidence validation."
-            logger.warning(evidence_warning)
-            triage_requests_total.labels(status="warning").inc()
-    
-    # Call LLM for triage with metrics
-    with MetricsTimer(llm_request_duration_seconds, {"agent_type": "triage", "model": "gpt-4-turbo-preview"}):
+            logger.warning(f"Could not check document count: {e}")
+
+        if doc_count is None:
+            evidence_warning = "No matching context found (could not verify database). Manual review required."
+        elif doc_count == 0:
+            evidence_warning = (
+                "No historical data found in knowledge base. Please ingest runbooks/incidents/logs. "
+                "Proceeding with REVIEW and confidence=0.0."
+            )
+        else:
+            evidence_warning = (
+                f"No matching evidence found. Database has {doc_count} documents, but none match the alert context. "
+                "Proceeding with REVIEW and confidence=0.0. Please align service/component metadata or ingest matching data."
+            )
+
+    # If we have context, go through normal LLM path
+    if not context_missing:
+        logger.info(f"Context validation passed: {len(context_chunks)} chunks retrieved for triage")
+
+        # Call LLM for triage
+        logger.debug("Calling LLM for triage...")
         triage_output = call_llm_for_triage(alert, context_chunks)
-        llm_requests_total.labels(agent_type="triage", model="gpt-4-turbo-preview", status="success").inc()
-    
-    logger.debug(f"LLM triage completed: severity={triage_output.get('severity')}, confidence={triage_output.get('confidence')}")
-    
-    # Validate triage output with guardrails
-    is_valid, validation_errors = validate_triage_output(triage_output)
-    if not is_valid:
-        logger.error(f"Triage validation failed: {validation_errors}")
-        triage_requests_total.labels(status="validation_error").inc()
-        raise ValueError(f"Triage output validation failed: {', '.join(validation_errors)}")
-    
-    # Determine if policy should be deferred until feedback
-    workflow_cfg = get_workflow_config() or {}
-    feedback_before_policy = bool(workflow_cfg.get("feedback_before_policy", False))
-    if feedback_before_policy:
-        policy_decision = None
-        policy_band = "PENDING"
-        logger.info("Policy evaluation deferred until feedback received")
+        logger.debug(
+            f"LLM triage completed: severity={triage_output.get('severity')}, "
+            f"confidence={triage_output.get('confidence')}"
+        )
+
+        # Validate triage output with guardrails
+        is_valid, validation_errors = validate_triage_output(triage_output)
+        if not is_valid:
+            logger.error(f"Triage validation failed: {validation_errors}")
+            raise ValueError(f"Triage output validation failed: {', '.join(validation_errors)}")
+
+        workflow_cfg = get_workflow_config() or {}
+        feedback_before_policy = bool(workflow_cfg.get("feedback_before_policy", False))
+        if feedback_before_policy:
+            policy_decision = None
+            policy_band = "PENDING"
+            logger.info("Policy evaluation deferred until feedback received")
+        else:
+            policy_decision = get_policy_from_config(triage_output)
+            policy_band = policy_decision.get("policy_band", "REVIEW")
+            logger.info(f"Policy decision: {policy_band}")
+
+        triage_evidence = format_evidence_chunks(
+            context_chunks,
+            retrieval_method="hybrid_search",
+            retrieval_params={
+                "query_text": query_text,
+                "service": service_val,
+                "component": component_val,
+                "limit": 5
+            }
+        )
     else:
-        # Run policy gate AFTER triage (configuration-driven)
-        policy_decision = get_policy_from_config(triage_output)
-        policy_band = policy_decision.get("policy_band", "REVIEW")
-        policy_decisions_total.labels(policy_band=policy_band).inc()
-        logger.info(f"Policy decision: {policy_band}")
-    
-    # Format evidence chunks for storage
-    triage_evidence = format_evidence_chunks(
-        context_chunks,
-        retrieval_method="hybrid_search",
-        retrieval_params={
-            "query_text": query_text,
-            "service": service_val,
-            "component": component_val,
-            "limit": 5
+        # Fallback triage output with REVIEW band and confidence 0.0
+        labels = alert.get("labels", {}) if isinstance(alert, dict) else {}
+        service_hint = labels.get("service") or "unknown"
+        category_hint = labels.get("category") or "other"
+        title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"
+
+        triage_output = {
+            "severity": "medium",
+            "category": category_hint,
+            "summary": f"No context found for alert: {title}. Manual review required.",
+            "likely_cause": "Unknown (no matching context evidence).",
+            "routing": "UNKNOWN",
+            "affected_services": [service_hint] if service_hint else [],
+            "recommended_actions": [
+                "Review alert details manually.",
+                "Ingest or align historical data for this service/component.",
+                "Retry triage after data alignment."
+            ],
+            "confidence": 0.0
         }
-    )
-    
+
+        # Force REVIEW policy band to reflect HITL requirement
+        policy_decision = {
+            "policy_band": "REVIEW",
+            "can_auto_apply": False,
+            "requires_approval": True,
+            "notification_required": False,
+            "rollback_required": False,
+            "policy_reason": "No matching context; manual review required."
+        }
+        policy_band = "REVIEW"
+
+        triage_evidence = format_evidence_chunks(
+            context_chunks,  # empty list
+            retrieval_method="hybrid_search",
+            retrieval_params={
+                "query_text": query_text,
+                "service": service_val,
+                "component": component_val,
+                "limit": 5
+            }
+        )
+
     # Store incident with evidence and policy decision
     repository = IncidentRepository()
     incident_id = repository.create(
@@ -236,13 +286,12 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         policy_band=policy_band,
         policy_decision=policy_decision
     )
-    
+
     logger.info(
         f"Triage completed successfully: incident_id={incident_id}, "
         f"severity={triage_output.get('severity')}, policy_band={policy_band}"
     )
-    triage_requests_total.labels(status="success").inc()
-    
+
     result = {
         "incident_id": incident_id,
         "triage": triage_output,
@@ -251,10 +300,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         "policy_band": policy_band,
         "policy_decision": policy_decision
     }
-    
-    # Add warning if no evidence was found
+
     if evidence_warning:
         result["warning"] = evidence_warning
-    
+
     return result
 

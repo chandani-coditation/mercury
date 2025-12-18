@@ -1,5 +1,7 @@
 """Embedding generation utilities."""
 import os
+import sys
+from pathlib import Path
 import tiktoken
 from typing import List
 from openai import OpenAI
@@ -7,16 +9,30 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Try to load embeddings config, fallback to defaults
+try:
+    # Add project root to path for config loading
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
+    from ai_service.core import get_embeddings_config
+    embeddings_config = get_embeddings_config()
+    DEFAULT_MODEL = embeddings_config.get("model", "text-embedding-3-small")
+except Exception:
+    DEFAULT_MODEL = "text-embedding-3-small"
+
 # Token limits for embedding models
 EMBEDDING_MODEL_LIMITS = {
     "text-embedding-3-small": 8191,
     "text-embedding-3-large": 8191,
-    "text-embedding-ada-002": 8191
+    "text-embedding-ada-002": 8191,
+    "bge-m3": 8192
 }
 
-def count_tokens(text: str, model: str = "text-embedding-3-small") -> int:
+def count_tokens(text: str, model: str = None) -> int:
     """Count tokens in text using the same encoding as the embedding model."""
-    encoding = tiktoken.get_encoding("cl100k_base")  # Used by text-embedding-3-small
+    if model is None:
+        model = DEFAULT_MODEL
+    encoding = tiktoken.get_encoding("cl100k_base")  # Used by OpenAI embedding models
     return len(encoding.encode(text))
 
 
@@ -28,13 +44,13 @@ def get_embedding_client():
     return OpenAI(api_key=api_key)
 
 
-def embed_text(text: str, model: str = "text-embedding-3-small") -> list:
+def embed_text(text: str, model: str = None) -> list:
     """
     Generate embedding for text.
     
     Args:
         text: Text to embed
-        model: OpenAI embedding model name
+        model: OpenAI embedding model name (defaults to config)
     
     Returns:
         List of floats (embedding vector)
@@ -42,6 +58,8 @@ def embed_text(text: str, model: str = "text-embedding-3-small") -> list:
     Raises:
         ValueError: If text exceeds token limit
     """
+    if model is None:
+        model = DEFAULT_MODEL
     client = get_embedding_client()
     
     # Replace newlines with spaces for better embeddings
@@ -66,7 +84,7 @@ def embed_text(text: str, model: str = "text-embedding-3-small") -> list:
     return response.data[0].embedding
 
 
-def embed_texts_batch(texts: List[str], model: str = "text-embedding-3-small", batch_size: int = 100) -> List[List[float]]:
+def embed_texts_batch(texts: List[str], model: str = None, batch_size: int = 100) -> List[List[float]]:
     """
     Generate embeddings for multiple texts in batches.
     
@@ -76,7 +94,7 @@ def embed_texts_batch(texts: List[str], model: str = "text-embedding-3-small", b
     
     Args:
         texts: List of texts to embed
-        model: OpenAI embedding model name
+        model: OpenAI embedding model name (defaults to config)
         batch_size: Number of texts to process per API call (default: 100)
     
     Returns:
@@ -88,6 +106,8 @@ def embed_texts_batch(texts: List[str], model: str = "text-embedding-3-small", b
     if not texts:
         return []
     
+    if model is None:
+        model = DEFAULT_MODEL
     client = get_embedding_client()
     all_embeddings = []
     max_tokens = EMBEDDING_MODEL_LIMITS.get(model, 8191)

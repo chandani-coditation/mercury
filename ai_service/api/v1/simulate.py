@@ -90,7 +90,7 @@ def simulate_robusta_flow(
         results["incident_id"] = incident_id
         results["triage"] = triage_output
         results["enrichments"].append({
-            "title": "🤖 Triager Agent Output",
+            "title": " Triager Agent Output",
             "content": f"Severity: {triage_output.get('severity')}, Category: {triage_output.get('category')}, Policy Band: {policy_band}"
         })
         
@@ -118,7 +118,7 @@ def simulate_robusta_flow(
                 "status": "feedback_stored"
             }
             results["enrichments"].append({
-                "title": "✅ Triage Feedback Collected",
+                "title": " Triage Feedback Collected",
                 "content": "Feedback stored successfully"
             })
         
@@ -130,8 +130,8 @@ def simulate_robusta_flow(
             
             results["resolution"] = resolution_output
             results["enrichments"].append({
-                "title": "🛠️ Resolution Copilot Agent Output",
-                "content": f"Risk Level: {resolution_output.get('risk_level')}, Steps: {len(resolution_output.get('resolution_steps', []))}"
+                "title": " Resolution Copilot Agent Output",
+                "content": f"Risk Level: {resolution_output.get('risk_level')}, Steps: {len(resolution_output.get('steps', resolution_output.get('resolution_steps', [])))}"
             })
             
             # Step 4: Feedback Collection (Resolution)
@@ -158,13 +158,13 @@ def simulate_robusta_flow(
                     "status": "feedback_stored"
                 }
                 results["enrichments"].append({
-                    "title": "✅ Resolution Feedback Collected",
+                    "title": " Resolution Feedback Collected",
                     "content": "Feedback stored and resolution accepted"
                 })
         else:
             # Resolution was skipped (REVIEW policy band)
             results["enrichments"].append({
-                "title": "⚠️ Resolution Copilot Skipped",
+                "title": " Resolution Copilot Skipped",
                 "content": f"Policy Band: {policy_band}. Manual review required."
             })
         

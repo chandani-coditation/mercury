@@ -13,7 +13,7 @@ echo ""
 
 # Check if kind is installed
 if ! command -v kind &> /dev/null; then
-    echo "❌ kind is not installed"
+    echo " kind is not installed"
     echo ""
     echo "Install kind with:"
     echo "  brew install kind  # macOS"
@@ -23,7 +23,7 @@ fi
 
 # Check if kubectl is installed
 if ! command -v kubectl &> /dev/null; then
-    echo "❌ kubectl is not installed"
+    echo " kubectl is not installed"
     echo ""
     echo "Install kubectl with:"
     echo "  brew install kubectl  # macOS"
@@ -32,23 +32,23 @@ fi
 
 # Check if helm is installed
 if ! command -v helm &> /dev/null; then
-    echo "❌ helm is not installed"
+    echo " helm is not installed"
     echo ""
     echo "Install helm with:"
     echo "  brew install helm  # macOS"
     exit 1
 fi
 
-echo "✓ Prerequisites check passed"
+echo " Prerequisites check passed"
 echo ""
 
 # Check if cluster already exists
 if kind get clusters | grep -q "noc-cluster"; then
-    echo "⚠️  Cluster 'noc-cluster' already exists"
+    echo "  Cluster 'noc-cluster' already exists"
     read -p "Delete and recreate? (y/N) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "🗑️  Deleting existing cluster..."
+        echo "  Deleting existing cluster..."
         kind delete cluster --name noc-cluster
     else
         echo "Using existing cluster"
@@ -58,10 +58,10 @@ if kind get clusters | grep -q "noc-cluster"; then
 fi
 
 # Create kind cluster
-echo "📦 Creating kind cluster..."
+echo " Creating kind cluster..."
 # Check if ports 80/443 are in use
 if lsof -i :80 >/dev/null 2>&1 || lsof -i :443 >/dev/null 2>&1; then
-    echo "⚠️  Ports 80/443 are in use, using alternative ports (8080/8443)"
+    echo "  Ports 80/443 are in use, using alternative ports (8080/8443)"
     cat <<EOF | kind create cluster --name noc-cluster --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -103,7 +103,7 @@ nodes:
 EOF
 fi
 
-echo "✓ Cluster created"
+echo " Cluster created"
 echo ""
 
 # Wait for cluster to be ready
@@ -125,11 +125,11 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
   --set prometheus.prometheusSpec.service.nodePort=30900 \
   --wait
 
-echo "✓ Prometheus installed"
+echo " Prometheus installed"
 echo ""
 
 # Install Robusta
-echo "🤖 Installing Robusta..."
+echo " Installing Robusta..."
 kubectl create namespace robusta 2>/dev/null || true
 
 # Add Robusta Helm repo
@@ -159,17 +159,17 @@ helm install robusta robusta/robusta \
   -f /tmp/robusta-values.yaml \
   --wait
 
-echo "✓ Robusta installed"
+echo " Robusta installed"
 echo ""
 
 # Get Robusta webhook URL
-echo "🔍 Getting Robusta webhook URL..."
+echo " Getting Robusta webhook URL..."
 sleep 10  # Wait for Robusta to be fully ready
 
 ROBUSTA_WEBHOOK=$(kubectl get svc -n robusta robusta-runner -o jsonpath='{.spec.clusterIP}')
 ROBUSTA_PORT=$(kubectl get svc -n robusta robusta-runner -o jsonpath='{.spec.ports[0].port}')
 
-echo "✓ Robusta webhook: http://${ROBUSTA_WEBHOOK}:${ROBUSTA_PORT}/webhook"
+echo " Robusta webhook: http://${ROBUSTA_WEBHOOK}:${ROBUSTA_PORT}/webhook"
 echo ""
 
 # Create a service to expose AI service to Robusta
@@ -179,7 +179,7 @@ echo "Note: You'll need to deploy your AI service to the cluster or"
 echo "      expose it via port-forward/ingress for Robusta to reach it."
 echo ""
 
-echo "✅ Setup complete!"
+echo " Setup complete!"
 echo ""
 echo "Next steps:"
 echo "  1. Deploy your AI service to the cluster (or use port-forward)"

@@ -7,12 +7,7 @@ from ai_service.policy import get_policy_from_config
 from ai_service.guardrails import validate_triage_output
 from ai_service.state import AgentState, AgentStep, PendingAction, get_state_bus
 from ai_service.core import (
-    get_retrieval_config, get_workflow_config, get_logger,
-    triage_requests_total, triage_duration_seconds,
-    retrieval_requests_total, retrieval_duration_seconds, retrieval_chunks_returned,
-    llm_requests_total, llm_request_duration_seconds,
-    policy_decisions_total, agent_state_emitted_total, hitl_actions_total, hitl_actions_pending,
-    MetricsTimer
+    get_retrieval_config, get_workflow_config, get_logger
 )
 from retrieval.hybrid_search import hybrid_search
 from ai_service.agents.triager import format_evidence_chunks, apply_retrieval_preferences
@@ -42,9 +37,7 @@ async def triage_agent_state(alert: Dict[str, Any], use_state_bus: bool = True) 
     Returns:
         Dictionary with incident_id, triage output, evidence, policy
     """
-    # Track overall triage duration
-    with MetricsTimer(triage_duration_seconds):
-        return await _triage_agent_state_internal(alert, use_state_bus)
+    return await _triage_agent_state_internal(alert, use_state_bus)
 
 
 async def _triage_agent_state_internal(
@@ -82,7 +75,6 @@ async def _triage_agent_state_internal(
     state.current_step = AgentStep.RETRIEVING_CONTEXT
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="retrieving_context").inc()
     
     # Get retrieval config
     retrieval_cfg = (get_retrieval_config() or {}).get("triage", {})
@@ -91,19 +83,6 @@ async def _triage_agent_state_internal(
     fulltext_weight = retrieval_cfg.get("fulltext_weight", 0.3)
     
     # Retrieve context
-    with MetricsTimer(retrieval_duration_seconds, {"agent_type": "triage"}):
-        context_chunks = hybrid_search(
-            query_text=query_text,
-            service=service_val,
-            component=component_val,
-            limit=retrieval_limit,
-            vector_weight=vector_weight,
-            fulltext_weight=fulltext_weight
-        )
-        retrieval_requests_total.labels(agent_type="triage", status="success").inc()
-        retrieval_chunks_returned.labels(agent_type="triage").observe(len(context_chunks))
-    
-    # Apply retrieval preferences
     context_chunks = apply_retrieval_preferences(context_chunks, retrieval_cfg)
     
     # Update state: context retrieved
@@ -143,31 +122,22 @@ async def _triage_agent_state_internal(
     
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="context_retrieved").inc()
     
     # Update state: calling LLM
     state.current_step = AgentStep.CALLING_LLM
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="calling_llm").inc()
     
     # Call LLM
-    with MetricsTimer(llm_request_duration_seconds, {"agent_type": "triage", "model": "gpt-4-turbo-preview"}):
-        triage_output = call_llm_for_triage(alert, context_chunks)
-        llm_requests_total.labels(agent_type="triage", model="gpt-4-turbo-preview", status="success").inc()
-    
-    # Update state: LLM completed
     state.current_step = AgentStep.LLM_COMPLETED
     state.triage_output = triage_output
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="llm_completed").inc()
     
     # Update state: validating
     state.current_step = AgentStep.VALIDATING
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="validating").inc()
     
     # Validate triage output
     is_valid, validation_errors = validate_triage_output(triage_output)
@@ -177,20 +147,17 @@ async def _triage_agent_state_internal(
         state.error = f"Validation failed: {', '.join(validation_errors)}"
         if use_state_bus:
             await state_bus.emit_state(state)
-        triage_requests_total.labels(status="validation_error").inc()
         raise ValueError(f"Triage output validation failed: {', '.join(validation_errors)}")
     
     # Update state: validation complete
     state.current_step = AgentStep.VALIDATION_COMPLETE
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="validation_complete").inc()
     
     # Update state: evaluating policy
     state.current_step = AgentStep.POLICY_EVALUATING
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="policy_evaluating").inc()
     
     # Determine if policy should be deferred
     workflow_cfg = get_workflow_config() or {}
@@ -204,7 +171,6 @@ async def _triage_agent_state_internal(
         # Run policy gate
         policy_decision = get_policy_from_config(triage_output)
         policy_band = policy_decision.get("policy_band", "REVIEW")
-        policy_decisions_total.labels(policy_band=policy_band).inc()
         logger.info(f"Policy decision: {policy_band}")
     
     # Update state with policy
@@ -218,7 +184,6 @@ async def _triage_agent_state_internal(
     state.current_step = AgentStep.POLICY_EVALUATED
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="policy_evaluated").inc()
     
     # Format evidence chunks
     triage_evidence = format_evidence_chunks(
@@ -250,8 +215,6 @@ async def _triage_agent_state_internal(
             },
             timeout_minutes=30
         )
-        hitl_actions_total.labels(action_type="review_triage", status="created").inc()
-        hitl_actions_pending.labels(action_type="review_triage").inc()
         
         # Store incident first (so we have incident_id)
         repository = IncidentRepository()
@@ -285,7 +248,6 @@ async def _triage_agent_state_internal(
     state.current_step = AgentStep.STORING
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="storing").inc()
     
     # Store incident
     repository = IncidentRepository()
@@ -303,13 +265,11 @@ async def _triage_agent_state_internal(
     state.completed_at = datetime.utcnow()
     if use_state_bus:
         await state_bus.emit_state(state)
-        agent_state_emitted_total.labels(agent_type="triage", step="completed").inc()
     
     logger.info(
         f"Triage completed successfully: incident_id={incident_id}, "
         f"severity={triage_output.get('severity')}, policy_band={policy_band}"
     )
-    triage_requests_total.labels(status="success").inc()
     
     result = {
         "incident_id": incident_id,

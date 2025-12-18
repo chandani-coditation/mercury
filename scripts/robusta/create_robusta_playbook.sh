@@ -12,7 +12,7 @@ echo ""
 
 # Check if kubectl is available
 if ! command -v kubectl &> /dev/null; then
-    echo "❌ kubectl is not installed"
+    echo " kubectl is not installed"
     exit 1
 fi
 
@@ -99,7 +99,7 @@ spec:
             # Build enrichment message
             enrichment = [
                 {
-                    "title": "🤖 Triager Agent Output",
+                    "title": " Triager Agent Output",
                     "content": f"""
 **Severity:** {triage.get('severity', 'unknown')}
 **Category:** {triage.get('category', 'unknown')}
@@ -125,7 +125,7 @@ spec:
         except Exception as e:
             event.add_enrichment([
                 {
-                    "title": "❌ Triager Agent Error",
+                    "title": " Triager Agent Error",
                     "content": f"Failed to call AI service: {str(e)}"
                 }
             ])
@@ -153,7 +153,7 @@ spec:
             if not incident_id and use_incident_id:
                 event.add_enrichment([
                     {
-                        "title": "⚠️ Resolution Copilot Skipped",
+                        "title": " Resolution Copilot Skipped",
                         "content": "No incident_id from triage step. Skipping resolution."
                     }
                 ])
@@ -190,7 +190,7 @@ spec:
             # Build enrichment message
             enrichment = [
                 {
-                    "title": "🛠️ Resolution Copilot Agent Output",
+                    "title": " Resolution Copilot Agent Output",
                     "content": f"""
 **Policy Band:** {policy_band}
 **Risk Level:** {resolution.get('risk_level', 'unknown')}
@@ -234,7 +234,7 @@ spec:
         except Exception as e:
             event.add_enrichment([
                 {
-                    "title": "❌ Resolution Copilot Error",
+                    "title": " Resolution Copilot Error",
                     "content": f"Failed to call AI service: {str(e)}"
                 }
             ])
@@ -245,13 +245,13 @@ EOF
 PLAYBOOK_FILE="/tmp/robusta-noc-playbook.yaml"
 echo "$PLAYBOOK" > $PLAYBOOK_FILE
 
-echo "📄 Playbook created: $PLAYBOOK_FILE"
+echo " Playbook created: $PLAYBOOK_FILE"
 echo ""
 echo "This playbook includes:"
-echo "  ✓ Triager Agent - Analyzes alerts with historical context"
-echo "  ✓ Feedback Collection (Triage) - Prompts for triage feedback"
-echo "  ✓ Resolution Copilot Agent - Generates resolution steps with policy gates"
-echo "  ✓ Feedback Collection (Resolution) - Prompts for resolution approval/edits"
+echo "   Triager Agent - Analyzes alerts with historical context"
+echo "   Feedback Collection (Triage) - Prompts for triage feedback"
+echo "   Resolution Copilot Agent - Generates resolution steps with policy gates"
+echo "   Feedback Collection (Resolution) - Prompts for resolution approval/edits"
 echo ""
 echo "To deploy:"
 echo "  kubectl apply -f $PLAYBOOK_FILE"
@@ -266,7 +266,7 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     kubectl apply -f $PLAYBOOK_FILE
     echo ""
-    echo "✅ Playbook deployed!"
+    echo " Playbook deployed!"
     echo ""
     echo "Check status:"
     echo "  kubectl get playbooks -n robusta"

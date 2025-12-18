@@ -4,14 +4,14 @@
   
   "provider": "openai",
   "triage": {
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-4o-mini",
     "temperature": 0.3,
     "max_tokens": null,
     "system_prompt": "You are an expert NOC (Network Operations Center) analyst. Always respond with valid JSON only.",
     "response_format": "json_object"
   },
   "resolution": {
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-4o-mini",
     "temperature": 0.2,
     "max_tokens": null,
     "system_prompt": "You are an expert NOC engineer. Always respond with valid JSON only.",

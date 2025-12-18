@@ -1,15 +1,10 @@
 """AI service FastAPI application."""
 import os
-import time
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from ai_service.core import (
-    setup_logging, get_logger,
-    http_requests_total, http_request_duration_seconds,
-    get_metrics_response
-)
+from ai_service.core import setup_logging, get_logger
 from ai_service.api.v1 import router as v1_router
 from ai_service.state import get_state_bus
 from db.connection import init_db_pool, close_db_pool
@@ -39,49 +34,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Request timing middleware
-@app.middleware("http")
-async def metrics_middleware(request: Request, call_next):
-    """Middleware to track HTTP metrics."""
-    start_time = time.time()
-    
-    # Process request
-    response = await call_next(request)
-    
-    # Calculate duration
-    duration = time.time() - start_time
-    
-    # Extract endpoint (normalize)
-    endpoint = request.url.path
-    # Normalize endpoint (replace IDs with {id})
-    if "/incidents/" in endpoint and len(endpoint.split("/")) > 3:
-        endpoint = "/incidents/{id}" + endpoint.split("/incidents/")[1].split("/", 1)[1] if "/" in endpoint.split("/incidents/")[1] else "/incidents/{id}"
-    
-    # Record metrics
-    http_requests_total.labels(
-        method=request.method,
-        endpoint=endpoint,
-        status_code=response.status_code
-    ).inc()
-    
-    http_request_duration_seconds.labels(
-        method=request.method,
-        endpoint=endpoint
-    ).observe(duration)
-    
-    logger.debug(
-        f"HTTP {request.method} {request.url.path} - {response.status_code} - {duration:.3f}s"
-    )
-    
-    return response
-
-
-@app.get("/metrics")
-def metrics():
-    """Prometheus metrics endpoint."""
-    return get_metrics_response()
 
 
 # Startup / shutdown hooks

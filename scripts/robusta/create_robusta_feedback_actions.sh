@@ -12,7 +12,7 @@ echo ""
 
 # Check if kubectl is available
 if ! command -v kubectl &> /dev/null; then
-    echo "❌ kubectl is not installed"
+    echo " kubectl is not installed"
     exit 1
 fi
 
@@ -44,7 +44,7 @@ spec:
         if not incident_id:
             event.add_enrichment([
                 {
-                    "title": "⚠️ Feedback Collection Skipped",
+                    "title": " Feedback Collection Skipped",
                     "content": "No incident_id available for feedback collection"
                 }
             ])
@@ -59,7 +59,7 @@ spec:
         except Exception as e:
             event.add_enrichment([
                 {
-                    "title": "❌ Feedback Collection Error",
+                    "title": " Feedback Collection Error",
                     "content": f"Failed to get incident: {str(e)}"
                 }
             ])
@@ -112,7 +112,7 @@ spec:
         if not incident_id:
             event.add_enrichment([
                 {
-                    "title": "⚠️ Feedback Collection Skipped",
+                    "title": " Feedback Collection Skipped",
                     "content": "No incident_id available for feedback collection"
                 }
             ])
@@ -128,7 +128,7 @@ spec:
         except Exception as e:
             event.add_enrichment([
                 {
-                    "title": "❌ Feedback Collection Error",
+                    "title": " Feedback Collection Error",
                     "content": f"Failed to get incident: {str(e)}"
                 }
             ])
@@ -170,7 +170,7 @@ EOF
 FEEDBACK_FILE="/tmp/robusta-feedback-actions.yaml"
 echo "$FEEDBACK_ACTIONS" > "$FEEDBACK_FILE"
 
-echo "✅ Created feedback actions YAML: $FEEDBACK_FILE"
+echo " Created feedback actions YAML: $FEEDBACK_FILE"
 echo ""
 echo "📋 Feedback Actions Created:"
 echo "  - call-noc-feedback-triage: Prompts for triage feedback"
@@ -183,7 +183,7 @@ echo "📝 To update playbook to include feedback actions:"
 echo "  Edit scripts/robusta/create_robusta_playbook.sh"
 echo "  Add feedback actions after triage and resolution agents"
 echo ""
-echo "⚠️  Note: These actions show enrichment messages."
+echo "  Note: These actions show enrichment messages."
 echo "   For full Slack integration, add interactive button handlers"
 echo "   that call the /incidents/{id}/feedback endpoint."
 

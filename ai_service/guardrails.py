@@ -62,6 +62,15 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
         if len(likely_cause) > max_cause_length:
             errors.append(f"Likely cause too long: {len(likely_cause)} chars (max: {max_cause_length})")
     
+    # Validate routing (required field)
+    routing = triage_output.get("routing", "")
+    if not routing or not routing.strip():
+        errors.append("Routing field is required and cannot be empty")
+    else:
+        max_routing_length = config.get("max_routing_length", 100)
+        if len(routing) > max_routing_length:
+            errors.append(f"Routing too long: {len(routing)} chars (max: {max_routing_length})")
+    
     # Validate array lengths
     affected_services = triage_output.get("affected_services", [])
     if not isinstance(affected_services, list):
@@ -120,26 +129,53 @@ def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]
         elif not (min_time <= estimated_time <= max_time):
             errors.append(f"estimated_time_minutes {estimated_time} out of range [{min_time}, {max_time}]")
     
-    # Validate resolution_steps
-    resolution_steps = resolution_output.get("resolution_steps", [])
-    if not isinstance(resolution_steps, list):
-        errors.append("resolution_steps must be a list")
+    # Validate steps (preferred) or resolution_steps (legacy)
+    steps = resolution_output.get("steps", resolution_output.get("resolution_steps", []))
+    if not isinstance(steps, list):
+        errors.append("steps must be a list")
     else:
         min_steps = config.get("min_resolution_steps", 1)
         max_steps = config.get("max_resolution_steps", 20)
-        if len(resolution_steps) < min_steps:
-            errors.append(f"Too few resolution steps: {len(resolution_steps)} (min: {min_steps})")
-        elif len(resolution_steps) > max_steps:
-            errors.append(f"Too many resolution steps: {len(resolution_steps)} (max: {max_steps})")
+        if len(steps) < min_steps:
+            errors.append(f"Too few resolution steps: {len(steps)} (min: {min_steps})")
+        elif len(steps) > max_steps:
+            errors.append(f"Too many resolution steps: {len(steps)} (max: {max_steps})")
         
         # Validate each step is a string
-        for i, step in enumerate(resolution_steps):
+        for i, step in enumerate(steps):
             if not isinstance(step, str):
                 errors.append(f"Resolution step {i+1} must be a string, got: {type(step).__name__}")
     
-    # Validate commands (if present)
+    # Validate commands_by_step (preferred) or commands (legacy)
+    commands_by_step = resolution_output.get("commands_by_step")
     commands = resolution_output.get("commands", [])
-    if commands is not None:
+    
+    if commands_by_step is not None:
+        if not isinstance(commands_by_step, dict):
+            errors.append("commands_by_step must be a dict or null")
+        else:
+            max_commands = config.get("max_commands", 10)
+            total_commands = sum(len(cmd_list) for cmd_list in commands_by_step.values() if isinstance(cmd_list, list))
+            if total_commands > max_commands:
+                errors.append(f"Too many commands in commands_by_step: {total_commands} (max: {max_commands})")
+            
+            # Check for dangerous commands
+            dangerous_commands = config.get("dangerous_commands", [])
+            for step_idx, cmd_list in commands_by_step.items():
+                if not isinstance(cmd_list, list):
+                    errors.append(f"commands_by_step['{step_idx}'] must be a list")
+                else:
+                    for cmd in cmd_list:
+                        if not isinstance(cmd, str):
+                            errors.append(f"Command in commands_by_step['{step_idx}'] must be a string")
+                        else:
+                            cmd_lower = cmd.lower()
+                            for dangerous in dangerous_commands:
+                                if dangerous.lower() in cmd_lower:
+                                    errors.append(f"Dangerous command detected: '{dangerous}' in '{cmd}'")
+    
+    # Validate legacy commands format (if present and commands_by_step not used)
+    if commands is not None and commands_by_step is None:
         if not isinstance(commands, list):
             errors.append("commands must be a list or null")
         else:
@@ -157,6 +193,34 @@ def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]
                     for dangerous in dangerous_commands:
                         if dangerous.lower() in cmd_lower:
                             errors.append(f"Dangerous command detected: '{dangerous}' in '{cmd}'")
+    
+    # Validate confidence (optional)
+    confidence = resolution_output.get("confidence")
+    if confidence is not None:
+        if not isinstance(confidence, (int, float)):
+            errors.append(f"confidence must be a number, got: {type(confidence).__name__}")
+        elif not (0.0 <= confidence <= 1.0):
+            errors.append(f"confidence {confidence} out of range [0.0, 1.0]")
+    
+    # Validate reasoning (optional)
+    reasoning = resolution_output.get("reasoning") or resolution_output.get("rationale")
+    if reasoning:
+        max_reasoning_length = config.get("max_reasoning_length", 1000)
+        if len(reasoning) > max_reasoning_length:
+            errors.append(f"reasoning too long: {len(reasoning)} chars (max: {max_reasoning_length})")
+    
+    # Validate provenance (optional)
+    provenance = resolution_output.get("provenance")
+    if provenance is not None:
+        if not isinstance(provenance, list):
+            errors.append("provenance must be a list or null")
+        else:
+            for i, prov in enumerate(provenance):
+                if not isinstance(prov, dict):
+                    errors.append(f"provenance[{i}] must be a dict")
+                else:
+                    if "doc_id" not in prov or "chunk_id" not in prov:
+                        errors.append(f"provenance[{i}] must contain 'doc_id' and 'chunk_id'")
     
     # Validate rollback_plan (if high risk)
     risk_level_upper = resolution_output.get("risk_level", "").lower()

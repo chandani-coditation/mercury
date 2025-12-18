@@ -1,11 +1,8 @@
 """Ingestion service FastAPI application."""
 import os
-import time
 from typing import Dict, List
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request as StarletteRequest
 from ingestion.models import (
     IngestDocument, IngestAlert, IngestIncident, 
     IngestRunbook, IngestLog
@@ -18,14 +15,10 @@ from ingestion.db_ops import insert_document_and_chunks
 from ingestion.api import documents
 from dotenv import load_dotenv
 
-# Import logging and metrics (create if needed, or use ai_service modules)
+# Import logging (use ai_service modules if available)
 import os
 try:
     from ai_service.core import setup_logging, get_logger
-    from ai_service.core import (
-        http_requests_total, http_request_duration_seconds,
-        get_metrics_response
-    )
 except ImportError:
     # Fallback if ai_service modules not available
     import logging
@@ -33,10 +26,6 @@ except ImportError:
         logging.basicConfig(level=getattr(logging, log_level))
     def get_logger(name):
         return logging.getLogger(name)
-    http_requests_total = None
-    http_request_duration_seconds = None
-    def get_metrics_response():
-        return Response(content="", media_type="text/plain")
 
 load_dotenv()
 
@@ -72,56 +61,11 @@ app.add_middleware(
 )
 
 
-# Request timing middleware
-@app.middleware("http")
-async def metrics_middleware(request: Request, call_next):
-    """Middleware to track HTTP metrics."""
-    if http_requests_total is None:
-        return await call_next(request)
-    
-    start_time = time.time()
-    
-    # Process request
-    response = await call_next(request)
-    
-    # Calculate duration
-    duration = time.time() - start_time
-    
-    # Extract endpoint (normalize)
-    endpoint = request.url.path
-    
-    # Record metrics
-    if http_requests_total:
-        http_requests_total.labels(
-            method=request.method,
-            endpoint=endpoint,
-            status_code=response.status_code
-        ).inc()
-    
-    if http_request_duration_seconds:
-        http_request_duration_seconds.labels(
-            method=request.method,
-            endpoint=endpoint
-        ).observe(duration)
-    
-    logger.debug(
-        f"HTTP {request.method} {request.url.path} - {response.status_code} - {duration:.3f}s"
-    )
-    
-    return response
-
-
 @app.get("/health")
 def health_check():
     """Health check endpoint."""
     logger.debug("Health check requested")
     return {"status": "healthy", "service": "ingestion", "version": "1.0.0"}
-
-
-@app.get("/metrics")
-def metrics():
-    """Prometheus metrics endpoint."""
-    return get_metrics_response()
 
 
 # Include documents router

@@ -1,7 +1,46 @@
 """Normalizers to convert various input formats to IngestDocument format."""
+import json
+import os
+from pathlib import Path
 from typing import Dict, Optional
 from datetime import datetime
 from ingestion.models import IngestAlert, IngestIncident, IngestRunbook, IngestLog, IngestDocument
+
+# Optional JSON schema validation
+try:
+    import jsonschema
+    JSON_SCHEMA_AVAILABLE = True
+except ImportError:
+    JSON_SCHEMA_AVAILABLE = False
+
+def _load_json_schema(schema_name: str) -> dict:
+    """Load JSON schema from config/json_schemas/ directory."""
+    try:
+        project_root = Path(__file__).parent.parent
+        schema_path = project_root / "config" / "json_schemas" / f"{schema_name}_schema.json"
+        if schema_path.exists():
+            with open(schema_path, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
+
+def _validate_with_schema(data: dict, schema_name: str) -> tuple[bool, list]:
+    """Validate data against JSON schema if available."""
+    if not JSON_SCHEMA_AVAILABLE:
+        return True, []  # Skip validation if jsonschema not installed
+    
+    schema = _load_json_schema(schema_name)
+    if not schema:
+        return True, []  # Skip if schema not found
+    
+    try:
+        jsonschema.validate(instance=data, schema=schema)
+        return True, []
+    except jsonschema.ValidationError as e:
+        return False, [str(e)]
+    except Exception as e:
+        return True, []  # Don't fail on validation errors, just log
 
 
 def normalize_alert(alert: IngestAlert) -> IngestDocument:
@@ -27,14 +66,22 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
     
     content = "\n\n".join(content_parts)
     
-    # Build tags
+    # Build comprehensive tags (mandatory fields from specification)
     tags = {
+        "type": "historical_alert",
         "alert_id": alert.alert_id,
         "source": alert.source,
         "severity": alert.severity,
-        "type": "historical_alert",
+        "service": service,  # From labels
+        "component": component,  # From labels
+        "env": alert.labels.get("environment") if alert.labels else None,
+        "risk": alert.severity,  # Use severity as risk indicator
+        "last_reviewed_at": alert.ts.isoformat() if alert.ts else None,
         **(alert.metadata or {})
     }
+    
+    # Remove None values
+    tags = {k: v for k, v in tags.items() if v is not None}
     
     return IngestDocument(
         doc_type="alert",
@@ -47,7 +94,7 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
     )
 
 
-def normalize_incident(incident: IngestIncident) -> IngestDocument:
+def normalize_incident(incident: IngestIncident, validate_schema: bool = False) -> IngestDocument:
     """Convert historical incident to IngestDocument format."""
     # Use raw_content if available (for unstructured), otherwise build from structured fields
     if incident.raw_content:
@@ -76,15 +123,34 @@ def normalize_incident(incident: IngestIncident) -> IngestDocument:
     if incident.affected_services and len(incident.affected_services) > 0:
         service = incident.affected_services[0]
     
-    # Build tags
+    # Build comprehensive tags (mandatory fields from specification)
     tags = {
+        "type": "historical_incident",
         "incident_id": incident.incident_id,
+        "ticket_id": incident.incident_id,  # ServiceNow ticket ID
+        "canonical_incident_key": incident.incident_id,  # Canonical key for matching
         "alert_id": incident.alert_id,
         "severity": incident.severity,
         "category": incident.category,
-        "type": "historical_incident",
+        "service": service,  # From affected_services
+        "component": None,  # Can be extracted from content if needed
+        "env": None,  # Environment (can be extracted from metadata if available)
+        "risk": incident.severity,  # Use severity as risk indicator
+        "last_reviewed_at": incident.timestamp.isoformat() if incident.timestamp else None,
         **(incident.metadata or {})
     }
+    
+    # Remove None values
+    tags = {k: v for k, v in tags.items() if v is not None}
+    
+    # Optional JSON schema validation
+    if validate_schema:
+        incident_dict = incident.model_dump(mode="json", exclude_none=True)
+        is_valid, errors = _validate_with_schema(incident_dict, "incident")
+        if not is_valid:
+            from ai_service.core import get_logger
+            logger = get_logger(__name__)
+            logger.warning(f"Incident schema validation warnings: {errors}")
     
     return IngestDocument(
         doc_type="incident",
@@ -97,7 +163,7 @@ def normalize_incident(incident: IngestIncident) -> IngestDocument:
     )
 
 
-def normalize_runbook(runbook: IngestRunbook) -> IngestDocument:
+def normalize_runbook(runbook: IngestRunbook, validate_schema: bool = False) -> IngestDocument:
     """Convert runbook to IngestDocument format."""
     # Use content as-is (can be markdown, plain text, or structured)
     content = runbook.content
@@ -114,12 +180,30 @@ def normalize_runbook(runbook: IngestRunbook) -> IngestDocument:
     if runbook.rollback_procedures:
         content = f"{content}\n\nRollback Procedures:\n{runbook.rollback_procedures}"
     
-    # Build tags
+    # Build comprehensive tags (mandatory fields from specification)
     tags = {
         "type": "runbook",
+        "runbook_id": runbook.tags.get("runbook_id") if runbook.tags else None,
+        "service": runbook.service,
+        "component": runbook.component,
+        "env": None,  # Environment (can be extracted from metadata if available)
+        "risk": None,  # Risk level (can be extracted from content if available)
+        "last_reviewed_at": None,  # Can be extracted from metadata if available
         **(runbook.tags or {}),
         **(runbook.metadata or {})
     }
+    
+    # Remove None values
+    tags = {k: v for k, v in tags.items() if v is not None}
+    
+    # Optional JSON schema validation
+    if validate_schema:
+        runbook_dict = runbook.model_dump(mode="json", exclude_none=True)
+        is_valid, errors = _validate_with_schema(runbook_dict, "runbook")
+        if not is_valid:
+            from ai_service.core import get_logger
+            logger = get_logger(__name__)
+            logger.warning(f"Runbook schema validation warnings: {errors}")
     
     return IngestDocument(
         doc_type="runbook",

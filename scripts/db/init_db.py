@@ -21,10 +21,10 @@ def init_schema():
     cur.execute(schema_sql)
     conn.commit()
     
-    print("✓ Database schema initialized successfully")
-    print("✓ Extensions: vector, uuid-ossp")
-    print("✓ Tables: documents, chunks, incidents, feedback")
-    print("✓ Indexes and view created")
+    print(" Database schema initialized successfully")
+    print(" Extensions: vector, uuid-ossp")
+    print(" Tables: documents, chunks, incidents, feedback")
+    print(" Indexes and view created")
     
     cur.close()
     conn.close()

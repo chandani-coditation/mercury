@@ -20,11 +20,11 @@ def run_migration(migration_file):
         print(f"Running migration: {migration_file}")
         cur.execute(migration_sql)
         conn.commit()
-        print("✓ Migration completed successfully")
+        print(" Migration completed successfully")
         
     except Exception as e:
         conn.rollback()
-        print(f"✗ Migration failed: {e}")
+        print(f" Migration failed: {e}")
         raise
     finally:
         cur.close()
@@ -46,5 +46,5 @@ if __name__ == "__main__":
         migration_path = os.path.join(migration_dir, migration)
         run_migration(migration_path)
     
-    print("\n✓ All migrations completed")
+    print("\n All migrations completed")
 

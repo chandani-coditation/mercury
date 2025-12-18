@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Runbook Schema",
+  "description": "JSON schema for validating runbook structure",
+  "type": "object",
+  "required": ["title", "content"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Runbook title",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "service": {
+      "type": ["string", "null"],
+      "description": "Service name"
+    },
+    "component": {
+      "type": ["string", "null"],
+      "description": "Component name"
+    },
+    "content": {
+      "type": "string",
+      "description": "Full runbook content",
+      "minLength": 1
+    },
+    "steps": {
+      "type": ["array", "null"],
+      "description": "Ordered list of resolution steps",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prerequisites": {
+      "type": ["array", "null"],
+      "description": "Required conditions before execution",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rollback_procedures": {
+      "type": ["string", "null"],
+      "description": "Rollback steps"
+    },
+    "tags": {
+      "type": ["object", "null"],
+      "description": "Metadata tags",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["runbook"]
+        },
+        "runbook_id": {
+          "type": ["string", "null"]
+        },
+        "service": {
+          "type": ["string", "null"]
+        },
+        "component": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "metadata": {
+      "type": ["object", "null"],
+      "description": "Additional metadata"
+    }
+  }
+}
+

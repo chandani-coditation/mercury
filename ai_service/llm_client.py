@@ -7,9 +7,7 @@ from openai import OpenAI
 from openai import RateLimitError, APIError, APIConnectionError, APITimeoutError
 from dotenv import load_dotenv
 from ai_service.core import (
-    get_llm_config, get_logger,
-    llm_requests_total, llm_request_duration_seconds,
-    llm_tokens_total, MetricsTimer
+    get_llm_config, get_logger
 )
 from ai_service.prompts import (
     TRIAGE_USER_PROMPT_TEMPLATE,
@@ -83,24 +81,13 @@ def _call_llm_with_retry(client, request_params, agent_type: str, model: str):
     
     for attempt in range(MAX_RETRIES):
         try:
-            start_time = time.time()
-            response = client.chat.completions.create(**request_params)
-            duration = time.time() - start_time
-            
-            # Record success metrics
-            llm_request_duration_seconds.labels(agent_type=agent_type, model=model).observe(duration)
-            llm_requests_total.labels(agent_type=agent_type, model=model, status="success").inc()
-            
+            # Add timeout to prevent hanging (60 seconds default)
+            request_params_with_timeout = {**request_params, "timeout": 60.0}
+            response = client.chat.completions.create(**request_params_with_timeout)
             return response
             
         except Exception as e:
             last_error = e
-            duration = time.time() - start_time if 'start_time' in locals() else 0
-            
-            # Record error metrics
-            llm_request_duration_seconds.labels(agent_type=agent_type, model=model).observe(duration)
-            error_status = "rate_limit" if isinstance(e, RateLimitError) else "error"
-            llm_requests_total.labels(agent_type=agent_type, model=model, status=error_status).inc()
             
             # Check if we should retry
             if not _should_retry(e) or attempt == MAX_RETRIES - 1:
@@ -205,8 +192,6 @@ def call_llm_for_triage(alert: dict, context_chunks: list, model: str = None) ->
         if usage:
             prompt_tokens = usage.prompt_tokens or 0
             completion_tokens = usage.completion_tokens or 0
-            llm_tokens_total.labels(agent_type="triage", type="prompt").inc(prompt_tokens)
-            llm_tokens_total.labels(agent_type="triage", type="completion").inc(completion_tokens)
             logger.debug(
                 f"LLM triage tokens: prompt={prompt_tokens}, completion={completion_tokens}"
             )
@@ -254,11 +239,19 @@ def call_llm_for_resolution(
     
     logger.debug(f"Calling LLM for resolution: model={model}, temperature={temperature}, chunks={len(context_chunks)}")
     
-    # Build context from chunks (prefer runbooks)
-    context_text = "\n\n---\n\n".join([
-        f"Document: {chunk.get('doc_title', 'Unknown')}\n{chunk['content']}"
-        for chunk in context_chunks[:5]
-    ])
+    # Build context from chunks (prefer runbooks) with provenance info
+    context_parts = []
+    for chunk in context_chunks[:10]:  # Include more chunks for better context
+        chunk_id = chunk.get('chunk_id', 'unknown')
+        doc_id = chunk.get('document_id', 'unknown')
+        doc_title = chunk.get('doc_title', 'Unknown')
+        context_parts.append(
+            f"Document: {doc_title}\n"
+            f"Chunk ID: {chunk_id}\n"
+            f"Document ID: {doc_id}\n"
+            f"Content: {chunk['content']}"
+        )
+    context_text = "\n\n---\n\n".join(context_parts)
     
     # Build user prompt from template
     prompt = RESOLUTION_USER_PROMPT_TEMPLATE.format(
@@ -297,8 +290,6 @@ def call_llm_for_resolution(
         if usage:
             prompt_tokens = usage.prompt_tokens or 0
             completion_tokens = usage.completion_tokens or 0
-            llm_tokens_total.labels(agent_type="resolution", type="prompt").inc(prompt_tokens)
-            llm_tokens_total.labels(agent_type="resolution", type="completion").inc(completion_tokens)
             logger.debug(
                 f"LLM resolution tokens: prompt={prompt_tokens}, completion={completion_tokens}"
             )

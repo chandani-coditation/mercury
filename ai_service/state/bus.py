@@ -5,12 +5,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 
 from .models import AgentState, PendingAction, AgentStep
-from ai_service.core import (
-    get_logger,
-    hitl_actions_total,
-    hitl_actions_pending,
-    hitl_action_duration_seconds,
-)
+from ai_service.core import get_logger
 from ai_service.repositories.agent_state_repository import AgentStateRepository
 
 logger = get_logger(__name__)
@@ -80,10 +75,7 @@ class StateBus:
                 pending_counts[state.pending_action.action_type] += 1
                 self._processed_actions.pop(state.pending_action.action_name, None)
 
-        # Update gauge to reflect recovered pending actions
-        for action_type in ["review_triage", "review_resolution", "approve_policy"]:
-            hitl_actions_pending.labels(action_type=action_type).set(pending_counts.get(action_type, 0))
-
+        # Log recovered pending actions
         if pending_counts:
             logger.info(
                 "Recovered %d agent states (%d pending actions) from persistence",
@@ -218,8 +210,6 @@ class StateBus:
                 self._pending_actions[incident_id] = escalated
                 state.current_step = AgentStep.PAUSED_FOR_REVIEW
                 state.requires_approval = True
-                hitl_actions_pending.labels(action_type="approve_policy").inc()
-                hitl_actions_total.labels(action_type="approve_policy", status="escalated").inc()
             else:
                 state.pending_action = None
                 state.current_step = AgentStep.ERROR
@@ -240,10 +230,7 @@ class StateBus:
         action_type = pending_action.action_type
         if pending_action.created_at:
             duration = (datetime.utcnow() - pending_action.created_at).total_seconds()
-            hitl_action_duration_seconds.labels(action_type=action_type).observe(duration)
 
-        hitl_actions_total.labels(action_type=action_type, status="timeout").inc()
-        hitl_actions_pending.labels(action_type=action_type).dec()
 
     async def pause_for_action(
         self,
@@ -387,10 +374,7 @@ class StateBus:
         action_type = pending_action.action_type if pending_action else "unknown"
         if pending_action and pending_action.created_at:
             duration = (datetime.utcnow() - pending_action.created_at).total_seconds()
-            hitl_action_duration_seconds.labels(action_type=action_type).observe(duration)
 
-        hitl_actions_total.labels(action_type=action_type, status="resumed").inc()
-        hitl_actions_pending.labels(action_type=action_type).dec()
 
         logger.info(
             "Agent resumed from action: incident_id=%s, action=%s, approved=%s",

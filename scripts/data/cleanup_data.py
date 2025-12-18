@@ -48,10 +48,10 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
     stmts = build_statements(targets)
     
     if dry_run:
-        print("\n🔍 DRY RUN - The following statements would be executed:")
+        print("\n DRY RUN - The following statements would be executed:")
         for s in stmts:
             print(f"  {s.strip()}")
-        print(f"\n⚠️  This would delete all data from: {', '.join(targets)}")
+        print(f"\n  This would delete all data from: {', '.join(targets)}")
         return
 
     conn = get_db_connection()
@@ -61,10 +61,10 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
             print(f"Executing: {s.strip()}")
             cur.execute(s)
         conn.commit()
-        print(f"\n✅ Cleanup complete. Deleted all data from: {', '.join(targets)}")
+        print(f"\n Cleanup complete. Deleted all data from: {', '.join(targets)}")
     except Exception as e:
         conn.rollback()
-        print(f"\n❌ Cleanup failed: {type(e).__name__}: {e}")
+        print(f"\n Cleanup failed: {type(e).__name__}: {e}")
         raise
     finally:
         cur.close()
@@ -108,7 +108,7 @@ Examples:
     targets = selected or ALL_TARGETS
 
     if not args.dry_run and not args.yes:
-        print("❌ Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
+        print(" Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
         sys.exit(1)
 
     print(f"Targets: {', '.join(targets)}")

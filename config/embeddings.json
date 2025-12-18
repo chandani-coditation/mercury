@@ -1,0 +1,33 @@
+{
+  "_comment": "Embedding Model Configuration",
+  "_description": "Configuration for embedding models (OpenAI or OSS alternatives)",
+  
+  "model": "text-embedding-3-small",
+  "dimension": 1536,
+  "max_tokens": 8191,
+  "batch_size": 100,
+  
+  "models": {
+    "text-embedding-3-small": {
+      "dimension": 1536,
+      "max_tokens": 8191,
+      "cost_per_1k_tokens": 0.02
+    },
+    "text-embedding-3-large": {
+      "dimension": 3072,
+      "max_tokens": 8191,
+      "cost_per_1k_tokens": 0.13
+    },
+    "bge-m3": {
+      "dimension": 1024,
+      "max_tokens": 8192,
+      "cost_per_1k_tokens": 0.0,
+      "note": "OSS alternative - requires local deployment"
+    }
+  },
+  
+  "target_model": "text-embedding-3-large",
+  "use_oss_alternative": false,
+  "oss_model": "bge-m3"
+}
+

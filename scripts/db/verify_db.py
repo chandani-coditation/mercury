@@ -20,11 +20,11 @@ def verify_db():
     
     try:
         print("=" * 70)
-        print("🔍 Database Verification Report")
+        print(" Database Verification Report")
         print("=" * 70)
         
         # 1. Check documents count
-        print("\n📄 Documents:")
+        print("\n Documents:")
         cur.execute("SELECT COUNT(*) as total FROM documents;")
         total_docs = cur.fetchone()["total"]
         print(f"  Total documents: {total_docs}")
@@ -41,7 +41,7 @@ def verify_db():
             print(f"    {row['doc_type']}: {row['count']}")
         
         # 2. Check chunks count
-        print("\n📦 Chunks:")
+        print("\n Chunks:")
         cur.execute("SELECT COUNT(*) as total FROM chunks;")
         total_chunks = cur.fetchone()["total"]
         print(f"  Total chunks: {total_chunks}")
@@ -57,7 +57,7 @@ def verify_db():
         chunk_stats = cur.fetchone()
         print(f"  Chunks with embeddings: {chunk_stats['with_embedding']}/{chunk_stats['total']}")
         if chunk_stats['missing_embedding'] > 0:
-            print(f"  ⚠️  WARNING: {chunk_stats['missing_embedding']} chunks missing embeddings!")
+            print(f"    WARNING: {chunk_stats['missing_embedding']} chunks missing embeddings!")
         
         # Chunks with tsvector
         cur.execute("""
@@ -70,10 +70,10 @@ def verify_db():
         tsv_stats = cur.fetchone()
         print(f"  Chunks with tsvector: {tsv_stats['with_tsv']}/{tsv_stats['total']}")
         if tsv_stats['missing_tsv'] > 0:
-            print(f"  ⚠️  WARNING: {tsv_stats['missing_tsv']} chunks missing tsvector!")
+            print(f"    WARNING: {tsv_stats['missing_tsv']} chunks missing tsvector!")
         
         # 3. Check embedding dimensions (pgvector stores as vector type)
-        print("\n🔢 Embedding Details:")
+        print("\n Embedding Details:")
         # Check if we can query vector dimensions using pgvector functions
         # For text-embedding-3-small, expected dimension is 1536
         cur.execute("""
@@ -99,12 +99,12 @@ def verify_db():
             dims = sample['embedding_text'].count(',') + 1
             print(f"  Sample embedding dimensions: {dims}")
             if dims == 1536:
-                print("  ✓ Embedding dimensions match expected (1536)")
+                print("   Embedding dimensions match expected (1536)")
             else:
-                print(f"  ⚠️  Unexpected dimensions: {dims} (expected 1536)")
+                print(f"    Unexpected dimensions: {dims} (expected 1536)")
         
         # 4. Check chunks per document
-        print("\n📊 Chunks per Document:")
+        print("\n Chunks per Document:")
         cur.execute("""
             SELECT 
                 d.doc_type,
@@ -128,7 +128,7 @@ def verify_db():
             print(f"    {row['doc_type']}: avg={avg:.1f}, min={min_c}, max={max_c}")
         
         # 5. Sample embeddings validation
-        print("\n✅ Sample Embedding Validation:")
+        print("\n Sample Embedding Validation:")
         cur.execute("""
             SELECT 
                 c.id,
@@ -151,12 +151,12 @@ def verify_db():
                     dims = embedding_str.count(',') + 1
                     title_preview = (sample['title'] or 'N/A')[:50]
                     print(f"  Sample {i}: {sample['doc_type']} - '{title_preview}...'")
-                    print(f"    ✓ Valid vector: {dims} dimensions")
-                    print(f"    ✓ Content length: {len(sample['content'])} chars")
+                    print(f"     Valid vector: {dims} dimensions")
+                    print(f"     Content length: {len(sample['content'])} chars")
                 else:
-                    print(f"  Sample {i}: ⚠️  Invalid embedding format!")
+                    print(f"  Sample {i}:   Invalid embedding format!")
         else:
-            print("  ⚠️  No embeddings found to validate!")
+            print("    No embeddings found to validate!")
         
         # 6. Check for documents without chunks
         print("\n🔗 Document-Chunk Relationships:")
@@ -168,9 +168,9 @@ def verify_db():
         """)
         orphaned = cur.fetchone()["orphaned"]
         if orphaned > 0:
-            print(f"  ⚠️  WARNING: {orphaned} documents have no chunks!")
+            print(f"    WARNING: {orphaned} documents have no chunks!")
         else:
-            print("  ✓ All documents have chunks")
+            print("   All documents have chunks")
         
         # 7. Check indexes
         print("\n📇 Indexes:")
@@ -190,47 +190,47 @@ def verify_db():
         
         # 8. Summary
         print("\n" + "=" * 70)
-        print("📋 Summary:")
+        print(" Summary:")
         print("=" * 70)
         
         all_good = True
         if total_docs == 0:
-            print("  ⚠️  No documents found!")
+            print("    No documents found!")
             all_good = False
         else:
-            print(f"  ✓ {total_docs} documents ingested")
+            print(f"   {total_docs} documents ingested")
         
         if total_chunks == 0:
-            print("  ⚠️  No chunks found!")
+            print("    No chunks found!")
             all_good = False
         else:
-            print(f"  ✓ {total_chunks} chunks created")
+            print(f"   {total_chunks} chunks created")
         
         if chunk_stats['missing_embedding'] > 0:
-            print(f"  ⚠️  {chunk_stats['missing_embedding']} chunks missing embeddings")
+            print(f"    {chunk_stats['missing_embedding']} chunks missing embeddings")
             all_good = False
         else:
-            print(f"  ✓ All {total_chunks} chunks have embeddings")
+            print(f"   All {total_chunks} chunks have embeddings")
         
         if tsv_stats['missing_tsv'] > 0:
-            print(f"  ⚠️  {tsv_stats['missing_tsv']} chunks missing tsvector")
+            print(f"    {tsv_stats['missing_tsv']} chunks missing tsvector")
             all_good = False
         else:
-            print(f"  ✓ All {total_chunks} chunks have tsvector")
+            print(f"   All {total_chunks} chunks have tsvector")
         
         if orphaned > 0:
-            print(f"  ⚠️  {orphaned} documents without chunks")
+            print(f"    {orphaned} documents without chunks")
             all_good = False
         
         if all_good:
-            print("\n  ✅ Database is correctly set up and all embeddings generated!")
+            print("\n   Database is correctly set up and all embeddings generated!")
         else:
-            print("\n  ⚠️  Some issues detected. Please review above.")
+            print("\n    Some issues detected. Please review above.")
         
         print("=" * 70)
         
     except Exception as e:
-        print(f"\n❌ Error during verification: {type(e).__name__}: {e}")
+        print(f"\n Error during verification: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
         raise

@@ -57,10 +57,10 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
             print(f"Executing: {s.strip()}")
             cur.execute(s)
         conn.commit()
-        print("\n✅ Cleanup complete.")
+        print("\n Cleanup complete.")
     except Exception as e:
         conn.rollback()
-        print(f"\n❌ Cleanup failed: {type(e).__name__}: {e}")
+        print(f"\n Cleanup failed: {type(e).__name__}: {e}")
         raise
     finally:
         cur.close()
@@ -104,7 +104,7 @@ Examples:
     targets = selected or ALL_TARGETS
 
     if not args.dry_run and not args.yes:
-        print("❌ Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
+        print(" Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
         sys.exit(1)
 
     print(f"Targets: {', '.join(targets)}")
