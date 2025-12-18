@@ -13,7 +13,16 @@ async function request(url, options = {}) {
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(text || resp.statusText);
+    // Try to parse as JSON, otherwise use text
+    let errorData;
+    try {
+      errorData = text ? JSON.parse(text) : { detail: resp.statusText };
+    } catch {
+      errorData = { detail: text || resp.statusText };
+    }
+    const error = new Error(text || resp.statusText);
+    error.response = { data: errorData, status: resp.status };
+    throw error;
   }
   return resp.json();
 }

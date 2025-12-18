@@ -206,12 +206,12 @@ def hybrid_search(
         placeholder_count = query.count('%s')
         param_count = len(exec_params)
         
-        # Log using standardized logger
-        logger.error(
+        # Log using standardized logger (DEBUG level for diagnostic info)
+        logger.debug(
             f"HYBRID_SEARCH: placeholders={placeholder_count}, params={param_count}, "
             f"service={repr(service_val)}, component={repr(component_val)}"
         )
-        logger.error(
+        logger.debug(
             f"HYBRID_SEARCH: param list length={len(exec_params)}, "
             f"params={[type(p).__name__ for p in exec_params]}"
         )

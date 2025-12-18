@@ -375,13 +375,13 @@ def create_resolution_graph():
     def validate_resolution_node(state: ResolutionState) -> ResolutionState:
         """Node: Validate resolution output with guardrails."""
         resolution_output = state["resolution_output"]
-        policy_decision = state["policy_decision"]
+        context_chunks = state.get("context_chunks", [])
         
         logger.debug("LangGraph: Validating resolution output")
         
         is_valid, validation_errors = validate_resolution_output(
             resolution_output,
-            policy_band=policy_decision.get("policy_band", "REVIEW")
+            context_chunks=context_chunks
         )
         if not is_valid:
             error_msg = f"Resolution validation failed: {', '.join(validation_errors)}"

@@ -46,6 +46,8 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
     
+    # Increase connect_timeout and add wait timeout for pool connections
+    wait_timeout = int(os.getenv("DB_POOL_WAIT_TIMEOUT", "10"))  # Wait up to 10s for available connection
     conninfo = f"host={host} port={port} dbname={dbname} user={user} password={password} connect_timeout={timeout}"
     
     try:
@@ -55,9 +57,10 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
             max_size=max_size,
             kwargs={"row_factory": dict_row},
             open=False,
+            timeout=wait_timeout,  # Wait timeout for getting connection from pool
         )
         _db_pool.open()
-        logger.info(f"Database connection pool initialized: min={min_size}, max={max_size}, timeout={timeout}s")
+        logger.info(f"Database connection pool initialized: min={min_size}, max={max_size}, connect_timeout={timeout}s, wait_timeout={wait_timeout}s")
         
         # Test the pool with a quick connection
         try:
@@ -109,7 +112,25 @@ def get_db_connection():
     for attempt in range(DB_CONN_RETRIES):
         try:
             if _db_pool is not None:
-                return _db_pool.getconn()
+                # Use getconn() with timeout handling - if pool is exhausted, it will raise PoolTimeout
+                try:
+                    return _db_pool.getconn()
+                except Exception as pool_exc:
+                    # If pool timeout or other pool error, log and retry
+                    if "timeout" in str(pool_exc).lower() or "pool" in str(pool_exc).lower():
+                        logger.warning(
+                            f"Connection pool timeout/error (attempt {attempt + 1}/{DB_CONN_RETRIES}): {pool_exc}. "
+                            f"Pool may be exhausted. Retrying..."
+                        )
+                        last_error = pool_exc
+                        if attempt < DB_CONN_RETRIES - 1:
+                            delay = min(
+                                DB_CONN_RETRY_BASE_DELAY * (2 ** attempt),
+                                DB_CONN_RETRY_MAX_DELAY,
+                            )
+                            time.sleep(delay)
+                            continue
+                    raise  # Re-raise if not a timeout/pool issue
             return _create_direct_connection()
         except psycopg.OperationalError as exc:
             last_error = exc
@@ -117,13 +138,23 @@ def get_db_connection():
                 DB_CONN_RETRY_BASE_DELAY * (2 ** attempt),
                 DB_CONN_RETRY_MAX_DELAY,
             )
-            logger.warning(
-                "Database connection attempt %s/%s failed: %s. Retrying in %.2fs",
-                attempt + 1,
-                DB_CONN_RETRIES,
-                exc,
-                delay,
-            )
+            # Only log as warning if it's not a timeout (timeouts are expected when pool is busy)
+            if "timeout" not in str(exc).lower():
+                logger.warning(
+                    "Database connection attempt %s/%s failed: %s. Retrying in %.2fs",
+                    attempt + 1,
+                    DB_CONN_RETRIES,
+                    exc,
+                    delay,
+                )
+            else:
+                logger.debug(
+                    "Database connection timeout (attempt %s/%s): %s. Retrying in %.2fs",
+                    attempt + 1,
+                    DB_CONN_RETRIES,
+                    exc,
+                    delay,
+                )
             time.sleep(delay)
         except Exception as exc:  # pragma: no cover - unexpected path
             last_error = exc

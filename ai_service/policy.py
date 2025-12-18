@@ -115,9 +115,9 @@ def get_policy_from_config(triage_output: Dict) -> Dict:
             logger.info(f"Policy band matched: {band_name} for severity={severity}, confidence={confidence}")
             return policy_decision
     
-    # Default to REVIEW if no band matches
+    # Default to REVIEW if no band matches (expected for zero-evidence alerts with confidence=0.0)
     default_band = bands.get("REVIEW", {}).get("actions", {})
-    logger.warning(f"No policy band matched for severity={severity}, confidence={confidence}, defaulting to REVIEW")
+    logger.debug(f"No policy band matched for severity={severity}, confidence={confidence}, defaulting to REVIEW (expected for zero-evidence alerts)")
     return {
         "policy_band": "REVIEW",
         "can_auto_apply": default_band.get("can_auto_apply", False),

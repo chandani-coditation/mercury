@@ -91,12 +91,14 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
-def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]]:
+def validate_resolution_output(resolution_output: Dict, context_chunks: List[Dict] = None) -> Tuple[bool, List[str]]:
     """
     Validate resolution output against guardrail configuration.
     
     Args:
         resolution_output: Resolution output dictionary from LLM
+        context_chunks: Optional list of context chunks used to generate resolution.
+                      Used to verify if commands came from runbooks (allowed even if "dangerous")
     
     Returns:
         Tuple of (is_valid, list_of_errors)
@@ -104,6 +106,16 @@ def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]
     logger.debug("Validating resolution output against guardrails")
     errors = []
     config = get_guardrail_config().get("resolution", {})
+    
+    # Build a set of runbook document IDs from context chunks for provenance checking
+    runbook_doc_ids = set()
+    runbook_chunk_ids = set()
+    if context_chunks:
+        for chunk in context_chunks:
+            doc_type = chunk.get("doc_type") or (chunk.get("metadata") or {}).get("doc_type")
+            if doc_type == "runbook":
+                runbook_doc_ids.add(chunk.get("document_id"))
+                runbook_chunk_ids.add(chunk.get("chunk_id"))
     
     # Check required fields
     required_fields = config.get("required_fields", [])
@@ -159,8 +171,17 @@ def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]
             if total_commands > max_commands:
                 errors.append(f"Too many commands in commands_by_step: {total_commands} (max: {max_commands})")
             
-            # Check for dangerous commands
+            # Check for dangerous commands (but allow if from runbooks via provenance)
             dangerous_commands = config.get("dangerous_commands", [])
+            provenance = resolution_output.get("provenance", [])
+            # Check if any provenance points to runbooks
+            has_runbook_provenance = False
+            if provenance and runbook_doc_ids:
+                for prov in provenance:
+                    if prov.get("doc_id") in runbook_doc_ids or prov.get("chunk_id") in runbook_chunk_ids:
+                        has_runbook_provenance = True
+                        break
+            
             for step_idx, cmd_list in commands_by_step.items():
                 if not isinstance(cmd_list, list):
                     errors.append(f"commands_by_step['{step_idx}'] must be a list")
@@ -172,7 +193,11 @@ def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]
                             cmd_lower = cmd.lower()
                             for dangerous in dangerous_commands:
                                 if dangerous.lower() in cmd_lower:
-                                    errors.append(f"Dangerous command detected: '{dangerous}' in '{cmd}'")
+                                    # Allow dangerous commands if they came from runbooks
+                                    if has_runbook_provenance:
+                                        logger.debug(f"Allowing dangerous command '{dangerous}' from runbook: '{cmd}'")
+                                    else:
+                                        errors.append(f"Dangerous command detected: '{dangerous}' in '{cmd}'. Commands must come from runbooks.")
     
     # Validate legacy commands format (if present and commands_by_step not used)
     if commands is not None and commands_by_step is None:
@@ -183,8 +208,17 @@ def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]
             if len(commands) > max_commands:
                 errors.append(f"Too many commands: {len(commands)} (max: {max_commands})")
             
-            # Check for dangerous commands
+            # Check for dangerous commands (but allow if from runbooks via provenance)
             dangerous_commands = config.get("dangerous_commands", [])
+            provenance = resolution_output.get("provenance", [])
+            # Check if any provenance points to runbooks
+            has_runbook_provenance = False
+            if provenance and runbook_doc_ids:
+                for prov in provenance:
+                    if prov.get("doc_id") in runbook_doc_ids or prov.get("chunk_id") in runbook_chunk_ids:
+                        has_runbook_provenance = True
+                        break
+            
             for cmd in commands:
                 if not isinstance(cmd, str):
                     errors.append(f"Command must be a string, got: {type(cmd).__name__}")
@@ -192,7 +226,11 @@ def validate_resolution_output(resolution_output: Dict) -> Tuple[bool, List[str]
                     cmd_lower = cmd.lower()
                     for dangerous in dangerous_commands:
                         if dangerous.lower() in cmd_lower:
-                            errors.append(f"Dangerous command detected: '{dangerous}' in '{cmd}'")
+                            # Allow dangerous commands if they came from runbooks
+                            if has_runbook_provenance:
+                                logger.debug(f"Allowing dangerous command '{dangerous}' from runbook: '{cmd}'")
+                            else:
+                                errors.append(f"Dangerous command detected: '{dangerous}' in '{cmd}'. Commands must come from runbooks.")
     
     # Validate confidence (optional)
     confidence = resolution_output.get("confidence")

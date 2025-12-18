@@ -368,8 +368,8 @@ def _resolution_copilot_agent_internal(
         f"provenance_chunks={len(resolution_output.get('provenance', []))}"
     )
     
-    # Validate resolution output with guardrails
-    is_valid, validation_errors = validate_resolution_output(resolution_output)
+    # Validate resolution output with guardrails (pass context_chunks to allow runbook commands)
+    is_valid, validation_errors = validate_resolution_output(resolution_output, context_chunks=context_chunks)
     if not is_valid:
         logger.error(f"Resolution validation failed: {validation_errors}")
         raise ValueError(f"Resolution output validation failed: {', '.join(validation_errors)}")

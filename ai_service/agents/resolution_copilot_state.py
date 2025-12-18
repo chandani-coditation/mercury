@@ -154,7 +154,7 @@ async def _resolution_agent_state_internal(
     if use_state_bus:
         await state_bus.emit_state(state)
 
-    is_valid, validation_errors = validate_resolution_output(resolution_output)
+    is_valid, validation_errors = validate_resolution_output(resolution_output, context_chunks=context_chunks)
     if not is_valid:
         state.current_step = AgentStep.ERROR
         state.error = f"Resolution validation failed: {', '.join(validation_errors)}"
