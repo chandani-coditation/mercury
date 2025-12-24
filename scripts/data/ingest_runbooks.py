@@ -32,6 +32,31 @@ import requests
 INGESTION_SERVICE_URL = "http://localhost:8002"
 
 
+def clean_text(text: str) -> str:
+    """Clean text by removing formatting artifacts and special characters."""
+    if not text:
+        return ""
+    
+    # Remove common formatting artifacts
+    text = text.replace("¶", "")  # Remove paragraph markers
+    text = text.replace("", "")  # Remove zero-width spaces
+    text = text.replace("\u200b", "")  # Remove zero-width spaces (Unicode)
+    text = text.replace("\xa0", " ")  # Replace non-breaking spaces with regular spaces
+    
+    # Remove markdown-style heading markers at the start
+    text = text.lstrip("#").strip()
+    
+    # Remove multiple consecutive spaces
+    while "  " in text:
+        text = text.replace("  ", " ")
+    
+    # Remove multiple consecutive newlines
+    while "\n\n\n" in text:
+        text = text.replace("\n\n\n", "\n\n")
+    
+    return text.strip()
+
+
 def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
     """Extract structured content from DOCX file.
     
@@ -42,9 +67,12 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
     # Extract title (usually first paragraph or document property)
     title = docx_path.stem  # Default to filename
     if doc.paragraphs:
-        first_para = doc.paragraphs[0].text.strip()
+        first_para = clean_text(doc.paragraphs[0].text)
         if first_para and len(first_para) < 200:  # Likely a title
             title = first_para
+    
+    # Clean the title
+    title = clean_text(title)
     
     # Extract all text content
     full_content_parts = []
@@ -58,7 +86,7 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
     for element in doc.element.body:
         if isinstance(element, CT_P):
             para = Paragraph(element, doc)
-            text = para.text.strip()
+            text = clean_text(para.text)
             
             if not text:
                 continue
@@ -83,23 +111,24 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                 else:
                     current_section = None
                 
-                full_content_parts.append(f"\n## {text}\n")
+                # Add header without markdown markers
+                full_content_parts.append(f"\n{text.upper()}\n{'='*len(text)}\n")
             else:
                 # Add to appropriate section
                 if current_section == "steps":
                     steps.append(text)
-                    full_content_parts.append(f"Step: {text}\n")
+                    full_content_parts.append(f"  • {text}\n")
                 elif current_section == "commands":
                     # Commands might be in code blocks or plain text
                     if text.startswith("$") or text.startswith("#") or "sudo" in text or "kubectl" in text:
                         commands.append(text)
-                    full_content_parts.append(f"Command: {text}\n")
+                    full_content_parts.append(f"  $ {text}\n")
                 elif current_section == "prerequisites":
                     prerequisites.append(text)
-                    full_content_parts.append(f"Prerequisite: {text}\n")
+                    full_content_parts.append(f"  • {text}\n")
                 elif current_section == "rollback":
                     rollback_procedures.append(text)
-                    full_content_parts.append(f"Rollback: {text}\n")
+                    full_content_parts.append(f"  • {text}\n")
                 else:
                     full_content_parts.append(f"{text}\n")
         
@@ -107,7 +136,7 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
             # Extract text from tables
             table = Table(element, doc)
             for row in table.rows:
-                row_text = " | ".join([cell.text.strip() for cell in row.cells])
+                row_text = " | ".join([clean_text(cell.text) for cell in row.cells])
                 if row_text:
                     full_content_parts.append(f"{row_text}\n")
     
@@ -135,15 +164,46 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
     service = None
     component = None
     
-    # Try to extract from filename (e.g., "Runbook - Database Alerts" -> service="Database")
-    filename_parts = docx_path.stem.replace("Runbook -", "").replace("Runbook –", "").strip().split()
-    if filename_parts:
-        # Common patterns: "Database Alerts" -> service="Database", component="Alerts"
+    # Try to extract from filename with smart pattern matching
+    filename_clean = docx_path.stem.replace("Runbook -", "").replace("Runbook –", "").strip()
+    filename_lower = filename_clean.lower()
+    
+    # Pattern matching for common runbook types
+    if "database" in filename_lower or "sql" in filename_lower or "db" in filename_lower:
+        service = "Database"
+        component = filename_clean.replace("Database", "").replace("database", "").strip()
+    elif "network" in filename_lower:
+        service = "Network"
+        component = filename_clean.replace("Network", "").replace("network", "").strip()
+    elif "cpu" in filename_lower:
+        service = "Infrastructure"
+        component = filename_clean
+    elif "memory" in filename_lower or "ram" in filename_lower:
+        service = "Infrastructure"
+        component = filename_clean
+    elif "disk" in filename_lower or "volume" in filename_lower or "storage" in filename_lower:
+        service = "Storage"
+        component = filename_clean
+    elif "high" in filename_lower:
+        # Generic "High" alerts - categorize as Infrastructure
+        service = "Infrastructure"
+        component = filename_clean
+    else:
+        # Fallback: split by spaces
+        filename_parts = filename_clean.split()
         if len(filename_parts) >= 2:
             service = filename_parts[0]
             component = " ".join(filename_parts[1:])
         else:
-            service = filename_parts[0]
+            service = filename_parts[0] if filename_parts else "General"
+            component = None
+    
+    # Clean up component (remove trailing words like "Alerts")
+    if component:
+        component = component.strip()
+        # Normalize common suffixes
+        if component.endswith(" Alerts"):
+            component = component.replace(" Alerts", "").strip() or "Alerts"
     
     # Build comprehensive tags
     runbook_id = str(uuid.uuid4())
