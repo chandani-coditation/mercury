@@ -2,10 +2,8 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: noc-ai-postgres
-    environment:
-      POSTGRES_USER: noc_ai
-      POSTGRES_PASSWORD: noc_ai_password
-      POSTGRES_DB: noc_ai
+    env_file:
+      - .env
     ports:
       - "5432:5432"
     volumes:
@@ -25,20 +23,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: noc-ai-service
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://noc_ai:noc_ai_password@postgres:5432/noc_ai
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=noc_ai
-      - POSTGRES_USER=noc_ai
-      - POSTGRES_PASSWORD=noc_ai_password
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AI_SERVICE_HOST=0.0.0.0
-      - AI_SERVICE_PORT=8001
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - DB_POOL_MIN=${DB_POOL_MIN:-5}
-      - DB_POOL_MAX=${DB_POOL_MAX:-20}
-      - DB_POOL_WAIT_TIMEOUT=${DB_POOL_WAIT_TIMEOUT:-30}
+      - POSTGRES_HOST=postgres  # Override for Docker network
     ports:
       - "8001:8001"
     depends_on:
@@ -57,16 +45,10 @@ services:
       dockerfile: Dockerfile
     container_name: noc-ai-ingestion
     command: uvicorn ingestion.main:app --host 0.0.0.0 --port 8002
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://noc_ai:noc_ai_password@postgres:5432/noc_ai
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=noc_ai
-      - POSTGRES_USER=noc_ai
-      - POSTGRES_PASSWORD=noc_ai_password
-      - INGESTION_SERVICE_HOST=0.0.0.0
-      - INGESTION_SERVICE_PORT=8002
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POSTGRES_HOST=postgres  # Override for Docker network
     ports:
       - "8002:8002"
     depends_on:
