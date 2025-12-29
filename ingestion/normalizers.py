@@ -121,7 +121,33 @@ def normalize_incident(incident: IngestIncident, validate_schema: bool = False) 
     # Extract service from affected_services if available
     service = None
     if incident.affected_services and len(incident.affected_services) > 0:
-        service = incident.affected_services[0]
+        raw_service = incident.affected_services[0]
+        # Parse service (e.g., "Database-SQL" -> "Database", "Server" stays "Server")
+        if "-" in raw_service:
+            service = raw_service.split("-")[0].strip()
+        else:
+            service = raw_service
+    
+    # Extract component from title, description, or category
+    component = None
+    search_text = f"{incident.title} {incident.description or ''} {incident.category or ''}".lower()
+    
+    # Pattern matching for common component types
+    if "volume" in search_text or "disk" in search_text or "storage" in search_text:
+        component = "Disk"
+    elif "cpu" in search_text or "processor" in search_text:
+        component = "CPU"
+    elif "memory" in search_text or "ram" in search_text:
+        component = "Memory"
+    elif "network" in search_text or "connectivity" in search_text:
+        component = "Network"
+    elif "database" in search_text or "sql" in search_text or "db" in search_text:
+        component = "Database"
+    elif "performance" in search_text:
+        component = "Performance"
+    elif incident.category:
+        # Use category as fallback
+        component = incident.category
     
     # Build comprehensive tags (mandatory fields from specification)
     tags = {
@@ -133,7 +159,7 @@ def normalize_incident(incident: IngestIncident, validate_schema: bool = False) 
         "severity": incident.severity,
         "category": incident.category,
         "service": service,  # From affected_services
-        "component": None,  # Can be extracted from content if needed
+        "component": component,  # Extracted from title/description/category
         "env": None,  # Environment (can be extracted from metadata if available)
         "risk": incident.severity,  # Use severity as risk indicator
         "last_reviewed_at": incident.timestamp.isoformat() if incident.timestamp else None,
@@ -155,7 +181,7 @@ def normalize_incident(incident: IngestIncident, validate_schema: bool = False) 
     return IngestDocument(
         doc_type="incident",
         service=service,
-        component=None,  # Can be extracted from content if needed
+        component=component,  # Now properly extracted
         title=f"Incident: {incident.title}",
         content=content,
         tags=tags,

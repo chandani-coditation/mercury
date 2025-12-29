@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS incidents (
   triage_completed_at TIMESTAMPTZ,
   resolution_proposed_at TIMESTAMPTZ,
   resolution_accepted_at TIMESTAMPTZ,
+  -- Rollback tracking fields
+  rollback_initiated_at TIMESTAMPTZ, -- When rollback was triggered
+  rollback_completed_at TIMESTAMPTZ, -- When rollback finished
+  rollback_status TEXT, -- 'not_required', 'initiated', 'in_progress', 'completed', 'failed'
+  rollback_trigger TEXT, -- What triggered the rollback (e.g., 'manual', 'health_check_failed', 'error_threshold_exceeded')
+  rollback_notes TEXT, -- Human notes about rollback execution
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -77,6 +83,8 @@ CREATE INDEX IF NOT EXISTS chunks_document_id_idx ON chunks(document_id);
 CREATE INDEX IF NOT EXISTS incidents_alert_id_idx ON incidents(alert_id);
 CREATE INDEX IF NOT EXISTS incidents_created_at_idx ON incidents(created_at);
 CREATE INDEX IF NOT EXISTS incidents_policy_band_idx ON incidents(policy_band);
+CREATE INDEX IF NOT EXISTS incidents_rollback_status_idx ON incidents(rollback_status);
+CREATE INDEX IF NOT EXISTS incidents_rollback_initiated_at_idx ON incidents(rollback_initiated_at);
 CREATE INDEX IF NOT EXISTS feedback_incident_id_idx ON feedback(incident_id);
 CREATE INDEX IF NOT EXISTS feedback_feedback_type_idx ON feedback(feedback_type);
 CREATE INDEX IF NOT EXISTS agent_state_incident_id_idx ON agent_state(incident_id);

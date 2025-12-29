@@ -67,7 +67,13 @@ Provide a JSON response with the following structure:
 {{
     "steps": ["step1", "step2", "step3"],
     "commands_by_step": {{"0": ["cmd1", "cmd2"], "1": ["cmd3"]}} or null,
-    "rollback_plan": ["rollback step1", "rollback step2"] or null,
+    "rollback_plan": {{
+        "steps": ["rollback step1", "rollback step2"],
+        "commands_by_step": {{"0": ["rollback cmd1"], "1": ["rollback cmd2"]}},
+        "preconditions": ["Check X before rollback", "Verify Y is still running"],
+        "estimated_time_minutes": 10,
+        "triggers": ["If step 3 fails", "If system becomes unstable", "If error rate exceeds threshold"]
+    }},
     "estimated_time_minutes": 15,
     "risk_level": "low|medium|high",
     "requires_approval": true or false,
@@ -76,21 +82,71 @@ Provide a JSON response with the following structure:
     "provenance": [{{"doc_id": "uuid", "chunk_id": "uuid"}}]
 }}
 
-IMPORTANT:
-- steps: Ordered natural language actions (safe, actionable)
-- commands_by_step: Optional dict mapping step index (as string) to array of terminal commands copied directly from runbooks
-- confidence: Your confidence in these steps (0.0-1.0) based on evidence quality and runbook match
-- reasoning: Cite specific runbooks, historical incidents, and logs from the context that justify these steps
-- provenance: Array of {{"doc_id": "...", "chunk_id": "..."}} references to the evidence chunks used (for audit trail)
+IMPORTANT FIELD DESCRIPTIONS:
 
-CRITICAL CONSTRAINTS:
-- You MUST base your response ONLY on the context provided above (runbooks, historical incidents, logs).
-- If no context is provided (context_text is empty), you MUST set confidence to 0.0, risk_level to "high", and indicate in the reasoning that no evidence was found.
-- Do NOT use general knowledge, training data, or external information. Only use the specific runbooks, incidents, and logs provided in the context.
-- Commands MUST be copied directly from the runbooks in the context. Do NOT generate generic commands.
-- If the context does not contain relevant resolution steps, indicate this clearly in the reasoning and set confidence to 0.0.
+**steps**: Ordered natural language actions (safe, actionable, production-ready)
+  - Each step should be clear, specific, and reversible when possible
+  - Include validation checks between critical steps
+  - Example: "Check current database connection count before proceeding"
 
-Be specific and actionable. Include actual commands if applicable (only from provided runbooks). If this is a critical issue or high-risk change, set requires_approval to true. Keep the reasoning concise (2-4 sentences) and cite specific evidence chunks."""
+**commands_by_step**: Dict mapping step index (as string) to array of terminal commands
+  - Commands MUST be copied directly from runbooks in the context
+  - Include safety checks in commands (e.g., "SELECT @@SERVERNAME" before executing changes)
+  - Never include destructive commands without confirmation steps
+
+**rollback_plan**: REQUIRED comprehensive rollback strategy (CRITICAL FOR PRODUCTION)
+  - **steps**: Ordered rollback actions in reverse sequence of resolution steps
+  - **commands_by_step**: Specific rollback commands mapped to rollback steps
+  - **preconditions**: What to verify BEFORE executing rollback (system state, backups, locks)
+  - **estimated_time_minutes**: Time to complete rollback (typically shorter than resolution)
+  - **triggers**: Specific conditions that indicate rollback is needed
+  - If runbooks contain rollback procedures, extract them directly
+  - If not in runbooks, infer safe rollback based on resolution steps (e.g., if step adds config, rollback removes it)
+  - For database changes: include transaction rollback, restore points, backup verification
+  - For service restarts: include service health checks and dependency verification
+  - For configuration changes: include config backup and restore procedures
+
+**confidence**: Your confidence in these steps (0.0-1.0) based on evidence quality
+  - Lower confidence if no rollback procedures found in runbooks
+  - Higher confidence if exact runbook match with tested rollback procedures
+
+**reasoning**: Cite specific evidence chunks and explain rollback safety
+
+**provenance**: Array of {{"doc_id": "...", "chunk_id": "..."}} references to evidence
+
+CRITICAL PRODUCTION SAFETY CONSTRAINTS:
+- You MUST provide a rollback_plan for ALL medium and high-risk resolutions
+- For low-risk resolutions, rollback_plan can be null only if changes are non-destructive and auto-reversible
+- You MUST base your response ONLY on the context provided (runbooks, historical incidents, logs)
+- If no context is provided, set confidence to 0.0, risk_level to "high", requires_approval to true
+- Commands MUST be copied from runbooks - do NOT generate generic commands
+- If resolution involves database changes, rollback MUST include backup verification steps
+- If resolution involves service restarts, rollback MUST include health check steps
+- If resolution involves configuration changes, rollback MUST reference backup/restore procedures
+- Set requires_approval to true for any medium/high risk changes
+- Include "point of no return" indicators in steps if applicable
+
+ROLLBACK PLAN EXAMPLES:
+
+For Database Query Changes:
+{{
+    "steps": ["Revert to original query", "Clear query cache", "Verify performance metrics"],
+    "commands_by_step": {{"0": ["USE [DatabaseName]; EXEC sp_recompile @objname = N'StoredProcedureName'"], "2": ["SELECT * FROM sys.dm_exec_query_stats ORDER BY last_execution_time DESC"]}},
+    "preconditions": ["Verify backup exists", "Confirm no active transactions on affected tables"],
+    "estimated_time_minutes": 5,
+    "triggers": ["Query execution time exceeds baseline by 2x", "Error rate increases above 5%", "CPU usage spikes above 90%"]
+}}
+
+For Service Configuration Changes:
+{{
+    "steps": ["Stop service gracefully", "Restore previous config from backup", "Restart service", "Verify service health"],
+    "commands_by_step": {{"0": ["systemctl stop myservice"], "1": ["cp /backup/config.json /etc/myservice/config.json"], "2": ["systemctl start myservice"], "3": ["systemctl status myservice && curl -f http://localhost:8080/health"]}},
+    "preconditions": ["Verify config backup exists at /backup/config.json", "Check no dependent services are in critical state"],
+    "estimated_time_minutes": 10,
+    "triggers": ["Service fails to start", "Health check returns non-200 status", "Dependent services report connection errors"]
+}}
+
+Be specific, production-safe, and always include rollback procedures. Cite evidence chunks in reasoning."""
 
 # Default system prompt for resolution (can be overridden via config/llm.json)
 RESOLUTION_SYSTEM_PROMPT_DEFAULT = "You are an expert NOC engineer. Always respond with valid JSON only."

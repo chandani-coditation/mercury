@@ -79,7 +79,10 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
     steps = []
     commands = []
     prerequisites = []
-    rollback_procedures = []
+    rollback_steps = []
+    rollback_commands = []
+    rollback_preconditions = []
+    rollback_triggers = []
     
     current_section = None
     
@@ -101,13 +104,28 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
             if is_header:
                 text_lower = text.lower()
                 if "step" in text_lower or "procedure" in text_lower:
-                    current_section = "steps"
+                    # Check if it's rollback steps
+                    if "rollback" in text_lower or "revert" in text_lower:
+                        current_section = "rollback_steps"
+                    else:
+                        current_section = "steps"
                 elif "command" in text_lower or "cmd" in text_lower:
-                    current_section = "commands"
+                    # Check if it's rollback commands
+                    if "rollback" in text_lower or "revert" in text_lower:
+                        current_section = "rollback_commands"
+                    else:
+                        current_section = "commands"
                 elif "prerequisite" in text_lower or "requirement" in text_lower:
-                    current_section = "prerequisites"
-                elif "rollback" in text_lower or "revert" in text_lower:
+                    # Check if it's rollback preconditions
+                    if "rollback" in text_lower or "revert" in text_lower:
+                        current_section = "rollback_preconditions"
+                    else:
+                        current_section = "prerequisites"
+                elif "rollback" in text_lower or "revert" in text_lower or "undo" in text_lower or "restore" in text_lower:
+                    # Generic rollback section
                     current_section = "rollback"
+                elif "trigger" in text_lower or "when to rollback" in text_lower or "rollback criteria" in text_lower:
+                    current_section = "rollback_triggers"
                 else:
                     current_section = None
                 
@@ -126,9 +144,18 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                 elif current_section == "prerequisites":
                     prerequisites.append(text)
                     full_content_parts.append(f"  • {text}\n")
-                elif current_section == "rollback":
-                    rollback_procedures.append(text)
+                elif current_section == "rollback" or current_section == "rollback_steps":
+                    rollback_steps.append(text)
                     full_content_parts.append(f"  • {text}\n")
+                elif current_section == "rollback_commands":
+                    rollback_commands.append(text)
+                    full_content_parts.append(f"  $ {text}\n")
+                elif current_section == "rollback_preconditions":
+                    rollback_preconditions.append(text)
+                    full_content_parts.append(f"  • {text}\n")
+                elif current_section == "rollback_triggers":
+                    rollback_triggers.append(text)
+                    full_content_parts.append(f"  ⚠ {text}\n")
                 else:
                     full_content_parts.append(f"{text}\n")
         
@@ -142,12 +169,25 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
     
     full_content = "".join(full_content_parts)
     
+    # Build structured rollback procedures
+    rollback_procedures = None
+    if rollback_steps:
+        rollback_procedures = {
+            "steps": rollback_steps,
+            "commands": rollback_commands if rollback_commands else None,
+            "preconditions": rollback_preconditions if rollback_preconditions else None,
+            "triggers": rollback_triggers if rollback_triggers else None
+        }
+        # If no structured data, fall back to text
+        if not rollback_commands and not rollback_preconditions and not rollback_triggers:
+            rollback_procedures = "\n".join(rollback_steps)
+    
     return {
         "title": title,
         "steps": steps,
         "commands": commands,
         "prerequisites": prerequisites,
-        "rollback_procedures": "\n".join(rollback_procedures) if rollback_procedures else None,
+        "rollback_procedures": rollback_procedures,
         "content": full_content
     }
 
@@ -225,6 +265,7 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
         "has_steps": len(extracted["steps"]) > 0,
         "has_commands": len(extracted["commands"]) > 0,
         "has_rollback": extracted["rollback_procedures"] is not None,
+        "rollback_structured": isinstance(extracted["rollback_procedures"], dict),  # Track if rollback is structured
     }
     
     return IngestRunbook(

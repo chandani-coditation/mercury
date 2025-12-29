@@ -260,17 +260,112 @@ def validate_resolution_output(resolution_output: Dict, context_chunks: List[Dic
                     if "doc_id" not in prov or "chunk_id" not in prov:
                         errors.append(f"provenance[{i}] must contain 'doc_id' and 'chunk_id'")
     
-    # Validate rollback_plan (if high risk)
+    # Validate rollback_plan (CRITICAL for production safety)
     risk_level_upper = resolution_output.get("risk_level", "").lower()
-    require_rollback_for = [r.lower() for r in config.get("require_rollback_for_risk_levels", [])]
+    require_rollback_for = [r.lower() for r in config.get("require_rollback_for_risk_levels", ["medium", "high"])]
+    
+    rollback_plan = resolution_output.get("rollback_plan")
+    
+    # Check if rollback is required based on risk level
     if risk_level_upper in require_rollback_for:
-        rollback_plan = resolution_output.get("rollback_plan")
         if not rollback_plan:
-            errors.append(f"rollback_plan required for risk_level '{risk_level_upper}'")
-        elif isinstance(rollback_plan, list):
-            max_rollback = config.get("max_rollback_steps", 10)
-            if len(rollback_plan) > max_rollback:
-                errors.append(f"Too many rollback steps: {len(rollback_plan)} (max: {max_rollback})")
+            errors.append(f"rollback_plan REQUIRED for risk_level '{risk_level_upper}' (production safety)")
+        else:
+            # Validate rollback_plan structure (supports both legacy list and new structured format)
+            if isinstance(rollback_plan, list):
+                # Legacy format: list of rollback steps
+                max_rollback = config.get("max_rollback_steps", 10)
+                if len(rollback_plan) > max_rollback:
+                    errors.append(f"Too many rollback steps: {len(rollback_plan)} (max: {max_rollback})")
+                
+                # For medium/high risk, recommend using structured format
+                if risk_level_upper in ["medium", "high"]:
+                    logger.warning(
+                        f"Legacy rollback_plan format detected for {risk_level_upper} risk. "
+                        "Consider using structured format with preconditions and triggers."
+                    )
+            
+            elif isinstance(rollback_plan, dict):
+                # New structured format: validate required fields
+                rollback_steps = rollback_plan.get("steps")
+                if not rollback_steps:
+                    errors.append("rollback_plan.steps is required in structured format")
+                elif not isinstance(rollback_steps, list):
+                    errors.append("rollback_plan.steps must be a list")
+                else:
+                    max_rollback = config.get("max_rollback_steps", 10)
+                    if len(rollback_steps) < 1:
+                        errors.append("rollback_plan.steps must contain at least 1 step")
+                    elif len(rollback_steps) > max_rollback:
+                        errors.append(f"Too many rollback steps: {len(rollback_steps)} (max: {max_rollback})")
+                    
+                    # Validate each rollback step is a string
+                    for i, step in enumerate(rollback_steps):
+                        if not isinstance(step, str):
+                            errors.append(f"rollback_plan.steps[{i}] must be a string")
+                
+                # Validate commands_by_step (optional)
+                rollback_commands = rollback_plan.get("commands_by_step")
+                if rollback_commands is not None:
+                    if not isinstance(rollback_commands, dict):
+                        errors.append("rollback_plan.commands_by_step must be a dict or null")
+                    else:
+                        for step_idx, cmd_list in rollback_commands.items():
+                            if not isinstance(cmd_list, list):
+                                errors.append(f"rollback_plan.commands_by_step['{step_idx}'] must be a list")
+                            else:
+                                for cmd in cmd_list:
+                                    if not isinstance(cmd, str):
+                                        errors.append(f"Rollback command in commands_by_step['{step_idx}'] must be a string")
+                
+                # Validate preconditions (optional but recommended for high risk)
+                preconditions = rollback_plan.get("preconditions")
+                if preconditions is not None:
+                    if not isinstance(preconditions, list):
+                        errors.append("rollback_plan.preconditions must be a list or null")
+                    else:
+                        for i, precond in enumerate(preconditions):
+                            if not isinstance(precond, str):
+                                errors.append(f"rollback_plan.preconditions[{i}] must be a string")
+                
+                # For high-risk resolutions, strongly recommend preconditions and triggers
+                if risk_level_upper == "high":
+                    if not preconditions:
+                        logger.warning("High-risk resolution missing rollback preconditions (strongly recommended)")
+                    
+                    triggers = rollback_plan.get("triggers")
+                    if not triggers or not isinstance(triggers, list):
+                        logger.warning("High-risk resolution missing rollback triggers (strongly recommended)")
+                
+                # Validate estimated_time_minutes (optional)
+                rollback_time = rollback_plan.get("estimated_time_minutes")
+                if rollback_time is not None:
+                    if not isinstance(rollback_time, int):
+                        errors.append(f"rollback_plan.estimated_time_minutes must be an integer")
+                    elif rollback_time < 1:
+                        errors.append("rollback_plan.estimated_time_minutes must be at least 1")
+                
+                # Validate triggers (optional)
+                triggers = rollback_plan.get("triggers")
+                if triggers is not None:
+                    if not isinstance(triggers, list):
+                        errors.append("rollback_plan.triggers must be a list or null")
+                    else:
+                        for i, trigger in enumerate(triggers):
+                            if not isinstance(trigger, str):
+                                errors.append(f"rollback_plan.triggers[{i}] must be a string")
+            else:
+                errors.append(f"rollback_plan must be a list or dict, got: {type(rollback_plan).__name__}")
+    
+    # Even for low-risk, if rollback_plan is provided, validate its structure
+    elif rollback_plan is not None:
+        if isinstance(rollback_plan, dict):
+            # Validate structured format even for low risk
+            rollback_steps = rollback_plan.get("steps")
+            if rollback_steps and not isinstance(rollback_steps, list):
+                errors.append("rollback_plan.steps must be a list")
+        elif not isinstance(rollback_plan, list):
+            errors.append(f"rollback_plan must be a list or dict or null, got: {type(rollback_plan).__name__}")
     
     if errors:
         logger.warning(f"Resolution guardrail validation failed with {len(errors)} errors: {errors}")

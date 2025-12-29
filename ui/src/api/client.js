@@ -46,8 +46,23 @@ export function putFeedback(incidentId, payload) {
   });
 }
 
-export function postResolution(incidentId) {
-  return request(`${API_BASE}/resolution?incident_id=${incidentId}`, {
+export function postResolution(incidentId, payload = null) {
+  const options = {
     method: "POST",
+    timeoutMs: 70000,
+  };
+  
+  // Only add body if payload is provided
+  if (payload) {
+    options.body = JSON.stringify(payload);
+  }
+  
+  return request(`${API_BASE}/resolution?incident_id=${incidentId}`, options);
+}
+
+export function putResolutionComplete(incidentId, payload = {}) {
+  return request(`${API_BASE}/incidents/${incidentId}/resolution`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }

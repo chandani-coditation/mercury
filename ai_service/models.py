@@ -1,6 +1,6 @@
 """Pydantic models for AI service."""
 from pydantic import BaseModel
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from datetime import datetime
 
 
@@ -26,12 +26,21 @@ class TriageOutput(BaseModel):
     confidence: float  # 0.0 to 1.0
 
 
+class RollbackPlan(BaseModel):
+    """Structured rollback plan for production safety."""
+    steps: List[str]  # Ordered rollback actions (reverse of resolution steps)
+    commands_by_step: Optional[Dict[str, List[str]]] = None  # Rollback commands mapped to steps
+    preconditions: Optional[List[str]] = None  # What to verify BEFORE rollback (state checks, backups)
+    estimated_time_minutes: Optional[int] = None  # Time to complete rollback
+    triggers: Optional[List[str]] = None  # Conditions indicating rollback is needed
+    
+    
 class ResolutionOutput(BaseModel):
     """Resolution output structure."""
     steps: List[str]  # Renamed from resolution_steps
     commands_by_step: Optional[Dict[str, List[str]]] = None  # Dict mapping step index to commands
     commands: Optional[List[str]] = None  # Legacy flat list (deprecated, use commands_by_step)
-    rollback_plan: Optional[List[str]] = None
+    rollback_plan: Optional[Union[List[str], RollbackPlan, Dict]] = None  # Support both legacy (list) and new (structured) formats
     estimated_time_minutes: int
     risk_level: str  # low, medium, high
     requires_approval: bool
