@@ -1,4 +1,5 @@
 """Pydantic models for AI service."""
+
 from pydantic import BaseModel
 from typing import Dict, List, Optional, Union
 from datetime import datetime
@@ -6,6 +7,7 @@ from datetime import datetime
 
 class Alert(BaseModel):
     """Canonical alert model."""
+
     alert_id: str
     source: str
     title: str
@@ -16,6 +18,7 @@ class Alert(BaseModel):
 
 class TriageOutput(BaseModel):
     """Triage output structure."""
+
     severity: str  # critical, high, medium, low
     category: str  # e.g., "database", "network", "application"
     summary: str
@@ -28,34 +31,42 @@ class TriageOutput(BaseModel):
 
 class RollbackPlan(BaseModel):
     """Structured rollback plan for production safety."""
+
     steps: List[str]  # Ordered rollback actions (reverse of resolution steps)
     commands_by_step: Optional[Dict[str, List[str]]] = None  # Rollback commands mapped to steps
-    preconditions: Optional[List[str]] = None  # What to verify BEFORE rollback (state checks, backups)
+    preconditions: Optional[List[str]] = (
+        None  # What to verify BEFORE rollback (state checks, backups)
+    )
     estimated_time_minutes: Optional[int] = None  # Time to complete rollback
     triggers: Optional[List[str]] = None  # Conditions indicating rollback is needed
-    
-    
+
+
 class ResolutionOutput(BaseModel):
     """Resolution output structure."""
+
     steps: List[str]  # Renamed from resolution_steps
     commands_by_step: Optional[Dict[str, List[str]]] = None  # Dict mapping step index to commands
     commands: Optional[List[str]] = None  # Legacy flat list (deprecated, use commands_by_step)
-    rollback_plan: Optional[Union[List[str], RollbackPlan, Dict]] = None  # Support both legacy (list) and new (structured) formats
+    rollback_plan: Optional[Union[List[str], RollbackPlan, Dict]] = (
+        None  # Support both legacy (list) and new (structured) formats
+    )
     estimated_time_minutes: int
     risk_level: str  # low, medium, high
     requires_approval: bool
     confidence: Optional[float] = None  # System's confidence in these steps (0.0-1.0)
-    reasoning: Optional[str] = None  # Short explanation citing evidence chunks (renamed from rationale)
+    reasoning: Optional[str] = (
+        None  # Short explanation citing evidence chunks (renamed from rationale)
+    )
     rationale: Optional[str] = None  # Legacy field (deprecated, use reasoning)
     provenance: Optional[List[Dict[str, str]]] = None  # Array of {doc_id, chunk_id} references
 
 
 class FeedbackInput(BaseModel):
     """Feedback input from human analyst."""
+
     feedback_type: str  # "triage" or "resolution"
     user_edited: Dict
     notes: Optional[str] = None
-    policy_band: Optional[str] = None  # Optional: Override policy band (AUTO, PROPOSE, REVIEW) for approval
-
-
-
+    policy_band: Optional[str] = (
+        None  # Optional: Override policy band (AUTO, PROPOSE, REVIEW) for approval
+    )

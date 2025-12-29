@@ -149,5 +149,6 @@ For Service Configuration Changes:
 Be specific, production-safe, and always include rollback procedures. Cite evidence chunks in reasoning."""
 
 # Default system prompt for resolution (can be overridden via config/llm.json)
-RESOLUTION_SYSTEM_PROMPT_DEFAULT = "You are an expert NOC engineer. Always respond with valid JSON only."
-
+RESOLUTION_SYSTEM_PROMPT_DEFAULT = (
+    "You are an expert NOC engineer. Always respond with valid JSON only."
+)

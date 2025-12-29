@@ -1,4 +1,5 @@
 """State models for state-based HITL workflow."""
+
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal, Any
 from datetime import datetime
@@ -96,4 +97,3 @@ class ActionResponse(BaseModel):
     notes: Optional[str] = None
     policy_band: Optional[str] = None  # For policy approval
     responded_at: datetime = Field(default_factory=datetime.utcnow)
-

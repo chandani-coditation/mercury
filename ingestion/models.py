@@ -1,4 +1,5 @@
 """Pydantic models for ingestion service."""
+
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Union
 from datetime import datetime
@@ -6,6 +7,7 @@ from datetime import datetime
 
 class IngestDocument(BaseModel):
     """Document to ingest (base model)."""
+
     doc_type: str  # "runbook", "incident", "alert", "log", "sop"
     service: Optional[str] = None
     component: Optional[str] = None
@@ -17,6 +19,7 @@ class IngestDocument(BaseModel):
 
 class IngestAlert(BaseModel):
     """Historical alert for ingestion."""
+
     alert_id: str
     source: str
     title: str
@@ -32,6 +35,7 @@ class IngestAlert(BaseModel):
 
 class IngestIncident(BaseModel):
     """Historical incident for ingestion."""
+
     incident_id: Optional[str] = None
     alert_id: Optional[str] = None
     title: str
@@ -49,6 +53,7 @@ class IngestIncident(BaseModel):
 
 class IngestRunbook(BaseModel):
     """Runbook for ingestion."""
+
     title: str
     service: Optional[str] = None
     component: Optional[str] = None
@@ -62,6 +67,7 @@ class IngestRunbook(BaseModel):
 
 class IngestLog(BaseModel):
     """Log snippet for ingestion."""
+
     content: str  # Raw log content
     timestamp: Optional[datetime] = None
     level: Optional[str] = None  # error, warning, info, debug
@@ -71,6 +77,3 @@ class IngestLog(BaseModel):
     context: Optional[Dict] = None  # JSON context
     log_format: Optional[str] = None  # "plain", "json", "syslog"
     metadata: Optional[Dict] = None
-
-
-

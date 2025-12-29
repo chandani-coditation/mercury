@@ -1,4 +1,5 @@
 """State bus for emitting agent state and managing HITL actions."""
+
 import asyncio
 from typing import Dict, Optional, Callable, Any, List, Tuple
 from datetime import datetime, timedelta
@@ -187,9 +188,7 @@ class StateBus:
 
             action_type = pending_action.action_type
 
-            state.warning = (
-                f"HITL action '{action_type}' timed out; escalating to approver."
-            )
+            state.warning = f"HITL action '{action_type}' timed out; escalating to approver."
             state.updated_at = datetime.utcnow()
 
             escalated = None
@@ -213,9 +212,7 @@ class StateBus:
             else:
                 state.pending_action = None
                 state.current_step = AgentStep.ERROR
-                state.error = (
-                    "Escalated approval timed out; manual intervention required."
-                )
+                state.error = "Escalated approval timed out; manual intervention required."
 
             self._states[incident_id] = state
 
@@ -230,7 +227,6 @@ class StateBus:
         action_type = pending_action.action_type
         if pending_action.created_at:
             duration = (datetime.utcnow() - pending_action.created_at).total_seconds()
-
 
     async def pause_for_action(
         self,
@@ -375,7 +371,6 @@ class StateBus:
         if pending_action and pending_action.created_at:
             duration = (datetime.utcnow() - pending_action.created_at).total_seconds()
 
-
         logger.info(
             "Agent resumed from action: incident_id=%s, action=%s, approved=%s",
             incident_id,
@@ -464,4 +459,3 @@ def get_state_bus() -> StateBus:
     if _state_bus is None:
         _state_bus = StateBus()
     return _state_bus
-

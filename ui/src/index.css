@@ -4,41 +4,50 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* ServiceNow Platform Theme */
+    --background: 214 18% 96%;
+    --foreground: 220 13% 18%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 13% 18%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 13% 18%;
 
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* ServiceNow Header Navy */
+    --header: 216 28% 25%;
+    
+    /* ServiceNow Link Blue */
+    --primary: 210 100% 42%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 214 18% 93%;
+    --secondary-foreground: 220 13% 18%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 214 18% 93%;
+    --muted-foreground: 220 9% 46%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 210 100% 42%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    /* ServiceNow Status Colors */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --success: 152 69% 31%;
+    --success-foreground: 0 0% 100%;
 
-    --success: 142.1 76.2% 36.3%;
-    --success-foreground: 355.7 100% 97.3%;
+    --warning: 37 90% 51%;
+    --warning-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 48 96% 89%;
+    --info: 201 96% 32%;
+    --info-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    --border: 214 18% 87%;
+    --input: 214 18% 95%;
+    --ring: 210 100% 42%;
+
+    --radius: 0.125rem;
   }
 }
 
@@ -53,14 +62,33 @@
 }
 
 @layer utilities {
-  /* Glass morphism effect */
+  /* ServiceNow Card Style - Clean & Solid */
   .glass-card {
-    @apply bg-card/40 backdrop-blur-xl border border-border/50 rounded-xl shadow-lg;
+    @apply bg-card border border-border rounded-sm shadow-sm;
   }
 
-  /* Glow border effect */
+  /* ServiceNow Subtle Border - Flat */
   .glow-border {
-    @apply border-primary/50 shadow-[0_0_20px_rgba(59,130,246,0.15)];
+    @apply border-border;
+  }
+
+  /* ServiceNow Table Rows */
+  .snow-table-row {
+    @apply border-b border-border hover:bg-secondary/50 transition-colors;
+  }
+
+  /* ServiceNow Form Fields */
+  .snow-field-label {
+    @apply text-sm font-medium text-foreground mb-1 block;
+  }
+
+  .snow-field-value {
+    @apply text-sm text-muted-foreground;
+  }
+
+  /* ServiceNow Section Header */
+  .snow-section-header {
+    @apply text-base font-semibold text-foreground border-b-2 border-primary pb-2 mb-4;
   }
 
   /* Severity badges */

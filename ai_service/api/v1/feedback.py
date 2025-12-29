@@ -1,11 +1,15 @@
 """Feedback endpoints."""
+
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from ai_service.models import FeedbackInput
 from ai_service.services import IncidentService, FeedbackService
 from ai_service.core import (
-    get_logger, get_workflow_config,
-    IncidentNotFoundError, DatabaseError, ValidationError
+    get_logger,
+    get_workflow_config,
+    IncidentNotFoundError,
+    DatabaseError,
+    ValidationError,
 )
 from ai_service.policy import get_policy_from_config
 from ai_service.guardrails import validate_triage_output
@@ -18,14 +22,14 @@ router = APIRouter()
 def submit_feedback(incident_id: str, feedback: FeedbackInput):
     """
     Submit human feedback/edits for an incident.
-    
+
     This stores the feedback and can update the policy band for approval.
-    
+
     **Approval Workflow:**
     - To approve an incident, provide `policy_band: "AUTO"` in the request
     - This will update the policy to AUTO, allowing resolution to proceed
     - You can also provide `user_edited` with the same triage/resolution output and `notes` for context
-    
+
     **Request Body:**
     - feedback_type: "triage" or "resolution"
     - user_edited: Edited version of triage/resolution output (or same as system output for approval)
@@ -35,13 +39,13 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
     try:
         incident_service = IncidentService()
         feedback_service = FeedbackService()
-        
+
         # Get incident to get system output
         try:
             incident = incident_service.get_incident(incident_id)
         except IncidentNotFoundError:
             raise HTTPException(status_code=404, detail="Incident not found")
-        
+
         # Get system output based on feedback type
         if feedback.feedback_type == "resolution":
             system_output = incident.get("resolution_output")
@@ -49,21 +53,19 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
             system_output = incident.get("triage_output")
         else:
             raise ValidationError("feedback_type must be 'triage' or 'resolution'")
-        
+
         if not system_output:
-            raise ValidationError(
-                f"No {feedback.feedback_type} output to provide feedback on"
-            )
-        
+            raise ValidationError(f"No {feedback.feedback_type} output to provide feedback on")
+
         # Store feedback
         feedback_id = feedback_service.create_feedback(
             incident_id=incident_id,
             feedback_type=feedback.feedback_type,
             system_output=system_output,
             user_edited=feedback.user_edited,
-            notes=feedback.notes
+            notes=feedback.notes,
         )
-        
+
         # If user provided user_edited triage_output, update the incident with it
         # This ensures resolution agent uses the user-edited version
         if feedback.feedback_type == "triage" and feedback.user_edited:
@@ -74,7 +76,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                     error_msg = f"Triage output validation failed: {', '.join(validation_errors)}"
                     logger.error(f"User-edited triage output validation failed: {error_msg}")
                     raise ValidationError(error_msg)
-                
+
                 # Validate that user_edited has the same structure (no new fields)
                 # Check that all keys in user_edited exist in original system_output
                 original_keys = set(system_output.keys())
@@ -84,10 +86,10 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                     error_msg = f"Cannot add new fields to triage output. Extra fields: {', '.join(extra_keys)}"
                     logger.error(f"User tried to add new fields: {error_msg}")
                     raise ValidationError(error_msg)
-                
+
                 incident_service.update_triage_output(incident_id, feedback.user_edited)
                 logger.info(f"Triage output updated via feedback: incident_id={incident_id}")
-                
+
                 # Verify the update by fetching the incident again
                 try:
                     updated_incident = incident_service.get_incident(incident_id)
@@ -107,22 +109,32 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
             except ValidationError:
                 raise  # Re-raise validation errors
             except Exception as e:
-                logger.error(f"Failed to update triage_output after feedback: {str(e)}", exc_info=True)
-                raise HTTPException(status_code=400, detail=f"Failed to update triage output: {str(e)}")
-        
+                logger.error(
+                    f"Failed to update triage_output after feedback: {str(e)}", exc_info=True
+                )
+                raise HTTPException(
+                    status_code=400, detail=f"Failed to update triage output: {str(e)}"
+                )
+
         # Update policy if:
         # 1. User explicitly provided policy_band (approval workflow)
         # 2. OR triage feedback with feedback_before_policy enabled
         if feedback.policy_band:
             # User is explicitly approving/changing policy band
             if feedback.policy_band not in ["AUTO", "PROPOSE", "REVIEW"]:
-                raise ValidationError(f"Invalid policy_band: {feedback.policy_band}. Must be AUTO, PROPOSE, or REVIEW")
-            
+                raise ValidationError(
+                    f"Invalid policy_band: {feedback.policy_band}. Must be AUTO, PROPOSE, or REVIEW"
+                )
+
             # Get triage output (use user_edited if provided, otherwise original)
-            triage_output = feedback.user_edited if (feedback.feedback_type == "triage" and feedback.user_edited) else incident.get("triage_output")
+            triage_output = (
+                feedback.user_edited
+                if (feedback.feedback_type == "triage" and feedback.user_edited)
+                else incident.get("triage_output")
+            )
             if not triage_output:
                 raise ValidationError("Cannot update policy without triage output")
-            
+
             # Log current policy before update
             current_policy_band = incident.get("policy_band")
             current_policy_decision = incident.get("policy_decision")
@@ -130,7 +142,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                 f"Updating policy via feedback: incident_id={incident_id}, "
                 f"current_policy_band={current_policy_band}, new_policy_band={feedback.policy_band}"
             )
-            
+
             # Recompute policy decision with the new policy band
             policy_decision = get_policy_from_config(triage_output)
             policy_decision["policy_band"] = feedback.policy_band
@@ -140,7 +152,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
             else:
                 policy_decision["can_auto_apply"] = False
                 policy_decision["requires_approval"] = True
-            
+
             try:
                 incident_service.update_policy(incident_id, feedback.policy_band, policy_decision)
                 logger.info(
@@ -149,7 +161,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                     f"can_auto_apply={policy_decision.get('can_auto_apply')}, "
                     f"requires_approval={policy_decision.get('requires_approval')}"
                 )
-                
+
                 # Verify the update by fetching the incident again
                 try:
                     updated_incident = incident_service.get_incident(incident_id)
@@ -171,7 +183,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
             except Exception as e:
                 # Non-fatal; still return feedback stored
                 logger.warning(f"Failed to update policy after feedback: {str(e)}")
-        
+
         elif feedback.feedback_type == "triage":
             # Legacy: If triage feedback and policy was deferred, compute and store policy now
             workflow_cfg = get_workflow_config() or {}
@@ -185,15 +197,15 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                 except Exception as e:
                     # Non-fatal; still return feedback stored
                     logger.warning(f"Failed to update policy after feedback: {str(e)}")
-        
+
         return {
             "feedback_id": feedback_id,
             "incident_id": incident_id,
             "feedback_type": feedback.feedback_type,
             "status": "feedback_stored",
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.utcnow().isoformat(),
         }
-    
+
     except HTTPException:
         raise
     except ValidationError as e:
@@ -205,4 +217,3 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
     except Exception as e:
         logger.error(f"Unexpected error storing feedback: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
-

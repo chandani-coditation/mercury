@@ -1,11 +1,17 @@
 """Resolution endpoints."""
+
 import os
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from ai_service.models import Alert
 from ai_service.agents import resolution_copilot_agent
 from ai_service.agents.resolution_copilot_state import resolution_agent_state
-from ai_service.core import get_logger, ValidationError, IncidentNotFoundError, ApprovalRequiredError
+from ai_service.core import (
+    get_logger,
+    ValidationError,
+    IncidentNotFoundError,
+    ApprovalRequiredError,
+)
 from ai_service.api.error_utils import format_user_friendly_error
 
 logger = get_logger(__name__)
@@ -24,7 +30,7 @@ async def resolution(
 ):
     """
     Generate resolution for an incident.
-    
+
     This endpoint uses the Resolution Copilot Agent to:
     1. Get incident (or create from alert)
     2. Retrieve runbook-heavy context
@@ -33,16 +39,16 @@ async def resolution(
     5. Validate with guardrails
     6. Store resolution
     7. Return resolution output
-    
+
     If incident_id is provided, fetch the incident and use its alert/triage.
     Otherwise, use the provided alert and perform triage first.
-    
+
     **Query Parameters:**
     - incident_id: Optional incident ID to fetch existing incident
-    
+
     **Request Body:**
     - alert: Optional Alert object (used if incident_id not provided)
-    
+
     **Response:**
     - incident_id: Incident identifier
     - resolution: Resolution steps, commands, rollback plan
@@ -51,20 +57,23 @@ async def resolution(
     """
     # Determine if LangGraph should be used
     use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH
-    
-    logger.info(f"Resolution request received: incident_id={incident_id}, use_state={use_state}, use_langgraph={use_lg}")
-    
+
+    logger.info(
+        f"Resolution request received: incident_id={incident_id}, use_state={use_state}, use_langgraph={use_lg}"
+    )
+
     try:
         # Convert alert to dict if provided
         alert_dict = None
         if alert:
             alert_dict = alert.model_dump()
             alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
-        
+
         # Call resolution agent (LangGraph, state-based, or synchronous)
         if use_lg:
             # Use LangGraph
             from ai_service.agents.langgraph_wrapper import run_resolution_graph
+
             result = run_resolution_graph(incident_id=incident_id, alert=alert_dict)
         elif use_state:
             if not incident_id:
@@ -81,15 +90,15 @@ async def resolution(
         else:
             # Use synchronous agent (backward compatible)
             result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
-        
+
         logger.info(
             f"Resolution completed: incident_id={result['incident_id']}, "
             f"risk_level={result['resolution'].get('risk_level')}, "
             f"steps={len(result['resolution'].get('steps', result['resolution'].get('resolution_steps', [])))}"
         )
-        
+
         return result
-    
+
     except ApprovalRequiredError as e:
         logger.info(f"Resolution requires approval: {str(e)}")
         raise HTTPException(
@@ -97,8 +106,8 @@ async def resolution(
             detail={
                 "error": "approval_required",
                 "message": str(e),
-                "incident_id": incident_id if incident_id else None
-            }
+                "incident_id": incident_id if incident_id else None,
+            },
         )
     except ValueError as e:
         # Handle validation errors (e.g., guardrail validation failures)
@@ -120,4 +129,3 @@ async def resolution(
             status_code=500,
             detail=friendly_detail,
         )
-

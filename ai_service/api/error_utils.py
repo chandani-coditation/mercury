@@ -1,4 +1,5 @@
 """Utility helpers for formatting user-friendly API error messages."""
+
 from typing import List
 
 
@@ -23,7 +24,9 @@ def format_user_friendly_error(error: Exception) -> str:
         hints.append("Wait a few seconds before retrying or reduce concurrent requests.")
 
     if "no historical data" in lower or "no matching evidence" in lower:
-        hints.append("Ingest relevant incidents/runbooks or adjust retrieval filters before retrying.")
+        hints.append(
+            "Ingest relevant incidents/runbooks or adjust retrieval filters before retrying."
+        )
 
     if "could not connect to server" in lower or "connection refused" in lower:
         hints.append("Ensure PostgreSQL is running and POSTGRES_HOST/PORT are correct.")
@@ -36,4 +39,3 @@ def format_user_friendly_error(error: Exception) -> str:
         return f"{message} Hint: {hint_text}"
 
     return f"{message} If the issue persists, retry or check the service logs for more details."
-

@@ -1,4 +1,5 @@
 """Triage endpoints."""
+
 import os
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
@@ -17,13 +18,13 @@ USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
 
 @router.post("/triage")
 async def triage(
-    alert: Alert, 
+    alert: Alert,
     use_state: bool = Query(False, description="Use state-based HITL workflow"),
-    use_langgraph: bool = Query(None, description="Use LangGraph framework (overrides env var)")
+    use_langgraph: bool = Query(None, description="Use LangGraph framework (overrides env var)"),
 ):
     """
     Triage an alert.
-    
+
     This endpoint uses the Triager Agent to:
     1. Retrieve context from knowledge base
     2. Call LLM for triage
@@ -31,10 +32,10 @@ async def triage(
     4. Apply policy gate
     5. Store incident in database
     6. Return triage output
-    
+
     **Request Body:**
     - Alert object with title, description, labels, etc.
-    
+
     **Response:**
     - incident_id: Unique incident identifier
     - triage: Triage assessment with severity, category, confidence
@@ -43,9 +44,11 @@ async def triage(
     """
     # Determine if LangGraph should be used
     use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH
-    
-    logger.info(f"Triage request received: alert={alert.title}, use_state={use_state}, use_langgraph={use_lg}")
-    
+
+    logger.info(
+        f"Triage request received: alert={alert.title}, use_state={use_state}, use_langgraph={use_lg}"
+    )
+
     try:
         # Convert alert to dict
         alert_dict = alert.model_dump()
@@ -54,11 +57,12 @@ async def triage(
             alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
         else:
             alert_dict["ts"] = datetime.utcnow().isoformat()
-        
+
         # Call triager agent (LangGraph, state-based, or synchronous)
         if use_lg:
             # Use LangGraph
             from ai_service.agents.langgraph_wrapper import run_triage_graph
+
             result = run_triage_graph(alert_dict)
         elif use_state:
             # Use state-based HITL workflow
@@ -66,15 +70,15 @@ async def triage(
         else:
             # Use synchronous agent (backward compatible)
             result = triage_agent(alert_dict)
-        
+
         logger.info(
             f"Triage completed: incident_id={result['incident_id']}, "
             f"severity={result['triage'].get('severity')}, "
             f"policy_band={result['policy_band']}"
         )
-        
+
         return result
-    
+
     except ValueError as e:
         # Handle validation errors (e.g., guardrail validation failures)
         error_msg = str(e)
@@ -92,4 +96,3 @@ async def triage(
             status_code=500,
             detail=friendly_detail,
         )
-

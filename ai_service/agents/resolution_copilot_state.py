@@ -1,15 +1,10 @@
 """State-based Resolution Agent - emits state snapshots and pauses for HITL."""
+
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from retrieval.hybrid_search import hybrid_search
-
 from ai_service.agents.triager import format_evidence_chunks, apply_retrieval_preferences
-from ai_service.core import (
-    get_logger,
-    get_retrieval_config,
-    IncidentNotFoundError
-)
+from ai_service.core import get_logger, get_retrieval_config, IncidentNotFoundError
 from ai_service.guardrails import validate_resolution_output
 from ai_service.llm_client import call_llm_for_resolution
 from ai_service.policy import get_policy_from_config, get_resolution_policy
@@ -36,6 +31,7 @@ async def resolution_agent_state(
 
     if not incident_id:
         raise ValueError("State-based resolution requires an incident_id")
+
 
 async def _resolution_agent_state_internal(
     incident_id: str,
@@ -131,7 +127,7 @@ async def _resolution_agent_state_internal(
                 )
         except Exception as exc:  # pragma: no cover - diagnostic path
             resolution_warning = f"Cannot verify database state: {exc}"
-    
+
     state.warning = resolution_warning
 
     if use_state_bus:
@@ -154,14 +150,16 @@ async def _resolution_agent_state_internal(
     if use_state_bus:
         await state_bus.emit_state(state)
 
-    is_valid, validation_errors = validate_resolution_output(resolution_output, context_chunks=context_chunks)
+    is_valid, validation_errors = validate_resolution_output(
+        resolution_output, context_chunks=context_chunks
+    )
     if not is_valid:
         state.current_step = AgentStep.ERROR
         state.error = f"Resolution validation failed: {', '.join(validation_errors)}"
         if use_state_bus:
             await state_bus.emit_state(state)
-            status="validation_error",
-            policy_band=state.policy_band or "unknown",
+            status = ("validation_error",)
+            policy_band = (state.policy_band or "unknown",)
         raise ValueError(state.error)
 
     state.current_step = AgentStep.VALIDATION_COMPLETE
@@ -237,9 +235,9 @@ async def _resolution_agent_state_internal(
             "policy_band": state.policy_band,
             "context_chunks_used": len(context_chunks),
             "evidence_chunks": resolution_evidence,
-            "pending_action": state.pending_action.model_dump(mode="json")
-            if state.pending_action
-            else None,
+            "pending_action": (
+                state.pending_action.model_dump(mode="json") if state.pending_action else None
+            ),
         }
         if resolution_warning:
             result["warning"] = resolution_warning
@@ -253,8 +251,8 @@ async def _resolution_agent_state_internal(
     if use_state_bus:
         await state_bus.emit_state(state)
 
-        status="success",
-        policy_band=state.policy_band or "unknown",
+        status = ("success",)
+        policy_band = (state.policy_band or "unknown",)
 
     result = {
         "incident_id": incident_id,
@@ -269,4 +267,3 @@ async def _resolution_agent_state_internal(
     if use_state_bus:
         result["state"] = state.model_dump(mode="json")
     return result
-

@@ -39,10 +39,14 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
   const decision = data.policy_decision;
   const policyBand = data.policy_band;
 
+  // Only require confirmation for PROPOSE and BLOCK, not for AUTO
+  const requiresConfirmation = policyBand === "PROPOSE" || policyBand === "BLOCK";
+
   const handleApproveClick = () => {
-    if (decision.requires_approval || policyBand === "PROPOSE" || policyBand === "BLOCK") {
+    if (requiresConfirmation) {
       setConfirmDialogOpen(true);
     } else {
+      // AUTO - proceed directly without confirmation
       onApprove();
     }
   };
@@ -114,14 +118,27 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
       </Card>
 
       {/* Approval Message */}
-      <Card className="p-6 bg-warning/10 border-warning/30">
-        <div className="space-y-3">
-          <h3 className="font-semibold text-foreground">Policy Decision Required</h3>
-          <p className="text-sm text-muted-foreground">
-            Review the policy band and approve to proceed with resolution
-          </p>
-        </div>
-      </Card>
+      {requiresConfirmation && (
+        <Card className="p-6 bg-warning/10 border-warning/30">
+          <div className="space-y-3">
+            <h3 className="font-semibold text-foreground">Policy Decision Required</h3>
+            <p className="text-sm text-muted-foreground">
+              Review the policy band and approve to proceed with resolution
+            </p>
+          </div>
+        </Card>
+      )}
+      
+      {!requiresConfirmation && (
+        <Card className="p-6 bg-success/10 border-success/30">
+          <div className="space-y-3">
+            <h3 className="font-semibold text-foreground">Auto-Approved Policy</h3>
+            <p className="text-sm text-muted-foreground">
+              This policy band allows automatic progression to resolution
+            </p>
+          </div>
+        </Card>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -157,9 +174,14 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
               <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
               Generating...
             </>
-          ) : (
+          ) : requiresConfirmation ? (
             <>
               Approve & Continue
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </>
+          ) : (
+            <>
+              Continue to Resolution
               <ArrowRight className="w-4 h-4 ml-2" />
             </>
           )}

@@ -1,4 +1,5 @@
 """Configuration loader for config files."""
+
 import os
 import json
 from typing import Dict, Optional
@@ -20,7 +21,7 @@ def _get_config_dir() -> str:
 def load_config(config_dir: Optional[str] = None) -> Dict:
     """
     Load configuration from config directory (multiple JSON files).
-    
+
     Loads and merges the following config files:
     - policy.json
     - guardrails.json
@@ -29,26 +30,26 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
     - workflow.json
     - schemas.json
     - field_mappings.json
-    
+
     Args:
         config_dir: Optional path to config directory. If None, uses default location.
-    
+
     Returns:
         Merged configuration dictionary
     """
     global _CONFIG_CACHE
-    
+
     # Return cached config if available
     if _CONFIG_CACHE is not None:
         logger.debug("Returning cached configuration")
         return _CONFIG_CACHE
-    
+
     # Determine config directory
     if config_dir is None:
         config_dir = _get_config_dir()
-    
+
     logger.info(f"Loading configuration from: {config_dir}")
-    
+
     # Config files to load (in order)
     config_files = {
         "policy_gate": "policy.json",
@@ -59,35 +60,37 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
         "field_mappings": "field_mappings.json",
         "embeddings": "embeddings.json",
         "historical_data_inputs": "schemas.json",  # Will extract this key
-        "alert_metadata": "schemas.json"  # Will extract this key
+        "alert_metadata": "schemas.json",  # Will extract this key
     }
-    
+
     merged_config = {}
-    
+
     # Load each config file
     for key, filename in config_files.items():
         config_path = os.path.join(config_dir, filename)
-        
+
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 file_config = json.load(f)
-            
+
             logger.debug(f"Loaded config file: {filename}")
-            
+
             # Special handling for schemas.json (contains multiple top-level keys)
             if filename == "schemas.json":
-                merged_config["historical_data_inputs"] = file_config.get("historical_data_inputs", {})
+                merged_config["historical_data_inputs"] = file_config.get(
+                    "historical_data_inputs", {}
+                )
                 merged_config["alert_metadata"] = file_config.get("alert_metadata", {})
             else:
                 merged_config[key] = file_config
-                
+
         except FileNotFoundError:
             logger.error(f"Configuration file not found: {config_path}")
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in configuration file {config_path}: {e}")
             raise ValueError(f"Invalid JSON in configuration file {config_path}: {e}")
-    
+
     _CONFIG_CACHE = merged_config
     logger.info("Configuration loaded successfully")
     return merged_config
@@ -96,10 +99,10 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
 def reload_config(config_dir: Optional[str] = None) -> Dict:
     """
     Force reload configuration (clears cache).
-    
+
     Args:
         config_dir: Optional path to config directory.
-    
+
     Returns:
         Configuration dictionary
     """
@@ -149,4 +152,3 @@ def get_embeddings_config() -> Dict:
     """Get embeddings configuration (model, dimensions, etc.)."""
     config = load_config()
     return config.get("embeddings", {})
-

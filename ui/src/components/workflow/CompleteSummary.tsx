@@ -72,9 +72,9 @@ export const CompleteSummary = ({
       },
       policy_decision: {
         policy_band: policyData.policy_band,
-        requires_approval: policyData.policy_decision.requires_approval,
-        can_auto_apply: policyData.policy_decision.can_auto_apply,
-        policy_reason: policyData.policy_decision.policy_reason,
+        requires_approval: policyData.policy_decision?.requires_approval || false,
+        can_auto_apply: policyData.policy_decision?.can_auto_apply || false,
+        policy_reason: policyData.policy_decision?.policy_reason || "",
       },
       evidence: {
         chunks_used: retrievalData.chunks_used || 0,
@@ -98,16 +98,30 @@ export const CompleteSummary = ({
     setDownloadMenuOpen(false);
   };
 
+  const hasResolution = resolutionData?.resolution_steps && resolutionData.resolution_steps.length > 0;
+
   return (
     <div className="space-y-6">
       {/* Success Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-success animate-pulse" />
-          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <CheckCircle className="w-6 h-6 text-success" />
-            Incident Resolution Complete
-          </h2>
+          {hasResolution ? (
+            <>
+              <div className="w-3 h-3 rounded-full bg-success animate-pulse" />
+              <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <CheckCircle className="w-6 h-6 text-success" />
+                Incident Resolution Complete
+              </h2>
+            </>
+          ) : (
+            <>
+              <div className="w-3 h-3 rounded-full bg-warning animate-pulse" />
+              <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <AlertCircle className="w-6 h-6 text-warning" />
+                Incident Summary
+              </h2>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {onViewTriage && (
@@ -119,7 +133,7 @@ export const CompleteSummary = ({
               View Triage
             </Button>
           )}
-          {onViewResolution && (
+          {onViewResolution && hasResolution && (
             <Button
               variant="outline"
               onClick={onViewResolution}
@@ -157,7 +171,7 @@ export const CompleteSummary = ({
               </div>
               <div>
                 <span className="text-muted-foreground">Service:</span>
-                <span className="ml-2 text-foreground">{alertData.labels.service}</span>
+                <span className="ml-2 text-foreground">{alertData.labels?.service || alertData.service || "N/A"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Title:</span>
@@ -192,7 +206,7 @@ export const CompleteSummary = ({
               <div className="text-sm">
                 <span className="text-muted-foreground">Affected Services:</span>
                 <div className="mt-1 flex flex-wrap gap-2">
-                  {triageData.affected_services.map((service: string, idx: number) => (
+                  {(triageData.affected_services || []).map((service: string, idx: number) => (
                     <span key={idx} className="px-2 py-1 bg-secondary/50 border border-border/50 rounded text-xs">
                       {service}
                     </span>
@@ -237,20 +251,22 @@ export const CompleteSummary = ({
               <div className="text-sm space-y-2">
                 <div className="flex items-center justify-between p-2 bg-secondary/30 rounded">
                   <span className="text-muted-foreground">Requires Approval</span>
-                  <span className={policyData.policy_decision.requires_approval ? "text-warning" : "text-success"}>
-                    {policyData.policy_decision.requires_approval ? "Yes" : "No"}
+                  <span className={policyData.policy_decision?.requires_approval ? "text-warning" : "text-success"}>
+                    {policyData.policy_decision?.requires_approval ? "Yes" : "No"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-2 bg-secondary/30 rounded">
                   <span className="text-muted-foreground">Can Auto-Apply</span>
-                  <span className={policyData.policy_decision.can_auto_apply ? "text-success" : "text-muted-foreground"}>
-                    {policyData.policy_decision.can_auto_apply ? "Yes" : "No"}
+                  <span className={policyData.policy_decision?.can_auto_apply ? "text-success" : "text-muted-foreground"}>
+                    {policyData.policy_decision?.can_auto_apply ? "Yes" : "No"}
                   </span>
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground pt-2 border-t border-border/50">
-                <strong className="text-foreground">Reason:</strong> {policyData.policy_decision.policy_reason}
-              </div>
+              {policyData.policy_decision?.policy_reason && (
+                <div className="text-xs text-muted-foreground pt-2 border-t border-border/50">
+                  <strong className="text-foreground">Reason:</strong> {policyData.policy_decision.policy_reason}
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -268,7 +284,7 @@ export const CompleteSummary = ({
                   <DialogTrigger asChild>
                     <button className="flex-1 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center hover:bg-primary/20 transition-colors cursor-pointer group">
                       <div className="text-2xl font-bold text-primary group-hover:scale-110 transition-transform">
-                        {retrievalData.chunks_used}
+                        {retrievalData.chunks_used || 0}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1 group-hover:text-primary transition-colors">
                         Chunks Used (Click to view)
@@ -289,12 +305,12 @@ export const CompleteSummary = ({
                       {/* Evidence Stats */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                          <div className="text-2xl font-bold text-primary">{retrievalData.chunks_used}</div>
+                          <div className="text-2xl font-bold text-primary">{retrievalData.chunks_used || 0}</div>
                           <div className="text-xs text-muted-foreground mt-1">Chunks Used</div>
                         </div>
                         <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
                           <div className="text-2xl font-bold text-primary">
-                            {new Set(retrievalData.chunk_sources).size}
+                            {new Set(retrievalData.chunk_sources || []).size}
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">Unique Sources</div>
                         </div>
@@ -304,7 +320,7 @@ export const CompleteSummary = ({
                       <div>
                         <div className="text-sm font-semibold text-foreground mb-2">Sources:</div>
                         <div className="flex flex-wrap gap-2">
-                          {[...new Set(retrievalData.chunk_sources)].map((source: string, idx: number) => (
+                          {[...new Set(retrievalData.chunk_sources || [])].map((source: string, idx: number) => (
                             <span
                               key={idx}
                               className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium"
@@ -340,7 +356,7 @@ export const CompleteSummary = ({
 
                 <div className="flex-1 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
                   <div className="text-2xl font-bold text-primary">
-                    {new Set(retrievalData.chunk_sources).size}
+                    {new Set(retrievalData.chunk_sources || []).size}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">Unique Sources</div>
                 </div>
@@ -348,7 +364,7 @@ export const CompleteSummary = ({
               <div>
                 <div className="text-xs text-muted-foreground mb-2">Sources:</div>
                 <div className="flex flex-wrap gap-2">
-                  {[...new Set(retrievalData.chunk_sources)].map((source: string, idx: number) => (
+                  {[...new Set(retrievalData.chunk_sources || [])].map((source: string, idx: number) => (
                     <span
                       key={idx}
                       className="px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium"
@@ -364,34 +380,74 @@ export const CompleteSummary = ({
       </div>
 
       {/* Resolution Steps - Full Width */}
-      <Card className="p-6 glass-card glow-border">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-success" />
-            <h3 className="font-semibold text-foreground">Resolution Steps Executed</h3>
-          </div>
-          <div className="bg-background/50 border border-border/30 rounded-lg p-4">
-            <div className="space-y-2">
-              {resolutionData.resolution_steps.map((step: string, index: number) => (
-                <div key={index} className="flex items-start gap-3 text-sm">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-success/20 text-success flex items-center justify-center text-xs font-bold">
-                    {index + 1}
-                  </span>
-                  <span className="text-muted-foreground leading-relaxed pt-0.5">{step}</span>
-                </div>
-              ))}
+      {resolutionData && resolutionData.resolution_steps && resolutionData.resolution_steps.length > 0 ? (
+        <Card className="p-6 glass-card glow-border">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-success" />
+              <h3 className="font-semibold text-foreground">Resolution Steps Executed</h3>
+            </div>
+            <div className="bg-background/50 border border-border/30 rounded-lg p-4">
+              <div className="space-y-2">
+                {resolutionData.resolution_steps.map((step: string, index: number) => (
+                  <div key={index} className="flex items-start gap-3 text-sm">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-success/20 text-success flex items-center justify-center text-xs font-bold">
+                      {index + 1}
+                    </span>
+                    <span className="text-muted-foreground leading-relaxed pt-0.5">{step}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      ) : (
+        <Card className="p-6 glass-card glow-border">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-warning" />
+              <h3 className="font-semibold text-foreground">Resolution Status</h3>
+            </div>
+            <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
+              <p className="text-muted-foreground text-sm text-center py-4">
+                Resolution has not been proposed yet for this incident.
+                {policyData?.policy_band && (
+                  <span className="block mt-2">
+                    Current Policy Band: <span className={cn("font-semibold", 
+                      policyData.policy_band === "AUTO" ? "text-success" :
+                      policyData.policy_band === "PROPOSE" ? "text-warning" :
+                      policyData.policy_band === "REVIEW" ? "text-warning" :
+                      policyData.policy_band === "BLOCK" ? "text-destructive" :
+                      "text-foreground"
+                    )}>{policyData.policy_band}</span>
+                    {policyData.policy_band === "AUTO" && (
+                      <span className="block mt-1 text-xs">Resolution can be auto-generated when approved.</span>
+                    )}
+                    {(policyData.policy_band === "PROPOSE" || policyData.policy_band === "REVIEW") && (
+                      <span className="block mt-1 text-xs">Approval required before resolution can be generated.</span>
+                    )}
+                    {policyData.policy_band === "BLOCK" && (
+                      <span className="block mt-1 text-xs">Resolution is currently blocked.</span>
+                    )}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Action Summary */}
-      <Card className="p-6 bg-success/10 border-success/30">
+      <Card className={`p-6 ${hasResolution ? 'bg-success/10 border-success/30' : 'bg-warning/10 border-warning/30'}`}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-foreground mb-1">Incident Resolved Successfully</h3>
+            <h3 className="font-semibold text-foreground mb-1">
+              {hasResolution ? "Incident Resolved Successfully" : "Incident Summary"}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              All resolution steps have been executed. The incident has been marked as complete.
+              {hasResolution 
+                ? "All resolution steps have been executed. The incident has been marked as complete."
+                : "This incident has been triaged and analyzed. Resolution has not been generated yet."}
             </p>
           </div>
           <div className="flex gap-3">

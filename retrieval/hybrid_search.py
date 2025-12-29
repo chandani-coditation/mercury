@@ -1,4 +1,5 @@
 """Hybrid search combining vector similarity and full-text search."""
+
 import os
 import time
 from typing import List, Dict, Optional
@@ -10,8 +11,10 @@ try:
     from ai_service.core import get_logger
 except ImportError:
     import logging
+
     def get_logger(name):
         return logging.getLogger(name)
+
 
 logger = get_logger(__name__)
 
@@ -22,11 +25,11 @@ def hybrid_search(
     component: Optional[str] = None,
     limit: int = 5,
     vector_weight: float = 0.7,
-    fulltext_weight: float = 0.3
+    fulltext_weight: float = 0.3,
 ) -> List[Dict]:
     """
     Perform hybrid search using RRF (Reciprocal Rank Fusion).
-    
+
     Args:
         query_text: Search query
         service: Optional service filter
@@ -34,7 +37,7 @@ def hybrid_search(
         limit: Number of results to return
         vector_weight: Weight for vector search (0-1)
         fulltext_weight: Weight for full-text search (0-1)
-    
+
     Returns:
         List of chunks with scores
     """
@@ -43,42 +46,42 @@ def hybrid_search(
         f"Starting hybrid search: query='{query_text[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
-    
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Generate query embedding
         query_embedding = embed_text(query_text)
         # Convert to pgvector string format
-        query_embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
-        
+        query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+
         # Normalize service and component (ensure None or non-empty strings)
         service_val = service if service and str(service).strip() else None
         component_val = component if component and str(component).strip() else None
-        
+
         # Build filter conditions with case-insensitive partial matching
         # This allows matching "database" with "Database-SQL", "Database", etc.
         filters = []
         filter_params = []
-        
+
         if service_val:
             # Case-insensitive partial match: "database" matches "Database-SQL", "Database", etc.
             filters.append("LOWER(c.metadata->>'service') LIKE LOWER(%s)")
             filter_params.append(f"%{service_val}%")
-        
+
         if component_val:
             # Case-insensitive partial match: "sql-server" matches "sql-server", "SQL Server", etc.
             filters.append("LOWER(c.metadata->>'component') LIKE LOWER(%s)")
             filter_params.append(f"%{component_val}%")
-        
+
         filter_clause = " AND " + " AND ".join(filters) if filters else ""
-        
+
         # Hybrid search query using RRF
         # Vector search: cosine similarity
         # Full-text search: ts_rank
         # RRF: 1/(k + rank) for each result set, then combine
-        
+
         query = f"""
         WITH vector_results AS (
             SELECT 
@@ -151,11 +154,11 @@ def hybrid_search(
         ORDER BY rrf_score DESC
         LIMIT %s
         """
-        
+
         # Build params list matching the query placeholders in order
         # Query placeholders in order (when no filters):
         # 1: embedding (vector_score)
-        # 2: embedding (vector_rank)  
+        # 2: embedding (vector_rank)
         # 3: embedding (ORDER BY)
         # 4: limit (vector_results)
         # 5: text (fulltext_score)
@@ -165,7 +168,7 @@ def hybrid_search(
         # 9: limit (fulltext_results)
         # 10: final limit
         exec_params = []
-        
+
         # Vector results params
         exec_params.append(query_embedding_str)  # 1: vector_score embedding
         exec_params.append(query_embedding_str)  # 2: vector_rank embedding
@@ -175,7 +178,7 @@ def hybrid_search(
             exec_params.append(param)
         exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
         exec_params.append(limit * 2)  # 4: vector_results limit
-        
+
         # Fulltext results params
         exec_params.append(query_text)  # 5: fulltext_score text
         exec_params.append(query_text)  # 6: fulltext_rank text
@@ -186,26 +189,26 @@ def hybrid_search(
             exec_params.append(param)
         exec_params.append(query_text)  # 8: ORDER BY text
         exec_params.append(limit * 2)  # 9: fulltext_results limit
-        
+
         # Final
         exec_params.append(limit)  # 10: final limit
-        
+
         # CRITICAL: Verify we have exactly the right number of parameters
         # Base: 10 params (no filters)
         # Each filter adds 2 params (one in vector_results, one in fulltext_results)
         expected_params = 10 + (2 * len(filter_params))
-        
+
         if len(exec_params) != expected_params:
             raise ValueError(
                 f"Parameter count mismatch: expected {expected_params} params "
                 f"but built {len(exec_params)} params. "
                 f"Service: {repr(service_val)}, Component: {repr(component_val)}"
             )
-        
+
         # Debug: verify parameter count and log BEFORE execute
-        placeholder_count = query.count('%s')
+        placeholder_count = query.count("%s")
         param_count = len(exec_params)
-        
+
         # Log using standardized logger (DEBUG level for diagnostic info)
         logger.debug(
             f"HYBRID_SEARCH: placeholders={placeholder_count}, params={param_count}, "
@@ -215,7 +218,7 @@ def hybrid_search(
             f"HYBRID_SEARCH: param list length={len(exec_params)}, "
             f"params={[type(p).__name__ for p in exec_params]}"
         )
-        
+
         # Verify parameter count matches query placeholders
         if param_count != placeholder_count:
             error_msg = (
@@ -226,7 +229,7 @@ def hybrid_search(
             )
             logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
             raise ValueError(error_msg)
-        
+
         try:
             cur.execute(query, exec_params)
         except Exception as e:
@@ -234,13 +237,11 @@ def hybrid_search(
             logger.error(f"Query placeholders: {placeholder_count}, Params: {param_count}")
             logger.error(f"Service: {repr(service_val)}, Component: {repr(component_val)}")
             raise
-        
+
         results = cur.fetchall()
-        
+
         duration = time.time() - start_time
-        logger.debug(
-            f"Hybrid search completed: found {len(results)} results in {duration:.3f}s"
-        )
+        logger.debug(f"Hybrid search completed: found {len(results)} results in {duration:.3f}s")
 
         # Diagnostic: log top fused hits to verify RRF/MMR behavior
         top_preview = []
@@ -250,7 +251,9 @@ def hybrid_search(
                     "doc_id": str(row["document_id"]),
                     "doc_type": row["doc_type"],
                     "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
-                    "fulltext_score": float(row["fulltext_score"]) if row["fulltext_score"] else 0.0,
+                    "fulltext_score": (
+                        float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
+                    ),
                     "rrf_score": float(row["rrf_score"]),
                     "title": (row["doc_title"] or "")[:80],
                 }
@@ -262,25 +265,29 @@ def hybrid_search(
             f"vector_weight={vector_weight}, fulltext_weight={fulltext_weight}, "
             f"preview={top_preview}"
         )
-        
+
         # Convert to list of dicts
         chunks = []
         for row in results:
-            chunks.append({
-                "chunk_id": str(row["id"]),
-                "document_id": str(row["document_id"]),
-                "chunk_index": row["chunk_index"],
-                "content": row["content"],
-                "metadata": row["metadata"],
-                "doc_title": row["doc_title"],
-                "doc_type": row["doc_type"],
-                "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
-                "fulltext_score": float(row["fulltext_score"]) if row["fulltext_score"] else 0.0,
-                "rrf_score": float(row["rrf_score"])
-            })
-        
+            chunks.append(
+                {
+                    "chunk_id": str(row["id"]),
+                    "document_id": str(row["document_id"]),
+                    "chunk_index": row["chunk_index"],
+                    "content": row["content"],
+                    "metadata": row["metadata"],
+                    "doc_title": row["doc_title"],
+                    "doc_type": row["doc_type"],
+                    "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
+                    "fulltext_score": (
+                        float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
+                    ),
+                    "rrf_score": float(row["rrf_score"]),
+                }
+            )
+
         return chunks
-    
+
     finally:
         cur.close()
         conn.close()
@@ -291,45 +298,45 @@ def mmr_search(
     service: Optional[str] = None,
     component: Optional[str] = None,
     limit: int = 5,
-    diversity: float = 0.5
+    diversity: float = 0.5,
 ) -> List[Dict]:
     """
     Maximal Marginal Relevance search for diverse results.
-    
+
     Args:
         query_text: Search query
         service: Optional service filter
         component: Optional component filter
         limit: Number of results
         diversity: Diversity parameter (0-1, higher = more diverse)
-    
+
     Returns:
         List of diverse chunks
     """
     # Get initial results from hybrid search
     candidates = hybrid_search(query_text, service, component, limit=limit * 3)
-    
+
     if not candidates:
         return []
-    
+
     # Simple MMR: select first result, then iteratively add most relevant
     # that is also diverse from already selected
     selected = []
     remaining = candidates.copy()
-    
+
     # First result is always the top one
     if remaining:
         selected.append(remaining.pop(0))
-    
+
     # For remaining slots, balance relevance and diversity
     while len(selected) < limit and remaining:
         best_idx = 0
         best_score = -1
-        
+
         for idx, candidate in enumerate(remaining):
             # Relevance score (RRF score)
             relevance = candidate["rrf_score"]
-            
+
             # Diversity: max similarity to already selected
             max_sim = 0.0
             if selected:
@@ -339,15 +346,14 @@ def mmr_search(
                         max_sim = 0.8  # High similarity if same doc
                     else:
                         max_sim = max(max_sim, 0.3)  # Lower similarity if different doc
-            
+
             # MMR score: lambda * relevance - (1 - lambda) * max_similarity
             mmr_score = diversity * relevance - (1 - diversity) * max_sim
-            
+
             if mmr_score > best_score:
                 best_score = mmr_score
                 best_idx = idx
-        
-        selected.append(remaining.pop(best_idx))
-    
-    return selected
 
+        selected.append(remaining.pop(best_idx))
+
+    return selected

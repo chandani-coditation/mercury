@@ -1,4 +1,5 @@
 """Repository for feedback data access."""
+
 import uuid
 import json
 from datetime import datetime
@@ -11,44 +12,41 @@ logger = get_logger(__name__)
 
 class FeedbackRepository:
     """Repository for feedback database operations."""
-    
+
     @staticmethod
     def create(
         incident_id: str,
         feedback_type: str,
         system_output: dict,
         user_edited: dict,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
     ) -> str:
         """
         Create a new feedback record.
-        
+
         Args:
             incident_id: Incident ID
             feedback_type: 'triage' or 'resolution'
             system_output: Original system output
             user_edited: User-edited output
             notes: Optional notes from user
-        
+
         Returns:
             Feedback ID
-        
+
         Raises:
             DatabaseError: If database operation fails
         """
         logger.debug(f"Creating feedback for incident: {incident_id}, type={feedback_type}")
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         try:
             feedback_id = uuid.uuid4()
-            
+
             # Compute diff (simple JSON diff)
-            diff = {
-                "original": system_output,
-                "edited": user_edited
-            }
-            
+            diff = {"original": system_output, "edited": user_edited}
+
             cur.execute(
                 """
                 INSERT INTO feedback (id, incident_id, feedback_type, system_output, user_edited, diff, notes)
@@ -61,10 +59,10 @@ class FeedbackRepository:
                     json.dumps(system_output),
                     json.dumps(user_edited),
                     json.dumps(diff),
-                    notes
-                )
+                    notes,
+                ),
             )
-            
+
             # If feedback is for resolution, mark resolution as accepted
             if feedback_type == "resolution":
                 cur.execute(
@@ -73,13 +71,13 @@ class FeedbackRepository:
                     SET resolution_accepted_at = %s
                     WHERE id = %s
                     """,
-                    (datetime.utcnow(), incident_id)
+                    (datetime.utcnow(), incident_id),
                 )
-            
+
             conn.commit()
             logger.info(f"Feedback created: {feedback_id} for incident {incident_id}")
             return str(feedback_id)
-        
+
         except Exception as e:
             conn.rollback()
             logger.error(f"Failed to create feedback: {str(e)}", exc_info=True)
@@ -87,26 +85,26 @@ class FeedbackRepository:
         finally:
             cur.close()
             conn.close()
-    
+
     @staticmethod
     def list_between(start_ts: datetime, end_ts: datetime) -> List[Dict]:
         """
         List feedback records between two timestamps.
-        
+
         Args:
             start_ts: Start timestamp
             end_ts: End timestamp
-        
+
         Returns:
             List of feedback dictionaries
-        
+
         Raises:
             DatabaseError: If database operation fails
         """
         logger.debug(f"Listing feedback between {start_ts} and {end_ts}")
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         try:
             cur.execute(
                 """
@@ -115,21 +113,23 @@ class FeedbackRepository:
                 WHERE created_at >= %s AND created_at <= %s
                 ORDER BY created_at ASC
                 """,
-                (start_ts, end_ts)
+                (start_ts, end_ts),
             )
             rows = cur.fetchall()
             results = []
             for r in rows:
-                results.append({
-                    "id": str(r[0]),
-                    "incident_id": str(r[1]) if r[1] else None,
-                    "feedback_type": r[2],
-                    "system_output": r[3],
-                    "user_edited": r[4],
-                    "diff": r[5],
-                    "notes": r[6],
-                    "created_at": r[7].isoformat() if r[7] else None,
-                })
+                results.append(
+                    {
+                        "id": str(r[0]),
+                        "incident_id": str(r[1]) if r[1] else None,
+                        "feedback_type": r[2],
+                        "system_output": r[3],
+                        "user_edited": r[4],
+                        "diff": r[5],
+                        "notes": r[6],
+                        "created_at": r[7].isoformat() if r[7] else None,
+                    }
+                )
             logger.debug(f"Listed {len(results)} feedback records")
             return results
         except Exception as e:
@@ -138,4 +138,3 @@ class FeedbackRepository:
         finally:
             cur.close()
             conn.close()
-

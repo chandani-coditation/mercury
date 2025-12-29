@@ -4,8 +4,10 @@ import { TriageView } from "@/components/workflow/TriageView";
 import { PolicyView } from "@/components/workflow/PolicyView";
 import { ResolutionView } from "@/components/workflow/ResolutionView";
 import { CompleteSummary } from "@/components/workflow/CompleteSummary";
-import { Terminal, Activity } from "lucide-react";
-import { postTriage, postResolution, putFeedback } from "@/api/client";
+import { Terminal, Activity, Search, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { postTriage, postResolution, putFeedback, putResolutionComplete, getIncident } from "@/api/client";
 
 // Sample data
 const sampleTriageData = {
@@ -71,6 +73,8 @@ const Index = () => {
   const [retrievalData, setRetrievalData] = useState<any>(null);
   const [resolutionData, setResolutionData] = useState<any>(null);
   const [error, setError] = useState("");
+  const [searchIncidentId, setSearchIncidentId] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
 
   const handleSubmit = async (alert: any) => {
     setIsLoading(true);
@@ -233,6 +237,76 @@ const Index = () => {
     setRetrievalData(null);
     setResolutionData(null);
     setError("");
+    setSearchIncidentId("");
+  };
+
+  const handleLoadIncident = async () => {
+    if (!searchIncidentId.trim()) {
+      setError("Please enter an Incident ID or Alert ID");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+    console.log("=== Loading Existing Incident ===");
+    console.log("Searching for:", searchIncidentId);
+
+    try {
+      const incident = await getIncident(searchIncidentId);
+      console.log("✅ Incident loaded:", incident);
+      console.log("Found by ID:", incident.incident_id || incident.id);
+      console.log("Alert ID:", incident.alert_id);
+
+      // Extract data from incident
+      setIncidentId(incident.incident_id || incident.id);
+      setAlertData(incident.alert || incident.raw_alert || {});
+      
+      // Set triage data (always set, even if empty, to avoid rendering issues)
+      setTriageData(incident.triage_output || {});
+
+      // Set policy data (always set, even if empty)
+      setPolicyData({
+        policy_band: incident.policy_band || null,
+        policy_decision: incident.policy_decision || {}
+      });
+
+      // Set retrieval/evidence data (always set, even if empty)
+      setRetrievalData(incident.triage_evidence || incident.resolution_evidence || {
+        chunks_used: 0,
+        chunk_sources: [],
+        chunks: []
+      });
+
+      // Set resolution data if exists
+      if (incident.resolution_output) {
+        setResolutionData(incident.resolution_output);
+      } else {
+        // Set empty resolution data to avoid undefined errors
+        setResolutionData({
+          resolution_steps: [],
+          rollback_plan: null,
+          risk_level: null,
+          estimated_time_minutes: null,
+          confidence: null,
+          reasoning: null
+        });
+      }
+
+      // When loading an existing incident, ALWAYS go to complete summary page
+      // This shows all available data in one place, regardless of resolution status
+      // The CompleteSummary component handles missing data gracefully
+      console.log("✅ Loading existing incident - going directly to Complete Summary");
+      console.log("Resolution exists:", !!incident.resolution_output);
+      console.log("Policy band:", incident.policy_band);
+      setCurrentStep("complete");
+
+      setShowSearch(false);
+    } catch (err: any) {
+      console.error("❌ Failed to load incident:", err);
+      setError(err.response?.data?.detail || err.message || "Failed to load incident");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleMarkComplete = () => {
@@ -255,46 +329,89 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Background gradient effect */}
-      <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-background to-background pointer-events-none" />
-      
-      {/* Header */}
-      <header className="relative z-10 border-b border-border/50 bg-card/50 backdrop-blur-xl">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Terminal className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-foreground">
-                NOC Agent UI — 
-                <span className="text-primary"> Triage</span> → 
-                <span className={policyData ? "text-primary" : "text-muted-foreground"}> Policy</span> → 
-                <span className={resolutionData ? "text-primary" : "text-muted-foreground"}> Resolution</span>
-              </h1>
-              <p className="text-xs text-muted-foreground">AI-Powered Incident Resolution</p>
-            </div>
-            <div className="ml-auto flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-success animate-pulse" />
-                <span className="text-xs text-muted-foreground">System Active</span>
+      {/* ServiceNow Style Header - Dark Navy */}
+      <header className="relative z-10 bg-[#2c3e50] text-white shadow-md">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded bg-white/10">
+                  <Terminal className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-semibold text-white">NOC Agent</h1>
+                  <p className="text-xs text-white/70">Incident Management</p>
+                </div>
               </div>
-              {currentStep !== "form" && (
-                <button
-                  onClick={handleNewTicket}
-                  className="px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors"
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* Search/Load Existing Ticket */}
+              {showSearch ? (
+                <div className="flex items-center gap-2 bg-white/10 rounded px-3 py-1.5">
+                  <Search className="w-4 h-4 text-white/70" />
+                  <Input
+                    value={searchIncidentId}
+                    onChange={(e) => setSearchIncidentId(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLoadIncident()}
+                    placeholder="Incident ID or Alert ID..."
+                    className="bg-transparent border-none text-white placeholder:text-white/50 focus-visible:ring-0 focus-visible:ring-offset-0 h-7 w-64"
+                    disabled={isLoading}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleLoadIncident}
+                    disabled={isLoading}
+                    className="bg-primary hover:bg-primary/90 h-7 px-3"
+                  >
+                    {isLoading ? "Loading..." : "Load"}
+                  </Button>
+                  <button
+                    onClick={() => {
+                      setShowSearch(false);
+                      setSearchIncidentId("");
+                      setError("");
+                    }}
+                    className="text-white/70 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowSearch(true)}
+                  className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white h-8"
                 >
-                  Triage New Ticket
-                </button>
+                  <Search className="w-4 h-4 mr-2" />
+                  Load Existing
+                </Button>
               )}
+              
+              <div className="h-6 w-px bg-white/20" />
+              
+              <div className="flex items-center gap-2 text-sm">
+                <Activity className="w-4 h-4 text-green-400" />
+                <span className="text-white/90">Active</span>
+              </div>
+              
+              <Button
+                size="sm"
+                onClick={handleNewTicket}
+                className="bg-primary hover:bg-primary/90 text-white h-8"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                New Ticket
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Progress Steps */}
+      {/* Progress Steps - ServiceNow Style */}
       {currentStep !== "form" && (
-        <div className="relative z-10 bg-card/30 border-b border-border/50">
+        <div className="relative z-10 bg-secondary border-b border-border">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center gap-2">
               <StepBadge label="Triage" status={getStepStatus("triage")} />
@@ -308,6 +425,21 @@ const Index = () => {
       {/* Main Content */}
       <main className="relative z-10 container mx-auto px-4 py-8">
         <div className="max-w-[98%] mx-auto">
+          {/* Error Display (Global) */}
+          {error && !isLoading && (
+            <div className="mb-4 p-4 bg-destructive/10 border-l-4 border-destructive rounded text-destructive animate-fade-in">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <div className="font-semibold">Error</div>
+                  <div className="text-sm mt-1">{error}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {currentStep === "form" && (
             <TicketForm onSubmit={handleSubmit} isLoading={isLoading} error={error} />
           )}
@@ -341,13 +473,13 @@ const Index = () => {
             />
           )}
 
-          {currentStep === "complete" && alertData && triageData && policyData && retrievalData && resolutionData && (
+          {currentStep === "complete" && alertData && resolutionData && (
             <CompleteSummary
-              alertData={alertData}
-              triageData={triageData}
-              policyData={policyData}
-              retrievalData={retrievalData}
-              resolutionData={resolutionData}
+              alertData={alertData || {}}
+              triageData={triageData || {}}
+              policyData={policyData || { policy_band: null, policy_decision: {} }}
+              retrievalData={retrievalData || { chunks_used: 0, chunk_sources: [], chunks: [] }}
+              resolutionData={resolutionData || { resolution_steps: [] }}
               onNewTicket={handleNewTicket}
               onViewTriage={() => {
                 // Just navigate - use existing state data, no API calls

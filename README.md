@@ -81,7 +81,11 @@ The UI expects the backend `ai-service` to be reachable at `http://localhost:800
    - Review the policy band and approve (if required)
    - Click **“Generate Resolution”** to request a runbook-driven resolution plan.
 
-The right-hand **Results** panel shows JSON for triage, policy, retrieval evidence, and resolution.
+The right-hand **Results** panel shows interactive, user-friendly views for:
+   - **Triage**: Displays severity, confidence, category, affected services, and recommended actions
+   - **Policy**: Shows policy band, approval requirements, and decision details
+   - **Retrieval Evidence**: Interactive expandable chunks showing matched runbooks and historical incidents
+   - **Resolution**: Final resolution plan
 
 ---
 

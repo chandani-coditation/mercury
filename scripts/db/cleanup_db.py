@@ -82,7 +82,7 @@ Examples:
   # Selective wipes
   python scripts/db/cleanup_db.py --yes --incidents --feedback
   python scripts/db/cleanup_db.py --yes --documents --chunks
-        """
+        """,
     )
     parser.add_argument("--yes", action="store_true", help="Confirm destructive action")
     parser.add_argument("--dry-run", action="store_true", help="Show statements without executing")
@@ -93,12 +93,16 @@ Examples:
 
     args = parser.parse_args()
 
-    selected = [t for t, flag in (
-        ("documents", args.documents),
-        ("chunks", args.chunks),
-        ("incidents", args.incidents),
-        ("feedback", args.feedback),
-    ) if flag]
+    selected = [
+        t
+        for t, flag in (
+            ("documents", args.documents),
+            ("chunks", args.chunks),
+            ("incidents", args.incidents),
+            ("feedback", args.feedback),
+        )
+        if flag
+    ]
 
     # Default to ALL if nothing selected
     targets = selected or ALL_TARGETS
@@ -113,5 +117,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-
-

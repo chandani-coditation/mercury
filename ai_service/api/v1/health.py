@@ -1,4 +1,5 @@
 """Health check endpoints with dependency checks."""
+
 from fastapi import APIRouter, HTTPException
 from ai_service.core import get_logger
 from db.connection import get_db_connection_context
@@ -32,13 +33,8 @@ def readiness_check():
     """
     logger.debug("Readiness check requested")
     start_time = time.time()
-    checks = {
-        "service": "ai",
-        "version": "1.0.0",
-        "status": "ready",
-        "checks": {}
-    }
-    
+    checks = {"service": "ai", "version": "1.0.0", "status": "ready", "checks": {}}
+
     # Check database with timeout protection
     db_start = time.time()
     try:
@@ -50,7 +46,7 @@ def readiness_check():
         db_duration = time.time() - db_start
         checks["checks"]["database"] = {
             "status": "healthy",
-            "response_time_ms": round(db_duration * 1000, 2)
+            "response_time_ms": round(db_duration * 1000, 2),
         }
     except Exception as e:
         db_duration = time.time() - db_start
@@ -61,10 +57,10 @@ def readiness_check():
         checks["checks"]["database"] = {
             "status": "unhealthy",
             "error": error_msg,
-            "response_time_ms": round(db_duration * 1000, 2)
+            "response_time_ms": round(db_duration * 1000, 2),
         }
         checks["status"] = "not_ready"
-    
+
     # Check LLM API (lightweight check - just verify API key is set)
     llm_start = time.time()
     try:
@@ -78,7 +74,7 @@ def readiness_check():
             llm_duration = time.time() - llm_start
             checks["checks"]["llm_api"] = {
                 "status": "healthy",
-                "response_time_ms": round(llm_duration * 1000, 2)
+                "response_time_ms": round(llm_duration * 1000, 2),
             }
     except Exception as e:
         llm_duration = time.time() - llm_start
@@ -89,16 +85,16 @@ def readiness_check():
         checks["checks"]["llm_api"] = {
             "status": "unhealthy",
             "error": error_msg,
-            "response_time_ms": round(llm_duration * 1000, 2)
+            "response_time_ms": round(llm_duration * 1000, 2),
         }
         checks["status"] = "not_ready"
-    
+
     total_duration = time.time() - start_time
     checks["total_response_time_ms"] = round(total_duration * 1000, 2)
-    
+
     if checks["status"] == "not_ready":
         raise HTTPException(status_code=503, detail=checks)
-    
+
     return checks
 
 
@@ -109,4 +105,3 @@ def liveness_check():
     Simple check to verify the service is running.
     """
     return {"status": "alive", "service": "ai"}
-

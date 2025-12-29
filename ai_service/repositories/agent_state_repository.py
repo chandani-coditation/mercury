@@ -1,4 +1,5 @@
 """Repository for agent state persistence."""
+
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from db.connection import get_db_connection
@@ -11,36 +12,36 @@ logger = get_logger(__name__)
 
 class AgentStateRepository:
     """Repository for agent state operations."""
-    
+
     def save_state(self, state: AgentState) -> str:
         """
         Save agent state to database.
-        
+
         Args:
             state: AgentState to save
-        
+
         Returns:
             State ID
         """
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         try:
             # Convert state to JSON
             state_data = state.model_dump(mode="json")
             pending_action_data = None
             if state.pending_action:
                 pending_action_data = state.pending_action.model_dump(mode="json")
-            
+
             # Insert or update state
             if state.incident_id:
                 # Check if state exists
                 cur.execute(
                     "SELECT id FROM agent_state WHERE incident_id = %s AND agent_type = %s",
-                    (state.incident_id, state.agent_type)
+                    (state.incident_id, state.agent_type),
                 )
                 existing = cur.fetchone()
-                
+
                 if existing:
                     # Update existing state
                     state_id = existing["id"] if isinstance(existing, dict) else existing[0]
@@ -54,11 +55,15 @@ class AgentStateRepository:
                         WHERE id = %s
                         """,
                         (
-                            state.current_step.value if hasattr(state.current_step, 'value') else str(state.current_step),
+                            (
+                                state.current_step.value
+                                if hasattr(state.current_step, "value")
+                                else str(state.current_step)
+                            ),
                             json.dumps(state_data),
                             json.dumps(pending_action_data) if pending_action_data else None,
-                            state_id
-                        )
+                            state_id,
+                        ),
                     )
                 else:
                     # Insert new state
@@ -71,10 +76,14 @@ class AgentStateRepository:
                         (
                             state.incident_id,
                             state.agent_type,
-                            state.current_step.value if hasattr(state.current_step, 'value') else str(state.current_step),
+                            (
+                                state.current_step.value
+                                if hasattr(state.current_step, "value")
+                                else str(state.current_step)
+                            ),
                             json.dumps(state_data),
-                            json.dumps(pending_action_data) if pending_action_data else None
-                        )
+                            json.dumps(pending_action_data) if pending_action_data else None,
+                        ),
                     )
                     result = cur.fetchone()
                     state_id = result["id"] if isinstance(result, dict) else result[0]
@@ -88,18 +97,22 @@ class AgentStateRepository:
                     """,
                     (
                         state.agent_type,
-                        state.current_step.value if hasattr(state.current_step, 'value') else str(state.current_step),
+                        (
+                            state.current_step.value
+                            if hasattr(state.current_step, "value")
+                            else str(state.current_step)
+                        ),
                         json.dumps(state_data),
-                        json.dumps(pending_action_data) if pending_action_data else None
-                    )
+                        json.dumps(pending_action_data) if pending_action_data else None,
+                    ),
                 )
                 result = cur.fetchone()
                 state_id = result["id"] if isinstance(result, dict) else result[0]
-            
+
             conn.commit()
             logger.debug(f"Agent state saved: state_id={state_id}, incident_id={state.incident_id}")
             return str(state_id)
-        
+
         except Exception as e:
             conn.rollback()
             logger.error(f"Error saving agent state: {e}", exc_info=True)
@@ -107,21 +120,21 @@ class AgentStateRepository:
         finally:
             cur.close()
             conn.close()
-    
+
     def get_state(self, incident_id: str, agent_type: str) -> Optional[AgentState]:
         """
         Get latest agent state for an incident.
-        
+
         Args:
             incident_id: Incident ID
             agent_type: Agent type (triage or resolution)
-        
+
         Returns:
             AgentState or None
         """
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         try:
             cur.execute(
                 """
@@ -131,16 +144,18 @@ class AgentStateRepository:
                 ORDER BY updated_at DESC
                 LIMIT 1
                 """,
-                (incident_id, agent_type)
+                (incident_id, agent_type),
             )
             result = cur.fetchone()
-            
+
             if not result:
                 return None
-            
+
             state_data = result["state_data"] if isinstance(result, dict) else result[0]
-            pending_action_data = result["pending_action"] if isinstance(result, dict) else result[1]
-            
+            pending_action_data = (
+                result["pending_action"] if isinstance(result, dict) else result[1]
+            )
+
             # Reconstruct AgentState
             state_dict = state_data if isinstance(state_data, dict) else json.loads(state_data)
             if pending_action_data:
@@ -148,29 +163,29 @@ class AgentStateRepository:
                     state_dict["pending_action"] = pending_action_data
                 else:
                     state_dict["pending_action"] = json.loads(pending_action_data)
-            
+
             return AgentState(**state_dict)
-        
+
         except Exception as e:
             logger.error(f"Error getting agent state: {e}", exc_info=True)
             raise DatabaseError(f"Failed to get agent state: {str(e)}")
         finally:
             cur.close()
             conn.close()
-    
+
     def get_pending_actions(self, agent_type: Optional[str] = None) -> list:
         """
         Get all pending actions.
-        
+
         Args:
             agent_type: Optional filter by agent type
-        
+
         Returns:
             List of (incident_id, pending_action) tuples
         """
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         try:
             if agent_type:
                 cur.execute(
@@ -180,7 +195,7 @@ class AgentStateRepository:
                     WHERE pending_action IS NOT NULL AND agent_type = %s
                     ORDER BY updated_at DESC
                     """,
-                    (agent_type,)
+                    (agent_type,),
                 )
             else:
                 cur.execute(
@@ -191,18 +206,22 @@ class AgentStateRepository:
                     ORDER BY updated_at DESC
                     """
                 )
-            
+
             results = cur.fetchall()
             pending = []
             for row in results:
                 incident_id = row["incident_id"] if isinstance(row, dict) else row[0]
                 pending_action_data = row["pending_action"] if isinstance(row, dict) else row[1]
                 if pending_action_data:
-                    action_dict = pending_action_data if isinstance(pending_action_data, dict) else json.loads(pending_action_data)
+                    action_dict = (
+                        pending_action_data
+                        if isinstance(pending_action_data, dict)
+                        else json.loads(pending_action_data)
+                    )
                     pending.append((incident_id, PendingAction(**action_dict)))
-            
+
             return pending
-        
+
         except Exception as e:
             logger.error(f"Error getting pending actions: {e}", exc_info=True)
             raise DatabaseError(f"Failed to get pending actions: {str(e)}")
@@ -259,4 +278,3 @@ class AgentStateRepository:
         finally:
             cur.close()
             conn.close()
-

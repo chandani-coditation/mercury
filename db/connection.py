@@ -1,4 +1,5 @@
 """Database connection utilities with connection pooling and retries."""
+
 import os
 import time
 import psycopg
@@ -12,9 +13,11 @@ load_dotenv()
 # Import logger (with fallback if ai_service not available)
 try:
     from ai_service.core import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 # Global connection pool
@@ -29,7 +32,7 @@ DB_CONN_RETRY_MAX_DELAY = float(os.getenv("DB_CONN_RETRY_MAX_DELAY", "5.0"))
 def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
     """
     Initialize the database connection pool.
-    
+
     Args:
         min_size: Minimum number of connections in pool (default: 2)
         max_size: Maximum number of connections in pool (default: 10)
@@ -39,17 +42,19 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
     if _db_pool is not None:
         logger.warning("Database pool already initialized")
         return
-    
+
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
     dbname = os.getenv("POSTGRES_DB", "nocdb")
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
-    
+
     # Increase connect_timeout and add wait timeout for pool connections
-    wait_timeout = int(os.getenv("DB_POOL_WAIT_TIMEOUT", "10"))  # Wait up to 10s for available connection
+    wait_timeout = int(
+        os.getenv("DB_POOL_WAIT_TIMEOUT", "10")
+    )  # Wait up to 10s for available connection
     conninfo = f"host={host} port={port} dbname={dbname} user={user} password={password} connect_timeout={timeout}"
-    
+
     try:
         _db_pool = ConnectionPool(
             conninfo,
@@ -60,8 +65,10 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
             timeout=wait_timeout,  # Wait timeout for getting connection from pool
         )
         _db_pool.open()
-        logger.info(f"Database connection pool initialized: min={min_size}, max={max_size}, connect_timeout={timeout}s, wait_timeout={wait_timeout}s")
-        
+        logger.info(
+            f"Database connection pool initialized: min={min_size}, max={max_size}, connect_timeout={timeout}s, wait_timeout={wait_timeout}s"
+        )
+
         # Test the pool with a quick connection
         try:
             with get_db_connection_context() as conn:
@@ -98,7 +105,7 @@ def _create_direct_connection():
         dbname=os.getenv("POSTGRES_DB", "nocdb"),
         user=os.getenv("POSTGRES_USER", "postgres"),
         password=os.getenv("POSTGRES_PASSWORD", "postgres"),
-        row_factory=dict_row
+        row_factory=dict_row,
     )
 
 
@@ -125,7 +132,7 @@ def get_db_connection():
                         last_error = pool_exc
                         if attempt < DB_CONN_RETRIES - 1:
                             delay = min(
-                                DB_CONN_RETRY_BASE_DELAY * (2 ** attempt),
+                                DB_CONN_RETRY_BASE_DELAY * (2**attempt),
                                 DB_CONN_RETRY_MAX_DELAY,
                             )
                             time.sleep(delay)
@@ -135,7 +142,7 @@ def get_db_connection():
         except psycopg.OperationalError as exc:
             last_error = exc
             delay = min(
-                DB_CONN_RETRY_BASE_DELAY * (2 ** attempt),
+                DB_CONN_RETRY_BASE_DELAY * (2**attempt),
                 DB_CONN_RETRY_MAX_DELAY,
             )
             # Only log as warning if it's not a timeout (timeouts are expected when pool is busy)
@@ -217,6 +224,3 @@ def get_db_cursor():
     """
     conn = get_db_connection()
     return conn, conn.cursor()
-
-
-
