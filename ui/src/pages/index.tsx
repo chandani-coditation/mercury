@@ -165,16 +165,20 @@ const Index = () => {
       console.log("Resolution response:", JSON.stringify(data, null, 2));
       
       // Extract resolution steps from the response
+      // The API returns: { resolution: { steps: [...], ... }, ... }
       const resolution = data.resolution || data;
       const steps = resolution.resolution_steps || resolution.steps || [];
       
       // Store all resolution data including rollback_plan if present
+      // Preserve the original structure to handle both string and object rollback_plan
       setResolutionData({
-        resolution_steps: steps,
-        rollback_plan: resolution.rollback_plan || null,
+        ...resolution, // Spread first to get all fields
+        resolution_steps: steps, // Ensure steps is always set
+        steps: steps, // Also set as 'steps' for compatibility
+        // Keep rollback_plan as-is (can be string or object)
         risk_level: resolution.risk_level || null,
-        estimated_duration: resolution.estimated_duration || null,
-        ...resolution
+        estimated_time_minutes: resolution.estimated_time_minutes || resolution.estimated_duration || null,
+        estimated_duration: resolution.estimated_duration || resolution.estimated_time_minutes || null,
       });
       
       // Update policy data to reflect approval

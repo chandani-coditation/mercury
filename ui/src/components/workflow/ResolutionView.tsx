@@ -20,6 +20,10 @@ interface ResolutionViewProps {
 
 export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewProps) => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  
+  // Debug logging
+  console.log("ResolutionView - Received data:", data);
+  
   const resolution = data.resolution || data;
   const steps = resolution.resolution_steps || resolution.steps || data.resolution_steps || [];
   const riskLevel = resolution.risk_level || "unknown";
@@ -28,6 +32,26 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
   const reasoning = resolution.reasoning;
   const rollbackPlan = resolution.rollback_plan;
   const commands = resolution.commands_by_step || {};
+  
+  console.log("ResolutionView - Extracted:", {
+    stepsCount: steps.length,
+    steps: steps,
+    riskLevel,
+    estimatedTime,
+    confidence,
+    hasRollbackPlan: !!rollbackPlan,
+    rollbackPlanType: typeof rollbackPlan
+  });
+  
+  // Handle rollback_plan - it can be a string or an object
+  const rollbackPlanSteps = typeof rollbackPlan === 'object' && rollbackPlan !== null 
+    ? (rollbackPlan.steps || [])
+    : null;
+  const rollbackPlanCommands = typeof rollbackPlan === 'object' && rollbackPlan !== null
+    ? (rollbackPlan.commands_by_step || {})
+    : {};
+  const rollbackPlanText = typeof rollbackPlan === 'string' ? rollbackPlan : null;
+  const hasRollbackPlan = rollbackPlan !== null && rollbackPlan !== undefined;
   
   const handleMarkCompleteClick = () => {
     setConfirmDialogOpen(true);
@@ -115,7 +139,8 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
             Resolution Steps
           </h3>
           <div className="space-y-3">
-            {steps.map((step: string, index: number) => {
+            {steps && steps.length > 0 ? (
+              steps.map((step: string, index: number) => {
               const stepCommands = commands[index] || commands[index.toString()] || [];
               const hasCommands = stepCommands && stepCommands.length > 0;
               
@@ -145,20 +170,101 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
                   </div>
                 </div>
               );
-            })}
+            })
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No resolution steps available</p>
+                <p className="text-xs mt-1">Resolution data may be incomplete</p>
+              </div>
+            )}
           </div>
         </div>
       </Card>
 
       {/* Rollback Plan */}
-      {rollbackPlan && (
+      {hasRollbackPlan && (
         <Card className="p-6 bg-warning/5 border-warning/20">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <h3 className="font-semibold text-foreground flex items-center gap-2">
               <Shield className="w-5 h-5 text-warning" />
               Rollback Plan
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">{rollbackPlan}</p>
+            
+            {/* If rollback_plan is a string */}
+            {rollbackPlanText && (
+              <p className="text-sm text-muted-foreground leading-relaxed">{rollbackPlanText}</p>
+            )}
+            
+            {/* If rollback_plan is an object with steps */}
+            {rollbackPlanSteps && rollbackPlanSteps.length > 0 && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  {rollbackPlanSteps.map((step: string, index: number) => {
+                    const stepCommands = rollbackPlanCommands[index] || rollbackPlanCommands[index.toString()] || [];
+                    const hasCommands = stepCommands && stepCommands.length > 0;
+                    
+                    return (
+                      <div key={index} className="bg-background/50 border border-warning/30 rounded-lg p-3">
+                        <div className="flex items-start gap-3">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-warning/20 text-warning flex items-center justify-center text-xs font-bold">
+                            {index + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-sm text-foreground leading-relaxed">{step}</p>
+                            
+                            {hasCommands && (
+                              <div className="mt-2 space-y-1">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Terminal className="w-3 h-3" />
+                                  <span>Rollback Commands:</span>
+                                </div>
+                                {stepCommands.map((cmd: string, cmdIdx: number) => (
+                                  <pre key={cmdIdx} className="text-xs bg-black/20 border border-border/30 rounded p-2 overflow-x-auto">
+                                    <code className="text-warning">{cmd}</code>
+                                  </pre>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Show additional rollback plan metadata if available */}
+                {typeof rollbackPlan === 'object' && rollbackPlan !== null && (
+                  <div className="space-y-2 pt-3 border-t border-warning/20">
+                    {rollbackPlan.estimated_time_minutes && (
+                      <div className="text-xs text-muted-foreground">
+                        <span className="font-semibold">Estimated Rollback Time:</span> {rollbackPlan.estimated_time_minutes} minutes
+                      </div>
+                    )}
+                    {rollbackPlan.preconditions && rollbackPlan.preconditions.length > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        <span className="font-semibold">Preconditions:</span>
+                        <ul className="list-disc list-inside mt-1">
+                          {rollbackPlan.preconditions.map((precondition: string, idx: number) => (
+                            <li key={idx}>{precondition}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {rollbackPlan.triggers && rollbackPlan.triggers.length > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        <span className="font-semibold">Rollback Triggers:</span>
+                        <ul className="list-disc list-inside mt-1">
+                          {rollbackPlan.triggers.map((trigger: string, idx: number) => (
+                            <li key={idx}>{trigger}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </Card>
       )}
