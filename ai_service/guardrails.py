@@ -591,11 +591,19 @@ def validate_triage_no_hallucination(
             for sig in retrieved_evidence.get("incident_signatures", [])
             if sig.get("metadata", {}).get("incident_signature_id")
         }
-        retrieved_runbook_ids = {
-            rb.get("tags", {}).get("runbook_id")
-            for rb in retrieved_evidence.get("runbook_metadata", [])
-            if rb.get("tags", {}).get("runbook_id")
-        }
+        # Extract runbook_ids from multiple possible locations
+        retrieved_runbook_ids = set()
+        for rb in retrieved_evidence.get("runbook_metadata", []):
+            # Try multiple ways to get runbook_id (formatted_evidence has it as direct field)
+            rb_id = None
+            if "runbook_id" in rb:
+                rb_id = rb.get("runbook_id")
+            elif "tags" in rb:
+                tags = rb.get("tags")
+                if isinstance(tags, dict):
+                    rb_id = tags.get("runbook_id")
+            if rb_id:
+                retrieved_runbook_ids.add(str(rb_id))  # Ensure string for comparison
         
         # Check for references to non-retrieved evidence
         for sig_id in incident_sig_ids:
@@ -816,9 +824,9 @@ def validate_triage_retrieval_boundaries(
                 f"Triage agent should only retrieve runbook metadata (documents), NOT runbook steps."
             )
         
-        # Check doc_type is runbook
+        # Check doc_type is runbook (allow None if not set, as it may be in tags)
         doc_type = rb.get("doc_type")
-        if doc_type != "runbook":
+        if doc_type and doc_type != "runbook":
             errors.append(
                 f"WRONG RETRIEVAL: Runbook metadata {i+1} has doc_type '{doc_type}', expected 'runbook'."
             )

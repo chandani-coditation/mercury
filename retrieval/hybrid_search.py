@@ -67,12 +67,12 @@ def hybrid_search(
 
         if service_val:
             # Case-insensitive partial match: "database" matches "Database-SQL", "Database", etc.
-            filters.append("LOWER(c.metadata->>'service') LIKE LOWER(%s)")
+            filters.append("COALESCE(LOWER(c.metadata->>'service'), '') LIKE LOWER(%s::text)")
             filter_params.append(f"%{service_val}%")
 
         if component_val:
             # Case-insensitive partial match: "sql-server" matches "sql-server", "SQL Server", etc.
-            filters.append("LOWER(c.metadata->>'component') LIKE LOWER(%s)")
+            filters.append("COALESCE(LOWER(c.metadata->>'component'), '') LIKE LOWER(%s::text)")
             filter_params.append(f"%{component_val}%")
 
         filter_clause = " AND " + " AND ".join(filters) if filters else ""
@@ -409,16 +409,22 @@ def triage_retrieval(
         filter_params = []
         
         if service_val:
-            filters.append("LOWER(c.metadata->>'service') LIKE LOWER(%s)")
+            # Use COALESCE to handle NULL values and cast to text
+            filters.append("COALESCE(LOWER(c.metadata->>'service'), '') LIKE LOWER(%s::text)")
             filter_params.append(f"%{service_val}%")
         
         if component_val:
-            filters.append("LOWER(c.metadata->>'component') LIKE LOWER(%s)")
+            # Use COALESCE to handle NULL values and cast to text
+            filters.append("COALESCE(LOWER(c.metadata->>'component'), '') LIKE LOWER(%s::text)")
             filter_params.append(f"%{component_val}%")
         
         filter_clause = " AND " + " AND ".join(filters) if filters else ""
         
         # Retrieve incident signatures (chunks with incident_signature_id)
+        # Parameter order: 
+        # Vector: $1 (score), $2 (rank), $3 (ORDER BY), $4 (limit), [filters for vector]
+        # Fulltext: $5 (score), $6 (rank), $7 (WHERE), $8 (ORDER BY), $9 (limit), [filters for fulltext]
+        # Final: $last (final limit)
         incident_sig_query = f"""
         WITH vector_results AS (
             SELECT 
@@ -448,14 +454,14 @@ def triage_retrieval(
                 c.metadata,
                 d.title as doc_title,
                 d.doc_type as doc_type,
-                ts_rank(c.tsv, plainto_tsquery('english', %s)) as fulltext_score,
-                ROW_NUMBER() OVER (ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s)) DESC) as fulltext_rank
+                ts_rank(c.tsv, plainto_tsquery('english', %s::text)) as fulltext_score,
+                ROW_NUMBER() OVER (ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s::text)) DESC) as fulltext_rank
             FROM chunks c
             JOIN documents d ON c.document_id = d.id
-            WHERE c.tsv @@ plainto_tsquery('english', %s)
+            WHERE c.tsv @@ plainto_tsquery('english', %s::text)
             AND c.metadata->>'incident_signature_id' IS NOT NULL
             {filter_clause}
-            ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s)) DESC
+            ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s::text)) DESC
             LIMIT %s
         ),
         combined_results AS (
@@ -494,17 +500,26 @@ def triage_retrieval(
         """
         
         # Build params for incident signatures
-        # Order: vector (3x embedding, limit), fulltext (4x query_text, limit), filters (2x for vector and fulltext WHERE), final limit
+        # Query parameter order (filter_clause is inserted BEFORE ORDER BY in vector CTE):
+        # Vector: 1=score, 2=rank, 3-4=filter_params (from filter_clause), 5=ORDER BY, 6=limit
+        # Fulltext: 7=score, 8=rank, 9=WHERE, 10-11=filter_params (from filter_clause), 12=ORDER BY, 13=limit
+        # Final: 14=final limit
         sig_params = []
-        sig_params.append(query_embedding_str)  # vector_score
-        sig_params.append(query_embedding_str)  # vector_rank
-        sig_params.append(query_embedding_str)  # ORDER BY
-        sig_params.append(limit)  # vector limit
-        sig_params.extend([query_text] * 4)  # fulltext (4 placeholders: score, rank, WHERE, ORDER BY)
-        sig_params.append(limit)  # fulltext limit
-        sig_params.extend(filter_params)  # filter params for vector WHERE clause
-        sig_params.extend(filter_params)  # filter params for fulltext WHERE clause
-        sig_params.append(limit)  # final limit
+        # Vector CTE
+        sig_params.append(query_embedding_str)  # 1: vector_score
+        sig_params.append(query_embedding_str)  # 2: vector_rank
+        sig_params.extend(filter_params)  # 3-4: filter params (service, component) - inserted BEFORE ORDER BY
+        sig_params.append(query_embedding_str)  # 5: vector ORDER BY
+        sig_params.append(limit)  # 6: vector limit
+        # Fulltext CTE
+        sig_params.append(str(query_text))  # 7: fulltext_score
+        sig_params.append(str(query_text))  # 8: fulltext_rank
+        sig_params.append(str(query_text))  # 9: fulltext WHERE
+        sig_params.extend(filter_params)  # 10-11: filter params (service, component) - inserted BEFORE ORDER BY
+        sig_params.append(str(query_text))  # 12: fulltext ORDER BY
+        sig_params.append(limit)  # 13: fulltext limit
+        # Final
+        sig_params.append(limit)  # 14: final limit
         
         # Execute incident signatures query
         cur.execute(incident_sig_query, sig_params)
@@ -545,13 +560,17 @@ def triage_retrieval(
         runbook_filters = []
         runbook_params = [query_text]  # For full-text search
         
+        # Service filter: match if service contains the value (flexible matching)
         if service_val:
-            runbook_filters.append("LOWER(d.service) LIKE LOWER(%s)")
+            runbook_filters.append("COALESCE(LOWER(d.service), '') LIKE LOWER(%s::text)")
             runbook_params.append(f"%{service_val}%")
         
-        if component_val:
-            runbook_filters.append("LOWER(d.component) LIKE LOWER(%s)")
-            runbook_params.append(f"%{component_val}%")
+        # Component filter: For triage, we prioritize service match over component match
+        # Component is optional - if provided, we'll boost relevance but not exclude
+        # This allows "Database" service alerts to match "Database Alerts" runbooks
+        # even if component is "Database" vs "Alerts"
+        # For now, skip component filter for runbook metadata - service + fulltext is sufficient
+        # Component matching can be handled by relevance scoring
         
         runbook_filter_clause = " AND " + " AND ".join(runbook_filters) if runbook_filters else ""
         runbook_params.append(limit)  # For LIMIT

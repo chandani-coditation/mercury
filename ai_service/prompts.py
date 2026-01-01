@@ -52,12 +52,15 @@ INSTRUCTIONS:
 - confidence: Your confidence in the classification (0.0-1.0) based on evidence quality
 - policy: Policy band determined by policy gate (AUTO, PROPOSE, or REVIEW)
 
-VALIDATION RULES:
+VALIDATION RULES (CRITICAL - STRICTLY ENFORCED):
 - If no incident signatures match, set confidence to 0.0 and use best-guess failure_type/error_class
 - If no runbook metadata matches, runbook_refs should be empty list []
-- Only include incident_signature_id values that actually appear in the evidence
-- Only include runbook_id values that actually appear in the runbook metadata
-- Do NOT invent IDs or references
+- incident_signatures array: ONLY include incident_signature_id values that EXACTLY MATCH the IDs from the "Incident Signature ID:" lines in the evidence above
+- runbook_refs array: ONLY include runbook_id values that EXACTLY MATCH the IDs from the "Runbook ID:" lines in the evidence above
+- DO NOT invent, guess, or create IDs that are not explicitly shown in the evidence
+- DO NOT use example IDs like "SIG-DB-001" or "RB123" unless they appear in the evidence
+- If evidence shows no signatures, incident_signatures must be []
+- If evidence shows no runbooks, runbook_refs must be []
 
 Remember: You are ONLY classifying. The Resolution Agent will handle recommendations later."""
 
