@@ -32,6 +32,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to auto-update updated_at
+DROP TRIGGER IF EXISTS agent_state_updated_at_trigger ON agent_state;
 CREATE TRIGGER agent_state_updated_at_trigger
   BEFORE UPDATE ON agent_state
   FOR EACH ROW

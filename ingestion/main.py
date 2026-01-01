@@ -136,23 +136,30 @@ def ingest_alert(alert: IngestAlert):
 
 @app.post("/ingest/incident")
 def ingest_incident(incident: IngestIncident):
-    """Ingest a historical incident (supports structured and unstructured data)."""
+    """
+    Ingest a historical incident as an incident signature.
+    
+    Per architecture: Incidents are converted to signatures (patterns, not raw text).
+    """
     logger.info(f"Ingesting incident: title={incident.title[:50]}...")
 
     try:
-        doc = normalize_incident(incident)
-        doc_id = insert_document_and_chunks(
-            doc_type=doc.doc_type,
-            service=doc.service,
-            component=doc.component,
-            title=doc.title,
-            content=doc.content,
-            tags=doc.tags,
-            last_reviewed_at=doc.last_reviewed_at,
+        from ingestion.db_ops import insert_incident_signature
+        
+        doc, signature = normalize_incident(incident)
+        signature_id = insert_incident_signature(
+            signature,
+            source_incident_id=incident.incident_id,
+            source_document_id=None  # We don't create a document for signatures
         )
-        logger.info(f"Incident ingested successfully: document_id={doc_id}")
+        logger.info(f"Incident signature ingested successfully: signature_id={signature_id}, signature_id={signature.incident_signature_id}")
 
-        return {"status": "ok", "document_id": doc_id, "message": "Incident ingested successfully"}
+        return {
+            "status": "ok",
+            "signature_id": signature_id,
+            "incident_signature_id": signature.incident_signature_id,
+            "message": "Incident signature ingested successfully"
+        }
     except Exception as e:
         logger.error(f"Incident ingestion error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -160,12 +167,24 @@ def ingest_incident(incident: IngestIncident):
 
 @app.post("/ingest/runbook")
 def ingest_runbook(runbook: IngestRunbook):
-    """Ingest a runbook (supports markdown, plain text, or structured JSON)."""
+    """
+    Ingest a runbook with atomic steps.
+    
+    Per architecture: Runbook metadata goes in documents table,
+    and each step is stored as an atomic chunk.
+    """
     logger.info(f"Ingesting runbook: title={runbook.title[:50]}...")
 
     try:
-        doc = normalize_runbook(runbook)
-        doc_id = insert_document_and_chunks(
+        from ingestion.db_ops import insert_runbook_with_steps
+        
+        doc, steps = normalize_runbook(runbook)
+        logger.info(f"Extracted {len(steps)} steps from runbook: {runbook.title}")
+        
+        if len(steps) == 0:
+            logger.warning(f"No steps extracted from runbook: {runbook.title}. Content length: {len(runbook.content)}")
+        
+        doc_id = insert_runbook_with_steps(
             doc_type=doc.doc_type,
             service=doc.service,
             component=doc.component,
@@ -173,10 +192,16 @@ def ingest_runbook(runbook: IngestRunbook):
             content=doc.content,
             tags=doc.tags,
             last_reviewed_at=doc.last_reviewed_at,
+            steps=steps,
         )
-        logger.info(f"Runbook ingested successfully: document_id={doc_id}")
+        logger.info(f"Runbook ingested successfully: document_id={doc_id}, steps={len(steps)}")
 
-        return {"status": "ok", "document_id": doc_id, "message": "Runbook ingested successfully"}
+        return {
+            "status": "ok",
+            "document_id": doc_id,
+            "steps_count": len(steps),
+            "message": "Runbook ingested successfully"
+        }
     except Exception as e:
         logger.error(f"Runbook ingestion error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

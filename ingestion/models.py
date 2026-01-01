@@ -77,3 +77,30 @@ class IngestLog(BaseModel):
     context: Optional[Dict] = None  # JSON context
     log_format: Optional[str] = None  # "plain", "json", "syslog"
     metadata: Optional[Dict] = None
+
+
+class RunbookStep(BaseModel):
+    """Atomic runbook step for storage (per architecture)."""
+
+    step_id: str  # e.g., "RB123-S3"
+    runbook_id: str  # e.g., "RB123"
+    condition: str  # When this step applies
+    action: str  # What to do
+    expected_outcome: Optional[str] = None  # Expected result
+    rollback: Optional[str] = None  # Rollback procedure
+    risk_level: Optional[str] = None  # "low", "medium", "high"
+    service: Optional[str] = None
+    component: Optional[str] = None
+
+
+class IncidentSignature(BaseModel):
+    """Incident signature (pattern, not raw text) for storage (per architecture)."""
+
+    incident_signature_id: str  # e.g., "SIG-DB-001"
+    failure_type: str  # e.g., "SQL_AGENT_JOB_FAILURE"
+    error_class: str  # e.g., "SERVICE_ACCOUNT_DISABLED"
+    symptoms: List[str]  # List of symptom strings
+    affected_service: Optional[str] = None
+    resolution_refs: Optional[List[str]] = None  # List of step_ids (e.g., ["RB123-S3"])
+    service: Optional[str] = None
+    component: Optional[str] = None

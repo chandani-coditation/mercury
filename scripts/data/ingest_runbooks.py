@@ -315,6 +315,8 @@ def ingest_runbook(
         response.raise_for_status()
         result = response.json()
         document_id = result.get("document_id")
+        steps_count = result.get("steps_count", 0)
+        logger.info(f"Runbook ingested: document_id={document_id}, steps_count={steps_count}")
         return True, document_id
     except Exception as e:
         logger.error(f"Failed to ingest runbook {runbook.title}: {str(e)}")
@@ -466,29 +468,25 @@ def main():
             doc_result = cur.fetchone()
             doc_count = doc_result["doc_count"] if isinstance(doc_result, dict) else doc_result[0]
 
-            # Count chunks
+            # Count runbook steps (stored in dedicated table)
             cur.execute(
                 """
-                SELECT COUNT(*) as chunk_count 
-                FROM chunks 
-                WHERE document_id IN (SELECT id FROM documents WHERE doc_type = %s)
-            """,
-                ("runbook",),
+                SELECT COUNT(*) as step_count 
+                FROM runbook_steps
+            """
             )
-            chunk_result = cur.fetchone()
-            chunk_count = (
-                chunk_result["chunk_count"] if isinstance(chunk_result, dict) else chunk_result[0]
+            step_result = cur.fetchone()
+            step_count = (
+                step_result["step_count"] if isinstance(step_result, dict) else step_result[0]
             )
 
-            # Count chunks with embeddings
+            # Count runbook steps with embeddings
             cur.execute(
                 """
                 SELECT COUNT(*) as embed_count 
-                FROM chunks 
-                WHERE document_id IN (SELECT id FROM documents WHERE doc_type = %s) 
-                AND embedding IS NOT NULL
-            """,
-                ("runbook",),
+                FROM runbook_steps 
+                WHERE embedding IS NOT NULL
+            """
             )
             embed_result = cur.fetchone()
             embed_count = (
@@ -499,12 +497,10 @@ def main():
             cur.execute(
                 """
                 SELECT embedding::text as embedding_text
-                FROM chunks 
-                WHERE document_id IN (SELECT id FROM documents WHERE doc_type = %s) 
-                AND embedding IS NOT NULL
+                FROM runbook_steps 
+                WHERE embedding IS NOT NULL
                 LIMIT 1
-            """,
-                ("runbook",),
+            """
             )
             sample = cur.fetchone()
             embedding_dim = None
@@ -516,29 +512,29 @@ def main():
             conn.close()
 
             print(f"\nDatabase Verification:")
-            print(f"   Documents stored: {doc_count}")
-            print(f"   Chunks created: {chunk_count}")
-            print(f"   Chunks with embeddings: {embed_count}/{chunk_count}")
+            print(f"   Runbook documents stored: {doc_count}")
+            print(f"   Runbook steps created: {step_count}")
+            print(f"   Steps with embeddings: {embed_count}/{step_count}")
             logger.info(f"\nDatabase Verification:")
-            logger.info(f"   Documents stored: {doc_count}")
-            logger.info(f"   Chunks created: {chunk_count}")
-            logger.info(f"   Chunks with embeddings: {embed_count}/{chunk_count}")
+            logger.info(f"   Runbook documents stored: {doc_count}")
+            logger.info(f"   Runbook steps created: {step_count}")
+            logger.info(f"   Steps with embeddings: {embed_count}/{step_count}")
 
             if embedding_dim:
                 print(f"   Embedding dimension: {embedding_dim}")
                 logger.info(f"   Embedding dimension: {embedding_dim}")
 
-            if embed_count == chunk_count and chunk_count > 0:
-                print(f"\n   SUCCESS: All {chunk_count} chunks have embeddings!")
-                logger.info(f"\n   SUCCESS: All {chunk_count} chunks have embeddings!")
-            elif embed_count < chunk_count:
-                print(f"\n    WARNING: {chunk_count - embed_count} chunks are missing embeddings!")
+            if embed_count == step_count and step_count > 0:
+                print(f"\n   SUCCESS: All {step_count} runbook steps have embeddings!")
+                logger.info(f"\n   SUCCESS: All {step_count} runbook steps have embeddings!")
+            elif embed_count < step_count:
+                print(f"\n    WARNING: {step_count - embed_count} steps are missing embeddings!")
                 logger.warning(
-                    f"\n    WARNING: {chunk_count - embed_count} chunks are missing embeddings!"
+                    f"\n    WARNING: {step_count - embed_count} steps are missing embeddings!"
                 )
             else:
-                print(f"\n    WARNING: No chunks found in database!")
-                logger.warning(f"\n    WARNING: No chunks found in database!")
+                print(f"\n    WARNING: No runbook steps found in database!")
+                logger.warning(f"\n    WARNING: No runbook steps found in database!")
 
         except Exception as e:
             print(f"    Could not verify embeddings: {str(e)}")

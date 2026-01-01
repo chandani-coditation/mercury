@@ -119,17 +119,19 @@ def _call_llm_with_retry(client, request_params, agent_type: str, model: str):
         raise last_error
 
 
-def call_llm_for_triage(alert: dict, context_chunks: list, model: str = None) -> dict:
+def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -> dict:
     """
     Call LLM to triage an alert.
+    
+    Per architecture: Triage agent receives incident signatures and runbook metadata only.
 
     Args:
         alert: Alert dictionary
-        context_chunks: Retrieved context chunks
+        triage_evidence: Dictionary with 'incident_signatures' and 'runbook_metadata' lists
         model: Optional OpenAI model to use (overrides config if provided)
 
     Returns:
-        Triage output as dictionary
+        Triage output as dictionary matching architecture schema
     """
     client = get_llm_client()
 
@@ -144,17 +146,55 @@ def call_llm_for_triage(alert: dict, context_chunks: list, model: str = None) ->
     response_format_type = triage_config.get("response_format", "json_object")
     max_tokens = triage_config.get("max_tokens")
 
+    incident_signatures = triage_evidence.get("incident_signatures", [])
+    runbook_metadata = triage_evidence.get("runbook_metadata", [])
+    
     logger.debug(
-        f"Calling LLM for triage: model={model}, temperature={temperature}, chunks={len(context_chunks)}"
+        f"Calling LLM for triage: model={model}, temperature={temperature}, "
+        f"signatures={len(incident_signatures)}, runbooks={len(runbook_metadata)}"
     )
 
-    # Build context from chunks
-    context_text = "\n\n---\n\n".join(
-        [
-            f"Document: {chunk.get('doc_title', 'Unknown')}\n{chunk['content']}"
-            for chunk in context_chunks[:5]  # Top 5 chunks
-        ]
-    )
+    # Build context text from incident signatures and runbook metadata
+    context_parts = []
+    
+    # Add incident signatures
+    if incident_signatures:
+        context_parts.append("=== INCIDENT SIGNATURES ===")
+        for sig in incident_signatures[:5]:  # Top 5 signatures
+            metadata = sig.get("metadata", {})
+            sig_id = metadata.get("incident_signature_id", "UNKNOWN")
+            failure_type = metadata.get("failure_type", "UNKNOWN")
+            error_class = metadata.get("error_class", "UNKNOWN")
+            symptoms = metadata.get("symptoms", [])
+            affected_service = metadata.get("affected_service", "")
+            
+            context_parts.append(
+                f"Incident Signature ID: {sig_id}\n"
+                f"Failure Type: {failure_type}\n"
+                f"Error Class: {error_class}\n"
+                f"Symptoms: {', '.join(symptoms) if symptoms else 'None'}\n"
+                f"Affected Service: {affected_service}\n"
+                f"Content: {sig.get('content', '')[:500]}"
+            )
+    
+    # Add runbook metadata (NOT steps)
+    if runbook_metadata:
+        context_parts.append("\n=== RUNBOOK METADATA ===")
+        for rb in runbook_metadata[:5]:  # Top 5 runbooks
+            tags = rb.get("tags", {})
+            runbook_id = tags.get("runbook_id", "UNKNOWN")
+            failure_types = tags.get("failure_types", [])
+            
+            context_parts.append(
+                f"Runbook ID: {runbook_id}\n"
+                f"Title: {rb.get('title', 'Unknown')}\n"
+                f"Service: {rb.get('service', 'Unknown')}\n"
+                f"Component: {rb.get('component', 'Unknown')}\n"
+                f"Failure Types: {', '.join(failure_types) if failure_types else 'None'}\n"
+                f"Last Reviewed: {rb.get('last_reviewed_at', 'Unknown')}"
+            )
+    
+    context_text = "\n\n---\n\n".join(context_parts) if context_parts else "No matching evidence found."
 
     # Build user prompt from template
     prompt = TRIAGE_USER_PROMPT_TEMPLATE.format(

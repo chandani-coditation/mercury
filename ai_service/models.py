@@ -16,17 +16,32 @@ class Alert(BaseModel):
     ts: Optional[datetime] = None  # Optional: defaults to current time if not provided
 
 
-class TriageOutput(BaseModel):
-    """Triage output structure."""
+class IncidentSignature(BaseModel):
+    """Incident signature classification."""
+    
+    failure_type: str  # e.g., "SQL_AGENT_JOB_FAILURE"
+    error_class: str  # e.g., "SERVICE_ACCOUNT_DISABLED"
 
+
+class MatchedEvidence(BaseModel):
+    """Matched evidence references."""
+    
+    incident_signatures: List[str]  # List of incident_signature_id values
+    runbook_refs: List[str]  # List of runbook_id values
+
+
+class TriageOutput(BaseModel):
+    """Triage output structure per architecture.
+    
+    Per architecture: Triage agent classifies incidents only.
+    Does NOT generate resolution steps, rank actions, or invent causes.
+    """
+    
+    incident_signature: IncidentSignature
+    matched_evidence: MatchedEvidence
     severity: str  # critical, high, medium, low
-    category: str  # e.g., "database", "network", "application"
-    summary: str
-    likely_cause: str
-    routing: str  # Team queue assignment (e.g., "SE DBA SQL", "NOC", "SE Windows")
-    affected_services: List[str]
-    recommended_actions: List[str]
     confidence: float  # 0.0 to 1.0
+    policy: str  # AUTO, PROPOSE, REVIEW (determined by policy gate, but included in output)
 
 
 class RollbackPlan(BaseModel):

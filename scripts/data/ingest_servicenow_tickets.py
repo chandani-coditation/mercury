@@ -170,8 +170,10 @@ def ingest_incident(
         )
         response.raise_for_status()
         result = response.json()
-        document_id = result.get("document_id")
-        return True, document_id
+        signature_id = result.get("signature_id") or result.get("chunk_id")  # Support both formats
+        incident_signature_id = result.get("incident_signature_id")
+        logger.info(f"Incident signature ingested: signature_id={signature_id}, incident_signature_id={incident_signature_id}")
+        return True, signature_id
     except Exception as e:
         logger.error(f"Failed to ingest incident {incident.incident_id}: {str(e)}")
         return False, None
@@ -215,12 +217,12 @@ def ingest_csv_file(
                         f"  [{row_num-1}/{total_rows}] Ingesting ticket {incident_id}: {title_preview}"
                     )
 
-                    success, document_id = ingest_incident(incident, ingestion_url)
+                    success, signature_id = ingest_incident(incident, ingestion_url)
 
                     if success:
                         success_count += 1
-                        print(f"     Successfully ingested (document_id: {document_id})")
-                        logger.info(f"     Successfully ingested (document_id: {document_id})")
+                        print(f"     Successfully ingested (signature_id: {signature_id})")
+                        logger.info(f"     Successfully ingested (signature_id: {signature_id})")
                     else:
                         error_count += 1
                         print(f"     Failed to ingest ticket {incident_id}")
@@ -341,36 +343,25 @@ def main():
             conn = get_db_connection()
             cur = conn.cursor()
 
-            # Count documents
-            cur.execute(
-                "SELECT COUNT(*) as doc_count FROM documents WHERE doc_type = %s", ("incident",)
-            )
-            doc_result = cur.fetchone()
-            doc_count = doc_result["doc_count"] if isinstance(doc_result, dict) else doc_result[0]
-
-            # Count chunks
+            # Count incident signatures (stored in dedicated table)
             cur.execute(
                 """
-                SELECT COUNT(*) as chunk_count 
-                FROM chunks 
-                WHERE document_id IN (SELECT id FROM documents WHERE doc_type = %s)
-            """,
-                ("incident",),
+                SELECT COUNT(*) as sig_count 
+                FROM incident_signatures
+            """
             )
-            chunk_result = cur.fetchone()
-            chunk_count = (
-                chunk_result["chunk_count"] if isinstance(chunk_result, dict) else chunk_result[0]
+            sig_result = cur.fetchone()
+            sig_count = (
+                sig_result["sig_count"] if isinstance(sig_result, dict) else sig_result[0]
             )
 
-            # Count chunks with embeddings
+            # Count incident signatures with embeddings
             cur.execute(
                 """
                 SELECT COUNT(*) as embed_count 
-                FROM chunks 
-                WHERE document_id IN (SELECT id FROM documents WHERE doc_type = %s) 
-                AND embedding IS NOT NULL
-            """,
-                ("incident",),
+                FROM incident_signatures 
+                WHERE embedding IS NOT NULL
+            """
             )
             embed_result = cur.fetchone()
             embed_count = (
@@ -381,12 +372,10 @@ def main():
             cur.execute(
                 """
                 SELECT embedding::text as embedding_text
-                FROM chunks 
-                WHERE document_id IN (SELECT id FROM documents WHERE doc_type = %s) 
-                AND embedding IS NOT NULL
+                FROM incident_signatures 
+                WHERE embedding IS NOT NULL
                 LIMIT 1
-            """,
-                ("incident",),
+            """
             )
             sample = cur.fetchone()
             embedding_dim = None
@@ -398,29 +387,27 @@ def main():
             conn.close()
 
             print(f"\nDatabase Verification:")
-            print(f"   Documents stored: {doc_count}")
-            print(f"   Chunks created: {chunk_count}")
-            print(f"   Chunks with embeddings: {embed_count}/{chunk_count}")
+            print(f"   Incident signatures stored: {sig_count}")
+            print(f"   Signatures with embeddings: {embed_count}/{sig_count}")
             logger.info(f"\nDatabase Verification:")
-            logger.info(f"   Documents stored: {doc_count}")
-            logger.info(f"   Chunks created: {chunk_count}")
-            logger.info(f"   Chunks with embeddings: {embed_count}/{chunk_count}")
+            logger.info(f"   Incident signatures stored: {sig_count}")
+            logger.info(f"   Signatures with embeddings: {embed_count}/{sig_count}")
 
             if embedding_dim:
                 print(f"   Embedding dimension: {embedding_dim}")
                 logger.info(f"   Embedding dimension: {embedding_dim}")
 
-            if embed_count == chunk_count and chunk_count > 0:
-                print(f"\n   SUCCESS: All {chunk_count} chunks have embeddings!")
-                logger.info(f"\n   SUCCESS: All {chunk_count} chunks have embeddings!")
-            elif embed_count < chunk_count:
-                print(f"\n    WARNING: {chunk_count - embed_count} chunks are missing embeddings!")
+            if embed_count == sig_count and sig_count > 0:
+                print(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings!")
+                logger.info(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings!")
+            elif embed_count < sig_count:
+                print(f"\n    WARNING: {sig_count - embed_count} signatures are missing embeddings!")
                 logger.warning(
-                    f"\n    WARNING: {chunk_count - embed_count} chunks are missing embeddings!"
+                    f"\n    WARNING: {sig_count - embed_count} signatures are missing embeddings!"
                 )
             else:
-                print(f"\n    WARNING: No chunks found in database!")
-                logger.warning(f"\n    WARNING: No chunks found in database!")
+                print(f"\n    WARNING: No incident signatures found in database!")
+                logger.warning(f"\n    WARNING: No incident signatures found in database!")
 
         except Exception as e:
             print(f"    Could not verify embeddings: {str(e)}")

@@ -357,3 +357,264 @@ def mmr_search(
         selected.append(remaining.pop(best_idx))
 
     return selected
+
+
+def triage_retrieval(
+    query_text: str,
+    service: Optional[str] = None,
+    component: Optional[str] = None,
+    limit: int = 5,
+    vector_weight: float = 0.7,
+    fulltext_weight: float = 0.3,
+) -> Dict[str, List[Dict]]:
+    """
+    Specialized retrieval for triage agent.
+    
+    Per architecture: Triage agent may ONLY retrieve:
+    - Incident signatures (chunks with incident_signature_id in metadata)
+    - Runbook metadata (documents with doc_type='runbook', NOT runbook steps)
+    
+    Args:
+        query_text: Search query
+        service: Optional service filter
+        component: Optional component filter
+        limit: Number of results per type
+        vector_weight: Weight for vector search (0-1)
+        fulltext_weight: Weight for full-text search (0-1)
+    
+    Returns:
+        Dictionary with:
+        - 'incident_signatures': List of incident signature chunks
+        - 'runbook_metadata': List of runbook document metadata (not steps)
+    """
+    logger.debug(
+        f"Starting triage retrieval: query='{query_text[:100]}...', "
+        f"service={service}, component={component}, limit={limit}"
+    )
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Generate query embedding
+        query_embedding = embed_text(query_text)
+        query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+        
+        # Normalize service and component
+        service_val = service if service and str(service).strip() else None
+        component_val = component if component and str(component).strip() else None
+        
+        # Build filter conditions
+        filters = []
+        filter_params = []
+        
+        if service_val:
+            filters.append("LOWER(c.metadata->>'service') LIKE LOWER(%s)")
+            filter_params.append(f"%{service_val}%")
+        
+        if component_val:
+            filters.append("LOWER(c.metadata->>'component') LIKE LOWER(%s)")
+            filter_params.append(f"%{component_val}%")
+        
+        filter_clause = " AND " + " AND ".join(filters) if filters else ""
+        
+        # Retrieve incident signatures (chunks with incident_signature_id)
+        incident_sig_query = f"""
+        WITH vector_results AS (
+            SELECT 
+                c.id,
+                c.document_id,
+                c.chunk_index,
+                c.content,
+                c.metadata,
+                d.title as doc_title,
+                d.doc_type as doc_type,
+                1 - (c.embedding <=> %s::vector) as vector_score,
+                ROW_NUMBER() OVER (ORDER BY c.embedding <=> %s::vector) as vector_rank
+            FROM chunks c
+            JOIN documents d ON c.document_id = d.id
+            WHERE c.embedding IS NOT NULL
+            AND c.metadata->>'incident_signature_id' IS NOT NULL
+            {filter_clause}
+            ORDER BY c.embedding <=> %s::vector
+            LIMIT %s
+        ),
+        fulltext_results AS (
+            SELECT 
+                c.id,
+                c.document_id,
+                c.chunk_index,
+                c.content,
+                c.metadata,
+                d.title as doc_title,
+                d.doc_type as doc_type,
+                ts_rank(c.tsv, plainto_tsquery('english', %s)) as fulltext_score,
+                ROW_NUMBER() OVER (ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s)) DESC) as fulltext_rank
+            FROM chunks c
+            JOIN documents d ON c.document_id = d.id
+            WHERE c.tsv @@ plainto_tsquery('english', %s)
+            AND c.metadata->>'incident_signature_id' IS NOT NULL
+            {filter_clause}
+            ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s)) DESC
+            LIMIT %s
+        ),
+        combined_results AS (
+            SELECT 
+                COALESCE(v.id, f.id) as id,
+                COALESCE(v.document_id, f.document_id) as document_id,
+                COALESCE(v.chunk_index, f.chunk_index) as chunk_index,
+                COALESCE(v.content, f.content) as content,
+                COALESCE(v.metadata, f.metadata) as metadata,
+                COALESCE(v.doc_title, f.doc_title) as doc_title,
+                COALESCE(v.doc_type, f.doc_type) as doc_type,
+                COALESCE(v.vector_score, 0.0) as vector_score,
+                COALESCE(f.fulltext_score, 0.0) as fulltext_score,
+                COALESCE(v.vector_rank, 999) as vector_rank,
+                COALESCE(f.fulltext_rank, 999) as fulltext_rank,
+                (1.0 / (60.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
+                (1.0 / (60.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score
+            FROM vector_results v
+            FULL OUTER JOIN fulltext_results f ON v.id = f.id
+        )
+        SELECT 
+            id,
+            document_id,
+            chunk_index,
+            content,
+            metadata,
+            doc_title,
+            doc_type,
+            vector_score,
+            fulltext_score,
+            rrf_score
+        FROM combined_results
+        WHERE rrf_score > 0
+        ORDER BY rrf_score DESC
+        LIMIT %s
+        """
+        
+        # Build params for incident signatures
+        # Order: vector (3x embedding, limit), fulltext (4x query_text, limit), filters (2x for vector and fulltext WHERE), final limit
+        sig_params = []
+        sig_params.append(query_embedding_str)  # vector_score
+        sig_params.append(query_embedding_str)  # vector_rank
+        sig_params.append(query_embedding_str)  # ORDER BY
+        sig_params.append(limit)  # vector limit
+        sig_params.extend([query_text] * 4)  # fulltext (4 placeholders: score, rank, WHERE, ORDER BY)
+        sig_params.append(limit)  # fulltext limit
+        sig_params.extend(filter_params)  # filter params for vector WHERE clause
+        sig_params.extend(filter_params)  # filter params for fulltext WHERE clause
+        sig_params.append(limit)  # final limit
+        
+        # Execute incident signatures query
+        cur.execute(incident_sig_query, sig_params)
+        incident_sig_rows = cur.fetchall()
+        
+        incident_signatures = []
+        for row in incident_sig_rows:
+            if isinstance(row, dict):
+                incident_signatures.append({
+                    "chunk_id": str(row["id"]),
+                    "document_id": str(row["document_id"]),
+                    "chunk_index": row["chunk_index"],
+                    "content": row["content"],
+                    "metadata": row["metadata"] if isinstance(row["metadata"], dict) else {},
+                    "doc_title": row["doc_title"],
+                    "doc_type": row["doc_type"],
+                    "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
+                    "fulltext_score": float(row["fulltext_score"]) if row["fulltext_score"] else 0.0,
+                    "rrf_score": float(row["rrf_score"]) if row["rrf_score"] else 0.0,
+                })
+            else:
+                # Handle tuple result
+                incident_signatures.append({
+                    "chunk_id": str(row[0]),
+                    "document_id": str(row[1]),
+                    "chunk_index": row[2],
+                    "content": row[3],
+                    "metadata": row[4] if isinstance(row[4], dict) else {},
+                    "doc_title": row[5],
+                    "doc_type": row[6],
+                    "vector_score": float(row[7]) if row[7] else 0.0,
+                    "fulltext_score": float(row[8]) if row[8] else 0.0,
+                    "rrf_score": float(row[9]) if row[9] else 0.0,
+                })
+        
+        # Retrieve runbook metadata (documents only, NOT steps)
+        # Runbook metadata is in documents table, not chunks
+        runbook_filters = []
+        runbook_params = [query_text]  # For full-text search
+        
+        if service_val:
+            runbook_filters.append("LOWER(d.service) LIKE LOWER(%s)")
+            runbook_params.append(f"%{service_val}%")
+        
+        if component_val:
+            runbook_filters.append("LOWER(d.component) LIKE LOWER(%s)")
+            runbook_params.append(f"%{component_val}%")
+        
+        runbook_filter_clause = " AND " + " AND ".join(runbook_filters) if runbook_filters else ""
+        runbook_params.append(limit)  # For LIMIT
+        
+        runbook_meta_query = f"""
+        SELECT 
+            d.id as document_id,
+            d.doc_type,
+            d.service,
+            d.component,
+            d.title,
+            d.tags,
+            d.last_reviewed_at,
+            -- Use document title/content for full-text search
+            ts_rank(to_tsvector('english', COALESCE(d.title, '') || ' ' || COALESCE(d.content, '')), 
+                    plainto_tsquery('english', %s)) as relevance_score
+        FROM documents d
+        WHERE d.doc_type = 'runbook'
+        {runbook_filter_clause}
+        ORDER BY relevance_score DESC, d.last_reviewed_at DESC NULLS LAST
+        LIMIT %s
+        """
+        
+        cur.execute(runbook_meta_query, runbook_params)
+        runbook_rows = cur.fetchall()
+        
+        runbook_metadata = []
+        for row in runbook_rows:
+            if isinstance(row, dict):
+                tags = row["tags"] if isinstance(row["tags"], dict) else {}
+                runbook_metadata.append({
+                    "document_id": str(row["document_id"]),
+                    "doc_type": row["doc_type"],
+                    "service": row["service"],
+                    "component": row["component"],
+                    "title": row["title"],
+                    "tags": tags,
+                    "last_reviewed_at": row["last_reviewed_at"].isoformat() if row["last_reviewed_at"] else None,
+                    "relevance_score": float(row["relevance_score"]) if row["relevance_score"] else 0.0,
+                })
+            else:
+                tags = row[5] if isinstance(row[5], dict) else {}
+                runbook_metadata.append({
+                    "document_id": str(row[0]),
+                    "doc_type": row[1],
+                    "service": row[2],
+                    "component": row[3],
+                    "title": row[4],
+                    "tags": tags,
+                    "last_reviewed_at": row[6].isoformat() if row[6] else None,
+                    "relevance_score": float(row[7]) if row[7] else 0.0,
+                })
+        
+        logger.debug(
+            f"Triage retrieval completed: {len(incident_signatures)} signatures, "
+            f"{len(runbook_metadata)} runbook metadata"
+        )
+        
+        return {
+            "incident_signatures": incident_signatures,
+            "runbook_metadata": runbook_metadata,
+        }
+    
+    finally:
+        cur.close()
+        conn.close()
