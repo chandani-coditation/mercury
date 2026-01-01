@@ -9,6 +9,11 @@ from ingestion.embeddings import embed_text, embed_texts_batch, count_tokens, EM
 from ingestion.chunker import chunk_text, add_chunk_header
 from ingestion.models import RunbookStep, IncidentSignature
 
+# Lazy import to avoid circular dependency
+def get_logger(name):
+    from ai_service.core import get_logger as _get_logger
+    return _get_logger(name)
+
 
 def create_tsvector(text: str) -> str:
     """Create tsvector from text for full-text search."""
@@ -497,6 +502,54 @@ def insert_runbook_with_steps(
                 )
                 inserted_count += 1
                 
+                # NOTE: Chunk creation for runbook steps is NO LONGER NEEDED for triage
+                # Triage retrieval only needs runbook metadata (from documents table)
+                # Runbook steps are retrieved by Resolution Agent, which may use chunks
+                # For now, keeping step chunking for Resolution Agent compatibility
+                try:
+                    # Create metadata for chunk
+                    chunk_metadata = {
+                        "step_id": step.step_id,
+                        "runbook_id": step.runbook_id,
+                        "condition": step.condition,
+                        "action": step.action,
+                        "expected_outcome": step.expected_outcome,
+                        "rollback": step.rollback,
+                        "risk_level": step.risk_level,
+                        "service": step_service,
+                        "component": step_component,
+                        "runbook_title": title,
+                    }
+                    
+                    # Insert chunk with step data
+                    chunk_id = uuid.uuid4()
+                    cur.execute(
+                        """
+                        INSERT INTO chunks (id, document_id, chunk_index, content, metadata, embedding, tsv)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (
+                            chunk_id,
+                            doc_id,
+                            inserted_count - 1,  # Use step index as chunk_index
+                            step_text,  # Content is the embedding text
+                            json.dumps(chunk_metadata),
+                            embedding_str,
+                            step_text,
+                        ),
+                    )
+                    # Commit chunk creation
+                    conn.commit()
+                    logger = get_logger(__name__)
+                    logger.debug(f"Created chunk for runbook step {step.step_id}")
+                except Exception as chunk_error:
+                    # Log error - chunk creation is critical for retrieval
+                    logger = get_logger(__name__)
+                    logger.error(f"Failed to create chunk for runbook step {step.step_id}: {chunk_error}")
+                    # Re-raise to ensure we know about the failure
+                    raise RuntimeError(f"Chunk creation failed for runbook step {step.step_id}: {chunk_error}") from chunk_error
+                
                 # Log successful insertion
                 try:
                     from ai_service.core import get_logger
@@ -695,6 +748,84 @@ def insert_incident_signature(
         )
         
         conn.commit()
+        
+        # NOTE: Chunk creation is NO LONGER NEEDED
+        # Triage retrieval now queries incident_signatures table directly
+        # (embeddings and tsvector are already in incident_signatures table)
+        # Keeping this code commented for reference, but it's not executed
+        # 
+        # try:
+            # Create embedding text for chunk (same as signature)
+            chunk_content = signature_text
+            
+            # Create metadata for chunk
+            chunk_metadata = {
+                "incident_signature_id": signature.incident_signature_id,
+                "failure_type": signature.failure_type,
+                "error_class": signature.error_class,
+                "symptoms": signature.symptoms,
+                "affected_service": signature.affected_service,
+                "service": signature.service,
+                "component": signature.component,
+                "source_incident_ids": source_incident_ids_array,
+            }
+            
+            # Create or get document for this signature (optional, for metadata)
+            doc_id = source_document_id
+            if not doc_id:
+                # Create a minimal document for the signature
+                doc_id = uuid.uuid4()
+                cur.execute(
+                    """
+                    INSERT INTO documents (id, doc_type, service, component, title, content, tags, last_reviewed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (
+                        doc_id,
+                        "incident_signature",
+                        signature.service,
+                        signature.component,
+                        f"Incident Signature: {signature.incident_signature_id}",
+                        "",  # Empty content - signature data is in chunk
+                        json.dumps({
+                            "incident_signature_id": signature.incident_signature_id,
+                            "failure_type": signature.failure_type,
+                            "error_class": signature.error_class,
+                        }),
+                        datetime.now(),
+                    ),
+                )
+            
+            # Insert chunk with signature data
+            chunk_id = uuid.uuid4()
+            cur.execute(
+                """
+                INSERT INTO chunks (id, document_id, chunk_index, content, metadata, embedding, tsv)
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    chunk_id,
+                    doc_id,
+                    0,  # Single chunk per signature
+                    chunk_content,
+                    json.dumps(chunk_metadata),
+                    embedding_str,
+                    chunk_content,
+                ),
+            )
+            
+            # conn.commit()
+            # logger = get_logger(__name__)
+            # logger.info(f"Created chunk for incident signature {signature.incident_signature_id}")
+        # except Exception as chunk_error:
+        #     # Log error - chunk creation is critical for retrieval
+        #     logger = get_logger(__name__)
+        #     logger.error(f"Failed to create chunk for signature {signature.incident_signature_id}: {chunk_error}")
+        #     # Re-raise to ensure we know about the failure
+        #     raise RuntimeError(f"Chunk creation failed for signature {signature.incident_signature_id}: {chunk_error}") from chunk_error
+        
         return str(signature_id)
     
     except Exception as e:

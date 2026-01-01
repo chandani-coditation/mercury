@@ -1,7 +1,7 @@
 """Triager Agent - Analyzes and triages alerts."""
 
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from ai_service.llm_client import call_llm_for_triage
 from ai_service.repositories import IncidentRepository
 from ai_service.policy import get_policy_from_config
@@ -10,10 +10,40 @@ from ai_service.guardrails import (
     validate_triage_no_hallucination,
     validate_triage_retrieval_boundaries,
 )
-from ai_service.core import get_retrieval_config, get_workflow_config, get_logger
+from ai_service.core import get_retrieval_config, get_workflow_config, get_logger, load_config
 from retrieval.hybrid_search import triage_retrieval
 
 logger = get_logger(__name__)
+
+
+def derive_severity_from_impact_urgency(impact: str, urgency: str) -> str:
+    """Derive severity from impact and urgency using config mapping."""
+    try:
+        config = load_config()
+        severity_mapping = config.get("field_mappings", {}).get("severity_mapping", {})
+        mapping = severity_mapping.get("impact_urgency_to_severity", {})
+        default = severity_mapping.get("default_severity", "medium")
+        
+        # Extract numeric values (e.g., "3 - Low" -> "3")
+        impact_val = impact.split()[0] if impact and isinstance(impact, str) else "3"
+        urgency_val = urgency.split()[0] if urgency and isinstance(urgency, str) else "3"
+        
+        # Create key (e.g., "3-3")
+        key = f"{impact_val}-{urgency_val}"
+        
+        # Look up in mapping
+        severity = mapping.get(key, default)
+        return severity
+    except Exception as e:
+        logger.warning(f"Error deriving severity from impact/urgency: {e}. Using default 'medium'")
+        return "medium"
+
+
+def extract_routing_from_alert(alert: Dict[str, Any]) -> Optional[str]:
+    """Extract routing (assignment_group) from alert labels."""
+    labels = alert.get("labels", {})
+    routing = labels.get("assignment_group") or labels.get("routing")
+    return routing
 
 
 def format_evidence_chunks(
@@ -135,14 +165,57 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         alert["ts"] = datetime.utcnow().isoformat()
 
     # Retrieve evidence (incident signatures and runbook metadata only)
-    query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
+    # Build query text with better keyword extraction
+    title = alert.get('title', '') or ''
+    description = alert.get('description', '') or ''
+    
+    # Extract key phrases from description for better matching
+    # Remove common noise words and focus on error messages
+    key_phrases = []
+    if description:
+        # Extract error messages, job names, step names
+        import re
+        # Look for patterns like "Unable to...", "The step failed", "Job failed"
+        error_patterns = [
+            r'Unable to [^\.]+',
+            r'[Tt]he step failed',
+            r'[Jj]ob failed',
+            r'[Ee]rror[^\.]*',
+            r'[Ff]ailed[^\.]*',
+        ]
+        for pattern in error_patterns:
+            matches = re.findall(pattern, description)
+            key_phrases.extend(matches)
+    
+    # Combine title, description, and unique key phrases
+    query_parts = [title, description]
+    if key_phrases:
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_phrases = []
+        for phrase in key_phrases:
+            phrase_lower = phrase.lower().strip()
+            if phrase_lower and phrase_lower not in seen:
+                seen.add(phrase_lower)
+                unique_phrases.append(phrase.strip())
+        query_parts.extend(unique_phrases)
+    
+    # Join and clean up extra whitespace
+    query_text = ' '.join(query_parts).strip()
+    # Clean up: remove extra spaces, normalize punctuation
+    import re
+    query_text = re.sub(r'\s+', ' ', query_text)  # Multiple spaces to single
+    query_text = re.sub(r'\.\s*\.', '.', query_text)  # Multiple periods
+    query_text = query_text.strip()
+    
     labels = alert.get("labels", {}) or {}
     service_val = labels.get("service") if isinstance(labels, dict) else None
     component_val = labels.get("component") if isinstance(labels, dict) else None
 
     logger.info(
-        f"Starting triage: query_text='{query_text[:100]}...', "
-        f"service={service_val}, component={component_val}"
+        f"Starting triage: query_text='{query_text[:150]}...', "
+        f"service={service_val}, component={component_val}, "
+        f"key_phrases={key_phrases[:3] if key_phrases else []}"
     )
 
     # Get retrieval config for triage
@@ -250,6 +323,20 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         
         # Update triage output with policy (policy gate determines this)
         triage_output["policy"] = policy_band
+        
+        # Extract routing from alert (assignment_group)
+        routing = extract_routing_from_alert(alert)
+        if routing:
+            triage_output["routing"] = routing
+        
+        # Override severity if impact/urgency are available in alert labels
+        labels = alert.get("labels", {})
+        impact = labels.get("impact")
+        urgency = labels.get("urgency")
+        if impact and urgency:
+            mapped_severity = derive_severity_from_impact_urgency(impact, urgency)
+            logger.info(f"Severity mapped from impact/urgency: {impact}/{urgency} -> {mapped_severity}")
+            triage_output["severity"] = mapped_severity
 
         # Format evidence for storage
         formatted_evidence = {
@@ -285,6 +372,13 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Fallback triage output with REVIEW band and confidence 0.0
         title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"
         
+        # Extract routing and severity from alert
+        routing = extract_routing_from_alert(alert)
+        labels = alert.get("labels", {})
+        impact = labels.get("impact", "3 - Low")
+        urgency = labels.get("urgency", "3 - Low")
+        severity = derive_severity_from_impact_urgency(impact, urgency)
+        
         triage_output = {
             "incident_signature": {
                 "failure_type": "UNKNOWN_FAILURE",
@@ -294,10 +388,13 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 "incident_signatures": [],
                 "runbook_refs": []
             },
-            "severity": "medium",
+            "severity": severity,
             "confidence": 0.0,
             "policy": "REVIEW"
         }
+        
+        if routing:
+            triage_output["routing"] = routing
 
         # Force REVIEW policy band
         policy_decision = {

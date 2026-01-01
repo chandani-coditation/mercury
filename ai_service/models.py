@@ -42,6 +42,7 @@ class TriageOutput(BaseModel):
     severity: str  # critical, high, medium, low
     confidence: float  # 0.0 to 1.0
     policy: str  # AUTO, PROPOSE, REVIEW (determined by policy gate, but included in output)
+    routing: Optional[str] = None  # Team queue assignment (e.g., "SE DBA SQL") - derived from assignment_group
 
 
 class RollbackPlan(BaseModel):

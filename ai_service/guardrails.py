@@ -586,11 +586,27 @@ def validate_triage_no_hallucination(
     runbook_refs = matched_evidence.get("runbook_refs", [])
     
     if retrieved_evidence:
-        retrieved_sig_ids = {
-            sig.get("metadata", {}).get("incident_signature_id")
-            for sig in retrieved_evidence.get("incident_signatures", [])
-            if sig.get("metadata", {}).get("incident_signature_id")
-        }
+        retrieved_sig_ids = set()
+        for sig in retrieved_evidence.get("incident_signatures", []):
+            # Try multiple ways to get incident_signature_id
+            sig_id = None
+            
+            # Method 1: Check if it's already at top level (formatted evidence)
+            if "incident_signature_id" in sig:
+                sig_id = sig.get("incident_signature_id")
+            
+            # Method 2: Check in metadata (raw evidence from triage_retrieval)
+            if not sig_id:
+                metadata = sig.get("metadata", {})
+                if isinstance(metadata, dict):
+                    sig_id = metadata.get("incident_signature_id")
+            
+            # Method 3: Check if metadata is not a dict, try top level
+            if not sig_id:
+                sig_id = sig.get("incident_signature_id")
+            
+            if sig_id:
+                retrieved_sig_ids.add(str(sig_id))
         # Extract runbook_ids from multiple possible locations
         retrieved_runbook_ids = set()
         for rb in retrieved_evidence.get("runbook_metadata", []):
@@ -806,13 +822,19 @@ def validate_triage_retrieval_boundaries(
     
     # Check incident signatures have incident_signature_id
     for i, sig in enumerate(incident_signatures):
-        metadata = sig.get("metadata", {})
-        sig_id = metadata.get("incident_signature_id")
+        # Metadata might be a dict or already extracted
+        if isinstance(sig.get("metadata"), dict):
+            metadata = sig.get("metadata", {})
+            sig_id = metadata.get("incident_signature_id")
+        else:
+            # If metadata is not a dict, check if incident_signature_id is at top level
+            sig_id = sig.get("incident_signature_id")
         
         if not sig_id:
             errors.append(
                 f"WRONG RETRIEVAL: Incident signature {i+1} missing 'incident_signature_id' in metadata. "
-                f"Triage retrieval should only return chunks with incident_signature_id."
+                f"Triage retrieval should only return chunks with incident_signature_id. "
+                f"Available keys: {list(sig.keys())}"
             )
     
     # Check runbook metadata does NOT contain step chunks

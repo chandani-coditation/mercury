@@ -404,23 +404,38 @@ def triage_retrieval(
         service_val = service if service and str(service).strip() else None
         component_val = component if component and str(component).strip() else None
         
-        # Build filter conditions
+        # Build filter conditions for incident_signatures table
+        # Use more flexible matching - service/component are hints, not strict filters
         filters = []
         filter_params = []
         
         if service_val:
-            # Use COALESCE to handle NULL values and cast to text
-            filters.append("COALESCE(LOWER(c.metadata->>'service'), '') LIKE LOWER(%s::text)")
-            filter_params.append(f"%{service_val}%")
+            # More flexible: match service or affected_service, case-insensitive
+            # Also allow partial matches (e.g., "Database" matches "Database-SQL")
+            filters.append("""
+                (COALESCE(LOWER(s.service), '') LIKE LOWER(%s::text)
+                 OR COALESCE(LOWER(s.affected_service), '') LIKE LOWER(%s::text)
+                 OR COALESCE(LOWER(s.service), '') LIKE LOWER(%s::text)
+                 OR COALESCE(LOWER(s.affected_service), '') LIKE LOWER(%s::text))
+            """)
+            # Add multiple variations for better matching
+            service_lower = service_val.lower()
+            filter_params.extend([
+                f"%{service_lower}%",  # service contains
+                f"%{service_lower}%",  # affected_service contains
+                f"{service_lower}%",   # service starts with
+                f"{service_lower}%"    # affected_service starts with
+            ])
         
         if component_val:
-            # Use COALESCE to handle NULL values and cast to text
-            filters.append("COALESCE(LOWER(c.metadata->>'component'), '') LIKE LOWER(%s::text)")
-            filter_params.append(f"%{component_val}%")
+            # More flexible component matching
+            filters.append("COALESCE(LOWER(s.component), '') LIKE LOWER(%s::text)")
+            filter_params.append(f"%{component_val.lower()}%")
         
         filter_clause = " AND " + " AND ".join(filters) if filters else ""
         
-        # Retrieve incident signatures (chunks with incident_signature_id)
+        # Retrieve incident signatures directly from incident_signatures table
+        # (No need for chunks table - embeddings and tsvector are already in incident_signatures)
         # Parameter order: 
         # Vector: $1 (score), $2 (rank), $3 (ORDER BY), $4 (limit), [filters for vector]
         # Fulltext: $5 (score), $6 (rank), $7 (WHERE), $8 (ORDER BY), $9 (limit), [filters for fulltext]
@@ -428,40 +443,68 @@ def triage_retrieval(
         incident_sig_query = f"""
         WITH vector_results AS (
             SELECT 
-                c.id,
-                c.document_id,
-                c.chunk_index,
-                c.content,
-                c.metadata,
-                d.title as doc_title,
-                d.doc_type as doc_type,
-                1 - (c.embedding <=> %s::vector) as vector_score,
-                ROW_NUMBER() OVER (ORDER BY c.embedding <=> %s::vector) as vector_rank
-            FROM chunks c
-            JOIN documents d ON c.document_id = d.id
-            WHERE c.embedding IS NOT NULL
-            AND c.metadata->>'incident_signature_id' IS NOT NULL
+                s.id,
+                s.source_document_id as document_id,
+                0 as chunk_index,
+                -- Create content from signature fields for display
+                CONCAT(
+                    'Failure Type: ', COALESCE(s.failure_type, ''),
+                    E'\\nError Class: ', COALESCE(s.error_class, ''),
+                    E'\\nSymptoms: ', COALESCE(array_to_string(s.symptoms, ', '), ''),
+                    E'\\nService: ', COALESCE(s.service, ''),
+                    E'\\nComponent: ', COALESCE(s.component, '')
+                ) as content,
+                -- Create metadata JSON from signature fields
+                jsonb_build_object(
+                    'incident_signature_id', s.incident_signature_id,
+                    'failure_type', s.failure_type,
+                    'error_class', s.error_class,
+                    'symptoms', s.symptoms,
+                    'affected_service', s.affected_service,
+                    'service', s.service,
+                    'component', s.component,
+                    'source_incident_ids', s.source_incident_ids
+                ) as metadata,
+                COALESCE(s.affected_service, s.service) as doc_title,
+                'incident_signature' as doc_type,
+                1 - (s.embedding <=> %s::vector) as vector_score,
+                ROW_NUMBER() OVER (ORDER BY s.embedding <=> %s::vector) as vector_rank
+            FROM incident_signatures s
+            WHERE s.embedding IS NOT NULL
             {filter_clause}
-            ORDER BY c.embedding <=> %s::vector
+            ORDER BY s.embedding <=> %s::vector
             LIMIT %s
         ),
         fulltext_results AS (
             SELECT 
-                c.id,
-                c.document_id,
-                c.chunk_index,
-                c.content,
-                c.metadata,
-                d.title as doc_title,
-                d.doc_type as doc_type,
-                ts_rank(c.tsv, plainto_tsquery('english', %s::text)) as fulltext_score,
-                ROW_NUMBER() OVER (ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s::text)) DESC) as fulltext_rank
-            FROM chunks c
-            JOIN documents d ON c.document_id = d.id
-            WHERE c.tsv @@ plainto_tsquery('english', %s::text)
-            AND c.metadata->>'incident_signature_id' IS NOT NULL
+                s.id,
+                s.source_document_id as document_id,
+                0 as chunk_index,
+                CONCAT(
+                    'Failure Type: ', COALESCE(s.failure_type, ''),
+                    E'\\nError Class: ', COALESCE(s.error_class, ''),
+                    E'\\nSymptoms: ', COALESCE(array_to_string(s.symptoms, ', '), ''),
+                    E'\\nService: ', COALESCE(s.service, ''),
+                    E'\\nComponent: ', COALESCE(s.component, '')
+                ) as content,
+                jsonb_build_object(
+                    'incident_signature_id', s.incident_signature_id,
+                    'failure_type', s.failure_type,
+                    'error_class', s.error_class,
+                    'symptoms', s.symptoms,
+                    'affected_service', s.affected_service,
+                    'service', s.service,
+                    'component', s.component,
+                    'source_incident_ids', s.source_incident_ids
+                ) as metadata,
+                COALESCE(s.affected_service, s.service) as doc_title,
+                'incident_signature' as doc_type,
+                ts_rank(s.tsv, plainto_tsquery('english', %s::text)) as fulltext_score,
+                ROW_NUMBER() OVER (ORDER BY ts_rank(s.tsv, plainto_tsquery('english', %s::text)) DESC) as fulltext_rank
+            FROM incident_signatures s
+            WHERE s.tsv @@ plainto_tsquery('english', %s::text)
             {filter_clause}
-            ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s::text)) DESC
+            ORDER BY ts_rank(s.tsv, plainto_tsquery('english', %s::text)) DESC
             LIMIT %s
         ),
         combined_results AS (
