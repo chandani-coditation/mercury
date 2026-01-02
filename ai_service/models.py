@@ -13,6 +13,7 @@ class Alert(BaseModel):
     title: str
     description: str
     labels: Dict[str, str] = {}
+    affected_services: Optional[List[str]] = None  # Affected services/CI from alert
     ts: Optional[datetime] = None  # Optional: defaults to current time if not provided
 
 
@@ -39,10 +40,12 @@ class TriageOutput(BaseModel):
     
     incident_signature: IncidentSignature
     matched_evidence: MatchedEvidence
-    severity: str  # critical, high, medium, low
+    severity: str  # critical, high, medium, low (derived from impact/urgency)
     confidence: float  # 0.0 to 1.0
     policy: str  # AUTO, PROPOSE, REVIEW (determined by policy gate, but included in output)
     routing: Optional[str] = None  # Team queue assignment (e.g., "SE DBA SQL") - derived from assignment_group
+    impact: Optional[str] = None  # Original impact value from historical evidence (e.g., "2 - Medium", "1 - High")
+    urgency: Optional[str] = None  # Original urgency value from historical evidence (e.g., "2 - Medium", "1 - High")
 
 
 class RollbackPlan(BaseModel):

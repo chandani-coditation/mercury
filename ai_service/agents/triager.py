@@ -1,7 +1,7 @@
 """Triager Agent - Analyzes and triages alerts."""
 
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from ai_service.llm_client import call_llm_for_triage
 from ai_service.repositories import IncidentRepository
 from ai_service.policy import get_policy_from_config
@@ -44,6 +44,116 @@ def extract_routing_from_alert(alert: Dict[str, Any]) -> Optional[str]:
     labels = alert.get("labels", {})
     routing = labels.get("assignment_group") or labels.get("routing")
     return routing
+
+
+def predict_routing_from_evidence(incident_signatures: List[Dict[str, Any]]) -> Optional[str]:
+    """
+    Predict routing (assignment_group) from matched incident signatures.
+    
+    Uses the most common assignment_group from historical incident signatures.
+    This is the primary method - alert labels are only used as fallback.
+    
+    Args:
+        incident_signatures: List of retrieved incident signature chunks with metadata
+        
+    Returns:
+        Most common assignment_group from signatures, or None if none found
+    """
+    if not incident_signatures:
+        logger.debug("No incident signatures provided for routing prediction")
+        return None
+    
+    assignment_groups = []
+    for sig in incident_signatures:
+        metadata = sig.get("metadata", {})
+        assignment_group = metadata.get("assignment_group")
+        logger.debug(f"Checking signature {sig.get('incident_signature_id', 'unknown')}: assignment_group={assignment_group}, metadata keys={list(metadata.keys())}")
+        if assignment_group and str(assignment_group).strip():
+            assignment_groups.append(str(assignment_group).strip())
+    
+    if not assignment_groups:
+        logger.warning(f"No assignment_group found in {len(incident_signatures)} incident signatures. Available metadata keys: {[list(sig.get('metadata', {}).keys()) for sig in incident_signatures[:2]]}")
+        return None
+    
+    # Return the most common assignment_group
+    from collections import Counter
+    counter = Counter(assignment_groups)
+    most_common = counter.most_common(1)
+    if most_common:
+        routing = most_common[0][0]
+        logger.info(f"Predicted routing from {len(assignment_groups)} signatures: {routing} (appeared {most_common[0][1]} times)")
+        return routing
+    
+    return None
+
+
+def predict_impact_urgency_from_evidence(incident_signatures: List[Dict[str, Any]]) -> Optional[tuple[str, str]]:
+    """
+    Predict impact and urgency from matched incident signatures.
+    
+    Uses the most common impact/urgency combination from historical incident signatures.
+    This is the primary method - alert labels are only used as fallback.
+    
+    Args:
+        incident_signatures: List of retrieved incident signature chunks with metadata
+        
+    Returns:
+        Tuple of (impact, urgency) or None if none found
+    """
+    if not incident_signatures:
+        logger.debug("No incident signatures provided for impact/urgency prediction")
+        return None
+    
+    impact_urgency_pairs = []
+    for sig in incident_signatures:
+        metadata = sig.get("metadata", {})
+        impact = metadata.get("impact")
+        urgency = metadata.get("urgency")
+        logger.debug(f"Checking signature {sig.get('incident_signature_id', 'unknown')}: impact={impact}, urgency={urgency}")
+        if impact and urgency:
+            impact_urgency_pairs.append((str(impact).strip(), str(urgency).strip()))
+    
+    if not impact_urgency_pairs:
+        logger.warning(f"No impact/urgency found in {len(incident_signatures)} incident signatures. Available metadata keys: {[list(sig.get('metadata', {}).keys()) for sig in incident_signatures[:2]]}")
+        return None
+    
+    # Find the most common impact/urgency combination
+    from collections import Counter
+    counter = Counter(impact_urgency_pairs)
+    most_common = counter.most_common(1)
+    if most_common:
+        impact, urgency = most_common[0][0]
+        logger.info(
+            f"Predicted impact/urgency from {len(impact_urgency_pairs)} signatures: "
+            f"impact={impact}, urgency={urgency} "
+            f"(appeared {most_common[0][1]} times)"
+        )
+        return (impact, urgency)
+    
+    return None
+
+
+def predict_severity_from_evidence(incident_signatures: List[Dict[str, Any]]) -> Optional[str]:
+    """
+    Predict severity from matched incident signatures based on impact/urgency.
+    
+    Uses the most common impact/urgency combination from historical incident signatures
+    to derive severity. This is the primary method - alert labels are only used as fallback.
+    
+    Args:
+        incident_signatures: List of retrieved incident signature chunks with metadata
+        
+    Returns:
+        Predicted severity (critical, high, medium, low) or None if none found
+    """
+    impact_urgency = predict_impact_urgency_from_evidence(incident_signatures)
+    if impact_urgency:
+        impact, urgency = impact_urgency
+        severity = derive_severity_from_impact_urgency(impact, urgency)
+        logger.info(f"Derived severity from predicted impact/urgency: {impact}/{urgency} -> {severity}")
+        return severity
+    
+    return None
 
 
 def format_evidence_chunks(
@@ -163,6 +273,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         alert["ts"] = alert["ts"].isoformat()
     elif "ts" not in alert:
         alert["ts"] = datetime.utcnow().isoformat()
+    
+    # Debug: Log alert structure to verify affected_services is present
+    logger.debug(f"Alert keys: {list(alert.keys())}, affected_services: {alert.get('affected_services')}")
 
     # Retrieve evidence (incident signatures and runbook metadata only)
     # Build query text with better keyword extraction
@@ -252,6 +365,16 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         f"Triage retrieval completed: {len(incident_signatures)} signatures, "
         f"{len(runbook_metadata)} runbook metadata"
     )
+    
+    # Debug: Log metadata structure of first signature to verify fields are present
+    if incident_signatures:
+        first_sig = incident_signatures[0]
+        metadata = first_sig.get("metadata", {})
+        logger.debug(
+            f"First signature metadata keys: {list(metadata.keys())}, "
+            f"assignment_group={metadata.get('assignment_group')}, "
+            f"impact={metadata.get('impact')}, urgency={metadata.get('urgency')}"
+        )
 
     # Check if we have evidence
     evidence_warning = None
@@ -324,19 +447,63 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Update triage output with policy (policy gate determines this)
         triage_output["policy"] = policy_band
         
-        # Extract routing from alert (assignment_group)
-        routing = extract_routing_from_alert(alert)
-        if routing:
-            triage_output["routing"] = routing
+        # PREDICT routing from matched incident signatures (primary method)
+        # This uses historical evidence to determine which team should handle this incident
+        predicted_routing = predict_routing_from_evidence(incident_signatures)
+        if predicted_routing:
+            triage_output["routing"] = predicted_routing
+            logger.info(f"Routing predicted from evidence: {predicted_routing}")
+        else:
+            # Fallback: Extract routing from alert labels if no evidence available
+            routing = extract_routing_from_alert(alert)
+            if routing:
+                triage_output["routing"] = routing
+                logger.info(f"Routing extracted from alert labels (fallback): {routing}")
         
-        # Override severity if impact/urgency are available in alert labels
-        labels = alert.get("labels", {})
-        impact = labels.get("impact")
-        urgency = labels.get("urgency")
-        if impact and urgency:
-            mapped_severity = derive_severity_from_impact_urgency(impact, urgency)
-            logger.info(f"Severity mapped from impact/urgency: {impact}/{urgency} -> {mapped_severity}")
-            triage_output["severity"] = mapped_severity
+        # PREDICT impact and urgency from matched incident signatures (primary method)
+        # This uses historical evidence to determine priority based on impact/urgency patterns
+        predicted_impact_urgency = predict_impact_urgency_from_evidence(incident_signatures)
+        if predicted_impact_urgency:
+            impact, urgency = predicted_impact_urgency
+            # Store impact and urgency separately
+            triage_output["impact"] = impact
+            triage_output["urgency"] = urgency
+            # Derive severity from impact/urgency
+            predicted_severity = derive_severity_from_impact_urgency(impact, urgency)
+            triage_output["severity"] = predicted_severity
+            logger.info(f"Impact/urgency/severity predicted from evidence: impact={impact}, urgency={urgency}, severity={predicted_severity}")
+        else:
+            # Fallback: Derive from alert labels if no evidence available
+            labels = alert.get("labels", {})
+            impact = labels.get("impact")
+            urgency = labels.get("urgency")
+            if impact and urgency:
+                triage_output["impact"] = impact
+                triage_output["urgency"] = urgency
+                mapped_severity = derive_severity_from_impact_urgency(impact, urgency)
+                triage_output["severity"] = mapped_severity
+                logger.info(f"Impact/urgency/severity derived from alert labels (fallback): impact={impact}, urgency={urgency}, severity={mapped_severity}")
+        
+        # Extract affected_services from alert
+        affected_services = alert.get("affected_services")
+        if affected_services is not None:
+            if isinstance(affected_services, str):
+                affected_services = [affected_services]
+            elif not isinstance(affected_services, list):
+                affected_services = [str(affected_services)]
+            if len(affected_services) > 0:
+                triage_output["affected_services"] = affected_services
+        # Also check labels if not in alert directly
+        elif isinstance(alert.get("labels"), dict):
+            labels = alert.get("labels", {})
+            if "affected_services" in labels:
+                aff_svc = labels.get("affected_services")
+                if isinstance(aff_svc, str):
+                    aff_svc = [aff_svc]
+                elif not isinstance(aff_svc, list):
+                    aff_svc = [str(aff_svc)]
+                if len(aff_svc) > 0:
+                    triage_output["affected_services"] = aff_svc
 
         # Format evidence for storage
         formatted_evidence = {
@@ -372,7 +539,8 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Fallback triage output with REVIEW band and confidence 0.0
         title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"
         
-        # Extract routing and severity from alert
+        # No evidence found - use fallback methods
+        # Extract routing from alert (fallback when no evidence)
         routing = extract_routing_from_alert(alert)
         labels = alert.get("labels", {})
         impact = labels.get("impact", "3 - Low")
@@ -395,6 +563,33 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         
         if routing:
             triage_output["routing"] = routing
+            logger.info(f"Routing extracted from alert labels (no evidence available): {routing}")
+
+        # Extract affected_services from alert
+        affected_services = alert.get("affected_services")
+        logger.debug(f"Extracting affected_services from alert: {affected_services}, type: {type(affected_services)}")
+        if affected_services is not None:
+            if isinstance(affected_services, str):
+                affected_services = [affected_services]
+            elif not isinstance(affected_services, list):
+                affected_services = [str(affected_services)]
+            if len(affected_services) > 0:
+                triage_output["affected_services"] = affected_services
+                logger.info(f"Added affected_services to triage output: {affected_services}")
+        
+        # Also check labels if not already set
+        if "affected_services" not in triage_output and isinstance(alert.get("labels"), dict):
+            labels = alert.get("labels", {})
+            logger.debug(f"Checking labels for affected_services: {labels.get('affected_services')}")
+            if "affected_services" in labels:
+                aff_svc = labels.get("affected_services")
+                if isinstance(aff_svc, str):
+                    aff_svc = [aff_svc]
+                elif not isinstance(aff_svc, list):
+                    aff_svc = [str(aff_svc)]
+                if len(aff_svc) > 0:
+                    triage_output["affected_services"] = aff_svc
+                    logger.info(f"Added affected_services from labels to triage output: {aff_svc}")
 
         # Force REVIEW policy band
         policy_decision = {

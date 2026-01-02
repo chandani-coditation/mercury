@@ -304,6 +304,20 @@ def _create_incident_signature_embedding_text(signature: IncidentSignature) -> s
     if signature.affected_service:
         parts.append(f"Affected Service: {signature.affected_service}")
     
+    # Assignment group - important for routing
+    if signature.assignment_group:
+        parts.append(f"Assignment Group: {signature.assignment_group}")
+    
+    # Impact and urgency - typical severity patterns from historical incidents
+    if signature.impact:
+        parts.append(f"Impact: {signature.impact}")
+    if signature.urgency:
+        parts.append(f"Urgency: {signature.urgency}")
+    
+    # Close notes - resolution information for resolution agent
+    if signature.close_notes:
+        parts.append(f"Resolution Notes: {signature.close_notes}")
+    
     return "\n".join(parts)
 
 
@@ -711,10 +725,10 @@ def insert_incident_signature(
             """
             INSERT INTO incident_signatures (
                 id, incident_signature_id, failure_type, error_class, symptoms,
-                affected_service, service, component, resolution_refs, embedding,
+                affected_service, service, component, assignment_group, impact, urgency, close_notes, resolution_refs, embedding,
                 source_incident_ids, source_document_id, last_seen_at
             )
-            VALUES (%s, %s, %s, %s, %s::TEXT[], %s, %s, %s, %s::TEXT[], %s::vector, %s::TEXT[], %s, %s)
+            VALUES (%s, %s, %s, %s, %s::TEXT[], %s, %s, %s, %s, %s, %s, %s, %s::TEXT[], %s::vector, %s::TEXT[], %s, %s)
             ON CONFLICT (incident_signature_id) DO UPDATE SET
                 failure_type = EXCLUDED.failure_type,
                 error_class = EXCLUDED.error_class,
@@ -722,6 +736,10 @@ def insert_incident_signature(
                 affected_service = EXCLUDED.affected_service,
                 service = EXCLUDED.service,
                 component = EXCLUDED.component,
+                assignment_group = EXCLUDED.assignment_group,
+                impact = EXCLUDED.impact,
+                urgency = EXCLUDED.urgency,
+                close_notes = EXCLUDED.close_notes,
                 resolution_refs = EXCLUDED.resolution_refs,
                 embedding = EXCLUDED.embedding,
                 source_incident_ids = array_cat(incident_signatures.source_incident_ids, EXCLUDED.source_incident_ids),
@@ -739,6 +757,10 @@ def insert_incident_signature(
                 signature.affected_service,
                 signature.service,
                 signature.component,
+                signature.assignment_group,
+                signature.impact,
+                signature.urgency,
+                signature.close_notes,
                 resolution_refs_array,
                 embedding_str,
                 source_incident_ids_array,
@@ -752,79 +774,6 @@ def insert_incident_signature(
         # NOTE: Chunk creation is NO LONGER NEEDED
         # Triage retrieval now queries incident_signatures table directly
         # (embeddings and tsvector are already in incident_signatures table)
-        # Keeping this code commented for reference, but it's not executed
-        # 
-        # try:
-            # Create embedding text for chunk (same as signature)
-            chunk_content = signature_text
-            
-            # Create metadata for chunk
-            chunk_metadata = {
-                "incident_signature_id": signature.incident_signature_id,
-                "failure_type": signature.failure_type,
-                "error_class": signature.error_class,
-                "symptoms": signature.symptoms,
-                "affected_service": signature.affected_service,
-                "service": signature.service,
-                "component": signature.component,
-                "source_incident_ids": source_incident_ids_array,
-            }
-            
-            # Create or get document for this signature (optional, for metadata)
-            doc_id = source_document_id
-            if not doc_id:
-                # Create a minimal document for the signature
-                doc_id = uuid.uuid4()
-                cur.execute(
-                    """
-                    INSERT INTO documents (id, doc_type, service, component, title, content, tags, last_reviewed_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (
-                        doc_id,
-                        "incident_signature",
-                        signature.service,
-                        signature.component,
-                        f"Incident Signature: {signature.incident_signature_id}",
-                        "",  # Empty content - signature data is in chunk
-                        json.dumps({
-                            "incident_signature_id": signature.incident_signature_id,
-                            "failure_type": signature.failure_type,
-                            "error_class": signature.error_class,
-                        }),
-                        datetime.now(),
-                    ),
-                )
-            
-            # Insert chunk with signature data
-            chunk_id = uuid.uuid4()
-            cur.execute(
-                """
-                INSERT INTO chunks (id, document_id, chunk_index, content, metadata, embedding, tsv)
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
-                ON CONFLICT DO NOTHING
-                """,
-                (
-                    chunk_id,
-                    doc_id,
-                    0,  # Single chunk per signature
-                    chunk_content,
-                    json.dumps(chunk_metadata),
-                    embedding_str,
-                    chunk_content,
-                ),
-            )
-            
-            # conn.commit()
-            # logger = get_logger(__name__)
-            # logger.info(f"Created chunk for incident signature {signature.incident_signature_id}")
-        # except Exception as chunk_error:
-        #     # Log error - chunk creation is critical for retrieval
-        #     logger = get_logger(__name__)
-        #     logger.error(f"Failed to create chunk for signature {signature.incident_signature_id}: {chunk_error}")
-        #     # Re-raise to ensure we know about the failure
-        #     raise RuntimeError(f"Chunk creation failed for signature {signature.incident_signature_id}: {chunk_error}") from chunk_error
         
         return str(signature_id)
     

@@ -427,10 +427,26 @@ def triage_retrieval(
                 f"{service_lower}%"    # affected_service starts with
             ])
         
+        # Component filter: Make it completely optional
+        # Strategy: If signature has no component (NULL/empty), it matches ANY alert component
+        # This is critical for storage signatures which have component=NULL
+        # We only apply component filter if signature actually has a component value
+        # This allows:
+        # - Alerts with component='Storage' to match signatures with component=NULL (most important)
+        # - Alerts with component='Storage' to match signatures with component='Storage' or 'Disk' etc.
+        # - Service match is still required (handled by service filter above)
+        # 
+        # Logic: Only filter by component if signature HAS a component value
+        # If signature component is NULL/empty, don't filter by component at all
+        # This is more permissive than the previous OR logic
         if component_val:
-            # More flexible component matching
-            filters.append("COALESCE(LOWER(s.component), '') LIKE LOWER(%s::text)")
-            filter_params.append(f"%{component_val.lower()}%")
+            # Only filter if signature has a component - if NULL, don't filter
+            filters.append("""
+                (COALESCE(s.component, '') = '' 
+                 OR COALESCE(LOWER(s.component), '') LIKE LOWER(%s::text))
+            """)
+            component_lower = component_val.lower()
+            filter_params.append(f"%{component_lower}%")
         
         filter_clause = " AND " + " AND ".join(filters) if filters else ""
         
@@ -463,6 +479,9 @@ def triage_retrieval(
                     'affected_service', s.affected_service,
                     'service', s.service,
                     'component', s.component,
+                    'assignment_group', s.assignment_group,
+                    'impact', s.impact,
+                    'urgency', s.urgency,
                     'source_incident_ids', s.source_incident_ids
                 ) as metadata,
                 COALESCE(s.affected_service, s.service) as doc_title,
@@ -495,6 +514,9 @@ def triage_retrieval(
                     'affected_service', s.affected_service,
                     'service', s.service,
                     'component', s.component,
+                    'assignment_group', s.assignment_group,
+                    'impact', s.impact,
+                    'urgency', s.urgency,
                     'source_incident_ids', s.source_incident_ids
                 ) as metadata,
                 COALESCE(s.affected_service, s.service) as doc_title,
@@ -543,26 +565,26 @@ def triage_retrieval(
         """
         
         # Build params for incident signatures
-        # Query parameter order (filter_clause is inserted BEFORE ORDER BY in vector CTE):
-        # Vector: 1=score, 2=rank, 3-4=filter_params (from filter_clause), 5=ORDER BY, 6=limit
-        # Fulltext: 7=score, 8=rank, 9=WHERE, 10-11=filter_params (from filter_clause), 12=ORDER BY, 13=limit
-        # Final: 14=final limit
+        # Query parameter order (filter_clause is inserted AFTER WHERE and BEFORE ORDER BY):
+        # Vector CTE: $1=score, $2=rank, $3...$N=filter_params, $N+1=ORDER BY, $N+2=limit
+        # Fulltext CTE: $N+3=score, $N+4=rank, $N+5=WHERE, $N+6...$M=filter_params, $M+1=ORDER BY, $M+2=limit
+        # Final: $M+3=final limit
         sig_params = []
         # Vector CTE
         sig_params.append(query_embedding_str)  # 1: vector_score
         sig_params.append(query_embedding_str)  # 2: vector_rank
-        sig_params.extend(filter_params)  # 3-4: filter params (service, component) - inserted BEFORE ORDER BY
-        sig_params.append(query_embedding_str)  # 5: vector ORDER BY
-        sig_params.append(limit)  # 6: vector limit
+        sig_params.extend(filter_params)  # 3...N: filter params (service + component) - inserted AFTER WHERE
+        sig_params.append(query_embedding_str)  # N+1: vector ORDER BY
+        sig_params.append(limit)  # N+2: vector limit
         # Fulltext CTE
-        sig_params.append(str(query_text))  # 7: fulltext_score
-        sig_params.append(str(query_text))  # 8: fulltext_rank
-        sig_params.append(str(query_text))  # 9: fulltext WHERE
-        sig_params.extend(filter_params)  # 10-11: filter params (service, component) - inserted BEFORE ORDER BY
-        sig_params.append(str(query_text))  # 12: fulltext ORDER BY
-        sig_params.append(limit)  # 13: fulltext limit
+        sig_params.append(str(query_text))  # N+3: fulltext_score
+        sig_params.append(str(query_text))  # N+4: fulltext_rank
+        sig_params.append(str(query_text))  # N+5: fulltext WHERE
+        sig_params.extend(filter_params)  # N+6...M: filter params (service + component) - inserted AFTER WHERE
+        sig_params.append(str(query_text))  # M+1: fulltext ORDER BY
+        sig_params.append(limit)  # M+2: fulltext limit
         # Final
-        sig_params.append(limit)  # 14: final limit
+        sig_params.append(limit)  # M+3: final limit
         
         # Execute incident signatures query
         cur.execute(incident_sig_query, sig_params)

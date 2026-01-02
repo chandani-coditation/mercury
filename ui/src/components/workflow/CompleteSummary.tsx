@@ -65,10 +65,14 @@ export const CompleteSummary = ({
         severity: triageData.severity,
         category: triageData.category,
         routing: triageData.routing,
+        impact: triageData.impact,
+        urgency: triageData.urgency,
         affected_services: triageData.affected_services,
         confidence: triageData.confidence,
         summary: triageData.summary,
         likely_cause: triageData.likely_cause,
+        incident_signature: triageData.incident_signature,
+        matched_evidence: triageData.matched_evidence,
       },
       policy_decision: {
         policy_band: policyData.policy_band,
@@ -81,9 +85,11 @@ export const CompleteSummary = ({
         sources: [...new Set(retrievalData.chunk_sources || [])],
       },
       resolution: {
-        steps: resolutionData.resolution_steps || [],
+        recommendations: resolutionData.recommendations || [],
+        steps: resolutionData.resolution_steps || resolutionData.steps || [],
         status: "completed",
         risk_level: resolutionData.risk_level,
+        overall_confidence: resolutionData.overall_confidence || resolutionData.confidence,
         estimated_time: resolutionData.estimated_time_minutes || resolutionData.estimated_duration,
         reasoning: resolutionData.reasoning,
       },
@@ -98,7 +104,9 @@ export const CompleteSummary = ({
     setDownloadMenuOpen(false);
   };
 
-  const hasResolution = resolutionData?.resolution_steps && resolutionData.resolution_steps.length > 0;
+  const hasResolution = (resolutionData?.recommendations && resolutionData.recommendations.length > 0) ||
+                        (resolutionData?.resolution_steps && resolutionData.resolution_steps.length > 0) ||
+                        (resolutionData?.steps && resolutionData.steps.length > 0);
 
   return (
     <div className="space-y-6">
@@ -199,20 +207,59 @@ export const CompleteSummary = ({
                   {triageData.category}
                 </span>
               </div>
-              <div className="text-sm">
-                <span className="text-muted-foreground">Routing:</span>
-                <span className="ml-2 font-mono text-primary font-semibold">{triageData.routing}</span>
-              </div>
-              <div className="text-sm">
-                <span className="text-muted-foreground">Affected Services:</span>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {(triageData.affected_services || []).map((service: string, idx: number) => (
-                    <span key={idx} className="px-2 py-1 bg-secondary/50 border border-border/50 rounded text-xs">
-                      {service}
-                    </span>
-                  ))}
+              {triageData.incident_signature && (
+                <div className="text-sm space-y-1">
+                  <span className="text-muted-foreground">Incident Signature:</span>
+                  <div className="mt-1 space-y-1">
+                    {triageData.incident_signature.failure_type && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">Failure Type: </span>
+                        <span className="font-mono text-xs text-foreground">{triageData.incident_signature.failure_type}</span>
+                      </div>
+                    )}
+                    {triageData.incident_signature.error_class && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">Error Class: </span>
+                        <span className="font-mono text-xs text-foreground">{triageData.incident_signature.error_class}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
+              {(triageData.impact || triageData.urgency) && (
+                <div className="text-sm grid grid-cols-2 gap-2">
+                  {triageData.impact && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Impact: </span>
+                      <span className="text-primary font-semibold">{triageData.impact}</span>
+                    </div>
+                  )}
+                  {triageData.urgency && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Urgency: </span>
+                      <span className="text-primary font-semibold">{triageData.urgency}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {triageData.routing && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Routing:</span>
+                  <span className="ml-2 font-mono text-primary font-semibold">{triageData.routing}</span>
+                </div>
+              )}
+              {triageData.affected_services && triageData.affected_services.length > 0 && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Affected Services:</span>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {triageData.affected_services.map((service: string, idx: number) => (
+                      <span key={idx} className="px-2 py-1 bg-secondary/50 border border-border/50 rounded text-xs">
+                        {service}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="text-sm">
                 <span className="text-muted-foreground">AI Confidence:</span>
                 <div className="mt-2 flex items-center gap-2">

@@ -1,0 +1,19 @@
+pattern,normalized_symptom,category
+failed|failure,operation_failed,execution
+error|errors,error_detected,execution
+timeout|timed out,timeout_occurred,network
+disconnected|connection lost,connection_lost,network
+unable to|cannot|could not,operation_blocked,execution
+authentication|auth,authentication_failure,security
+authorization|permission,authorization_failure,security
+access denied|permission denied,access_denied,security
+service account.*disabled,service_account_disabled,security
+database.*does not exist|database.*not found,database_missing,data
+connection.*failed|connection.*refused,connection_failed,network
+step failed,step_execution_failed,execution
+job failed,job_execution_failed,execution
+unable to open|cannot open,file_access_failed,file
+volume is critical|critical state,storage_critical,storage
+percent used.*9[0-9]|free space.*low,storage_capacity_low,storage
+percent used.*100|free space.*0,storage_exhausted,storage
+

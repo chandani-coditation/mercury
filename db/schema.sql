@@ -180,6 +180,10 @@ CREATE TABLE IF NOT EXISTS incident_signatures (
     affected_service TEXT,
     service TEXT,
     component TEXT,
+    assignment_group TEXT, -- Team/group that handles this type of incident (e.g., "SE DBA SQL", "NOC")
+    impact TEXT, -- Typical impact value from historical incidents (e.g., "3 - Low", "1 - High")
+    urgency TEXT, -- Typical urgency value from historical incidents (e.g., "3 - Low", "1 - High")
+    close_notes TEXT, -- Resolution notes/close notes from historical incidents (for resolution agent)
     resolution_refs TEXT[],
     embedding vector(1536),
     tsv tsvector,
@@ -203,6 +207,9 @@ CREATE TABLE IF NOT EXISTS triage_results (
     severity TEXT NOT NULL,
     confidence NUMERIC(5,4) NOT NULL,
     policy_band TEXT NOT NULL,
+    assignment_group TEXT, -- Team/group assigned to handle this incident (e.g., "SE DBA SQL", "NOC")
+    impact TEXT, -- Original impact value from alert (e.g., "3 - Low", "1 - High")
+    urgency TEXT, -- Original urgency value from alert (e.g., "3 - Low", "1 - High")
     matched_signature_ids TEXT[],
     matched_runbook_refs TEXT[],
     evidence_chunks JSONB,
@@ -297,6 +304,15 @@ CREATE INDEX IF NOT EXISTS incident_signatures_service_idx
 CREATE INDEX IF NOT EXISTS incident_signatures_component_idx 
     ON incident_signatures(component) 
     WHERE component IS NOT NULL;
+CREATE INDEX IF NOT EXISTS incident_signatures_assignment_group_idx 
+    ON incident_signatures(assignment_group) 
+    WHERE assignment_group IS NOT NULL;
+CREATE INDEX IF NOT EXISTS incident_signatures_impact_idx 
+    ON incident_signatures(impact) 
+    WHERE impact IS NOT NULL;
+CREATE INDEX IF NOT EXISTS incident_signatures_urgency_idx 
+    ON incident_signatures(urgency) 
+    WHERE urgency IS NOT NULL;
 CREATE INDEX IF NOT EXISTS incident_signatures_symptoms_idx 
     ON incident_signatures 
     USING GIN (symptoms);
@@ -327,6 +343,15 @@ CREATE INDEX IF NOT EXISTS triage_results_created_at_idx
 CREATE INDEX IF NOT EXISTS triage_results_completed_at_idx 
     ON triage_results(completed_at) 
     WHERE completed_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS triage_results_assignment_group_idx 
+    ON triage_results(assignment_group) 
+    WHERE assignment_group IS NOT NULL;
+CREATE INDEX IF NOT EXISTS triage_results_impact_idx 
+    ON triage_results(impact) 
+    WHERE impact IS NOT NULL;
+CREATE INDEX IF NOT EXISTS triage_results_urgency_idx 
+    ON triage_results(urgency) 
+    WHERE urgency IS NOT NULL;
 
 -- Indexes for resolution_outputs
 CREATE INDEX IF NOT EXISTS resolution_outputs_incident_id_idx 
@@ -385,6 +410,9 @@ BEGIN
     NEW.tsv := to_tsvector('english', 
         COALESCE(NEW.failure_type, '') || ' ' || 
         COALESCE(NEW.error_class, '') || ' ' || 
+        COALESCE(NEW.assignment_group, '') || ' ' ||
+        COALESCE(NEW.impact, '') || ' ' ||
+        COALESCE(NEW.urgency, '') || ' ' ||
         COALESCE(array_to_string(NEW.symptoms, ' '), '')
     );
     RETURN NEW;

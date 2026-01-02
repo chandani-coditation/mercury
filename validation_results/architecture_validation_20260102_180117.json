@@ -1,0 +1,409 @@
+{
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "architecture_violations": 0,
+  "expected_mismatches": 0,
+  "details": [
+    {
+      "incident_id": "INC6053761",
+      "title": "Volume is Critical: brprlgwc041.int.mgc.com-/apps/solr_data",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "STORAGE_FAILURE",
+        "error_class": "CAPACITY_EXCEEDED",
+        "matched_signatures": "\u2713 Matched 5 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: critical",
+        "confidence": "\u2713 High confidence: 1.00",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: NOC"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "STORAGE_FAILURE",
+          "error_class": "CAPACITY_EXCEEDED"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-716C8A22C65D",
+            "SIG-D83258417E4A",
+            "SIG-0C1741215011",
+            "SIG-7A90B566D335",
+            "SIG-FD795D31BAD2"
+          ],
+          "runbook_refs": [
+            "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+          ]
+        },
+        "severity": "critical",
+        "confidence": 1.0,
+        "policy": "PROPOSE",
+        "routing": "NOC"
+      }
+    },
+    {
+      "incident_id": "INC6053489",
+      "title": "SE Windows - Volume is Critical State brprwprtg101.int.mgc.c",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "STORAGE_FAILURE",
+        "error_class": "DISK_SPACE_CRITICAL",
+        "matched_signatures": "\u2713 Matched 3 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: high",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: SE Windows"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "STORAGE_FAILURE",
+          "error_class": "DISK_SPACE_CRITICAL"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-C1F0D6B2EE8B",
+            "SIG-1F945BD3A5E4",
+            "SIG-82175DB2C3FF"
+          ],
+          "runbook_refs": [
+            "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+          ]
+        },
+        "severity": "high",
+        "confidence": 0.9,
+        "policy": "PROPOSE",
+        "routing": "SE Windows"
+      }
+    },
+    {
+      "incident_id": "INC6053041",
+      "title": "SE Windows - Volume is Critical State BRPRWHYL313-C:\\ Label:",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "STORAGE_FAILURE",
+        "error_class": "DISK_SPACE_CRITICAL",
+        "matched_signatures": "\u2713 Matched 3 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: high",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: SE Windows"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "STORAGE_FAILURE",
+          "error_class": "DISK_SPACE_CRITICAL"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-C1F0D6B2EE8B",
+            "SIG-1F945BD3A5E4",
+            "SIG-82175DB2C3FF"
+          ],
+          "runbook_refs": [
+            "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+          ]
+        },
+        "severity": "high",
+        "confidence": 0.9,
+        "policy": "PROPOSE",
+        "routing": "SE Windows"
+      }
+    },
+    {
+      "incident_id": "INC6052827",
+      "title": "Volume is Critical: brprlmgt021.int.mgc.com-/tmp",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "STORAGE_FAILURE",
+        "error_class": "CAPACITY_EXCEEDED",
+        "matched_signatures": "\u2713 Matched 5 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: critical",
+        "confidence": "\u2713 High confidence: 1.00",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: NOC"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "STORAGE_FAILURE",
+          "error_class": "CAPACITY_EXCEEDED"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-9E7AECC4D857",
+            "SIG-716C8A22C65D",
+            "SIG-60EC86BD256A",
+            "SIG-CF6F8D13107D",
+            "SIG-2E755FC38069"
+          ],
+          "runbook_refs": [
+            "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+          ]
+        },
+        "severity": "critical",
+        "confidence": 1.0,
+        "policy": "PROPOSE",
+        "routing": "NOC"
+      }
+    },
+    {
+      "incident_id": "INC6052750",
+      "title": "SE Windows - Volume is Critical State BRPRWHYL319-C:\\ Label:",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "STORAGE_FAILURE",
+        "error_class": "DISK_SPACE_CRITICAL",
+        "matched_signatures": "\u2713 Matched 3 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: high",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: SE Windows"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "STORAGE_FAILURE",
+          "error_class": "DISK_SPACE_CRITICAL"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-C1F0D6B2EE8B",
+            "SIG-1F945BD3A5E4",
+            "SIG-82175DB2C3FF"
+          ],
+          "runbook_refs": [
+            "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+          ]
+        },
+        "severity": "high",
+        "confidence": 0.9,
+        "policy": "PROPOSE",
+        "routing": "SE Windows"
+      }
+    },
+    {
+      "incident_id": "INC6053814",
+      "title": "SentryOne Monitoring/Alert",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "SQL_AGENT_JOB_FAILURE",
+        "error_class": "STEP_EXECUTION_ERROR",
+        "matched_signatures": "\u2713 Matched 5 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: high",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: SE DBA SQL"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "SQL_AGENT_JOB_FAILURE",
+          "error_class": "STEP_EXECUTION_ERROR"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-5C2D39831C24",
+            "SIG-581F174E54FF",
+            "SIG-BD7BB023422D",
+            "SIG-1B117D039A13",
+            "SIG-64CD365A1707"
+          ],
+          "runbook_refs": [
+            "6bf4a099-a2cb-45e8-9d3b-c1c3952f350f"
+          ]
+        },
+        "severity": "high",
+        "confidence": 0.9,
+        "policy": "PROPOSE",
+        "routing": "SE DBA SQL"
+      }
+    },
+    {
+      "incident_id": "INC6053776",
+      "title": "SentryOne Monitoring/Alert",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "SQL_AGENT_JOB_FAILURE",
+        "error_class": "STEP_EXECUTION_ERROR",
+        "matched_signatures": "\u2713 Matched 3 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: high",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: SE DBA SQL"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "SQL_AGENT_JOB_FAILURE",
+          "error_class": "STEP_EXECUTION_ERROR"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-5CDAB1B01CDD",
+            "SIG-0582A22BE0B7",
+            "SIG-0341560D4449"
+          ],
+          "runbook_refs": [
+            "6bf4a099-a2cb-45e8-9d3b-c1c3952f350f"
+          ]
+        },
+        "severity": "high",
+        "confidence": 0.9,
+        "policy": "PROPOSE",
+        "routing": "SE DBA SQL"
+      }
+    },
+    {
+      "incident_id": "INC6053768",
+      "title": "SentryOne Monitoring/Alert",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "SQL_AGENT_JOB_FAILURE",
+        "error_class": "STEP_EXECUTION_ERROR",
+        "matched_signatures": "\u2713 Matched 3 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: high",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: PROPOSE",
+        "routing": "\u2713 Routing: SE DBA SQL"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "SQL_AGENT_JOB_FAILURE",
+          "error_class": "STEP_EXECUTION_ERROR"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-0582A22BE0B7",
+            "SIG-5CDAB1B01CDD",
+            "SIG-0341560D4449"
+          ],
+          "runbook_refs": [
+            "6bf4a099-a2cb-45e8-9d3b-c1c3952f350f"
+          ]
+        },
+        "severity": "high",
+        "confidence": 0.9,
+        "policy": "PROPOSE",
+        "routing": "SE DBA SQL"
+      }
+    },
+    {
+      "incident_id": "INC6053168",
+      "title": "SentryOne Monitoring/Alert",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "SQL_AGENT_JOB_FAILURE",
+        "error_class": "STEP_EXECUTION_ERROR",
+        "matched_signatures": "\u2713 Matched 5 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: medium",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: REVIEW",
+        "routing": "\u2713 Routing: SE DBA SQL"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "SQL_AGENT_JOB_FAILURE",
+          "error_class": "STEP_EXECUTION_ERROR"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-53B71F09283D",
+            "SIG-C8EFC628A3B5",
+            "SIG-C7F64C03B8C0",
+            "SIG-6EAFFFD1259F",
+            "SIG-ABC15B4F6DCD"
+          ],
+          "runbook_refs": [
+            "6bf4a099-a2cb-45e8-9d3b-c1c3952f350f"
+          ]
+        },
+        "severity": "medium",
+        "confidence": 0.9,
+        "policy": "REVIEW",
+        "routing": "SE DBA SQL"
+      }
+    },
+    {
+      "incident_id": "INC6052856",
+      "title": "SentryOne Monitoring/Alert",
+      "passed": true,
+      "architecture_compliant": true,
+      "expected_match": true,
+      "errors": [],
+      "warnings": [],
+      "evidence": {
+        "failure_type": "SQL_AGENT_JOB_FAILURE",
+        "error_class": "STEP_EXECUTION_ERROR",
+        "matched_signatures": "\u2713 Matched 5 signature(s)",
+        "runbook_refs": "\u2713 Matched 1 runbook(s)",
+        "severity": "\u2713 Severity: medium",
+        "confidence": "\u2713 High confidence: 0.90",
+        "policy": "\u2713 Policy: REVIEW",
+        "routing": "\u2713 Routing: SE DBA SQL"
+      },
+      "triage_output": {
+        "incident_signature": {
+          "failure_type": "SQL_AGENT_JOB_FAILURE",
+          "error_class": "STEP_EXECUTION_ERROR"
+        },
+        "matched_evidence": {
+          "incident_signatures": [
+            "SIG-53B71F09283D",
+            "SIG-C8EFC628A3B5",
+            "SIG-C7F64C03B8C0",
+            "SIG-6EAFFFD1259F",
+            "SIG-ABC15B4F6DCD"
+          ],
+          "runbook_refs": [
+            "6bf4a099-a2cb-45e8-9d3b-c1c3952f350f"
+          ]
+        },
+        "severity": "medium",
+        "confidence": 0.9,
+        "policy": "REVIEW",
+        "routing": "SE DBA SQL"
+      }
+    }
+  ]
+}

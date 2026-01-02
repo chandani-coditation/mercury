@@ -1,0 +1,36 @@
+rule_id,rule_type,priority,failure_type,pattern_type,pattern,value,context_field,notes
+EC-STORAGE-001,error_class,1,STORAGE_FAILURE,regex,percent used:\s*100|free space:\s*0,DISK_SPACE_EXHAUSTED,description,100% disk usage
+EC-STORAGE-002,error_class,2,STORAGE_FAILURE,regex,percent used:\s*9[0-9]|free space:,DISK_SPACE_CRITICAL,description,90%+ disk usage
+EC-STORAGE-003,error_class,3,STORAGE_FAILURE,keyword,volume is critical|critical state,CAPACITY_EXCEEDED,title|description,Critical volume state
+EC-STORAGE-004,error_class,4,STORAGE_FAILURE,fallback,,STORAGE_CAPACITY_ISSUE,,Default for storage
+EC-SQL-001,error_class,1,SQL_AGENT_JOB_FAILURE,keyword,unable to open|cannot open,FILE_ACCESS_ERROR,description,File access issues
+EC-SQL-002,error_class,2,SQL_AGENT_JOB_FAILURE,keyword,the step failed|step failed,STEP_EXECUTION_ERROR,description,Step execution failures
+EC-SQL-003,error_class,3,SQL_AGENT_JOB_FAILURE,keyword,job failed|job execution,JOB_EXECUTION_ERROR,description,Job execution failures
+EC-SQL-004,error_class,4,SQL_AGENT_JOB_FAILURE,keyword,database.*does not exist|database.*not found,DATABASE_NOT_FOUND,description,Database missing
+EC-SQL-005,error_class,5,SQL_AGENT_JOB_FAILURE,keyword,no global profile|profile is not configured,CONFIGURATION_ERROR,description,Config issues
+EC-SQL-006,error_class,6,SQL_AGENT_JOB_FAILURE,keyword,failed to initialize|initialization error,LIBRARY_INITIALIZATION_ERROR,description,Init failures
+EC-SQL-007,error_class,7,SQL_AGENT_JOB_FAILURE,regex,\[sqlstate\s+\d+\]|\(error\s+\d+\),SQL_ERROR,description,SQL error codes
+EC-SQL-008,error_class,8,SQL_AGENT_JOB_FAILURE,keyword,connection.*failed|connection.*refused,DATABASE_CONNECTION_FAILED,description,Connection issues
+EC-SQL-009,error_class,9,SQL_AGENT_JOB_FAILURE,fallback,,SQL_AGENT_ERROR,,Default for SQL Agent
+EC-DB-001,error_class,1,DATABASE_FAILURE,keyword,connection.*failed|connection.*refused,DATABASE_CONNECTION_FAILED,description,DB connection issues
+EC-DB-002,error_class,2,DATABASE_FAILURE,keyword,database.*does not exist|database.*not found,DATABASE_NOT_FOUND,description,DB missing
+EC-DB-003,error_class,3,DATABASE_FAILURE,keyword,timeout,DATABASE_TIMEOUT,description,DB timeout
+EC-DB-004,error_class,4,DATABASE_FAILURE,fallback,,DATABASE_ERROR,,Default for database
+EC-CONN-001,error_class,1,CONNECTION_FAILURE,keyword,timeout,CONNECTION_TIMEOUT,description,Connection timeout
+EC-CONN-002,error_class,2,CONNECTION_FAILURE,keyword,refused,CONNECTION_REFUSED,description,Connection refused
+EC-CONN-003,error_class,3,CONNECTION_FAILURE,fallback,,CONNECTION_FAILED,,Default for connection
+EC-AUTH-001,error_class,1,AUTHENTICATION_FAILURE,keyword,service account.*disabled,SERVICE_ACCOUNT_DISABLED,description,Service account disabled
+EC-AUTH-002,error_class,2,AUTHENTICATION_FAILURE,keyword,permission|access denied,PERMISSION_DENIED,description,Permission issues
+EC-AUTH-003,error_class,3,AUTHENTICATION_FAILURE,fallback,,AUTHENTICATION_ERROR,,Default for auth
+EC-PERF-001,error_class,1,PERFORMANCE_FAILURE,keyword,cpu,CPU_OVERLOAD,description,CPU issues
+EC-PERF-002,error_class,2,PERFORMANCE_FAILURE,keyword,memory|ram,MEMORY_EXHAUSTED,description,Memory issues
+EC-PERF-003,error_class,3,PERFORMANCE_FAILURE,fallback,,PERFORMANCE_DEGRADATION,,Default for performance
+EC-GENERIC-001,error_class,10,,keyword,service account.*disabled,SERVICE_ACCOUNT_DISABLED,description,Generic service account
+EC-GENERIC-002,error_class,11,,keyword,permission|access denied,PERMISSION_DENIED,description,Generic permission
+EC-GENERIC-003,error_class,12,,keyword,timeout,TIMEOUT_ERROR,description,Generic timeout
+EC-GENERIC-004,error_class,13,,keyword,connection.*failed|connection.*refused,CONNECTION_FAILED,description,Generic connection
+EC-GENERIC-005,error_class,14,,keyword,authentication,AUTHENTICATION_ERROR,description,Generic auth
+EC-GENERIC-006,error_class,15,,keyword,unable to open|cannot open,FILE_ACCESS_ERROR,description,Generic file access
+EC-GENERIC-007,error_class,16,,keyword,step failed|job failed,EXECUTION_ERROR,description,Generic execution
+EC-GENERIC-008,error_class,17,,fallback,,UNKNOWN_ERROR,,Default fallback
+

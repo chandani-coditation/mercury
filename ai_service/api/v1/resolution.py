@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from ai_service.models import Alert
-from ai_service.agents import resolution_copilot_agent
+from ai_service.agents import resolution_copilot_agent, resolution_agent
 from ai_service.agents.resolution_copilot_state import resolution_agent_state
 from ai_service.core import (
     get_logger,
@@ -12,6 +12,7 @@ from ai_service.core import (
     IncidentNotFoundError,
     ApprovalRequiredError,
 )
+from ai_service.repositories import IncidentRepository
 from ai_service.api.error_utils import format_user_friendly_error
 
 logger = get_logger(__name__)
@@ -88,8 +89,36 @@ async def resolution(
                 use_state_bus=True,
             )
         else:
-            # Use synchronous agent (backward compatible)
-            result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
+            # Use new architecture-compliant resolution_agent
+            # It requires triage_output, so fetch incident first
+            if incident_id:
+                repository = IncidentRepository()
+                try:
+                    incident = repository.get_by_id(incident_id)
+                    triage_output = incident.get("triage_output")
+                    if not triage_output:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Incident {incident_id} has no triage output. Please triage the alert first."
+                        )
+                    # Call new resolution_agent with triage_output
+                    resolution_result = resolution_agent(triage_output)
+                    # Format response to match expected structure
+                    result = {
+                        "incident_id": incident_id,
+                        "resolution": resolution_result,
+                        "policy_band": incident.get("policy_band"),
+                        "policy_decision": incident.get("policy_decision"),
+                        "evidence": {
+                            "retrieval_method": "resolution_retrieval",
+                            "runbook_steps": len(resolution_result.get("recommendations", [])),
+                        }
+                    }
+                except IncidentNotFoundError:
+                    raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
+            else:
+                # No incident_id - use old copilot agent (backward compatibility)
+                result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
 
         logger.info(
             f"Resolution completed: incident_id={result['incident_id']}, "

@@ -1,0 +1,16 @@
+{
+  "total": 2,
+  "passed": 0,
+  "failed": 2,
+  "file_results": [
+    {
+      "file": "tickets_data/updated high disk filtered - Sheet1.csv",
+      "results": {
+        "total": 2,
+        "passed": 0,
+        "failed": 2,
+        "details": []
+      }
+    }
+  ]
+}

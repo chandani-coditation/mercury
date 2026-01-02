@@ -25,10 +25,18 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
   console.log("ResolutionView - Received data:", data);
   
   const resolution = data.resolution || data;
-  const steps = resolution.resolution_steps || resolution.steps || data.resolution_steps || [];
-  const riskLevel = resolution.risk_level || "unknown";
+  
+  // New structure: recommendations array
+  const recommendations = resolution.recommendations || [];
+  
+  // Legacy structure: steps array (for backward compatibility)
+  const steps = recommendations.length > 0 
+    ? recommendations.map((rec: any) => rec.action || rec.step || "")
+    : (resolution.resolution_steps || resolution.steps || data.resolution_steps || []);
+  
+  const riskLevel = resolution.risk_level || data.risk_level || "unknown";
   const estimatedTime = resolution.estimated_time_minutes || resolution.estimated_duration;
-  const confidence = resolution.confidence;
+  const overallConfidence = resolution.overall_confidence || resolution.confidence;
   const reasoning = resolution.reasoning;
   const rollbackPlan = resolution.rollback_plan;
   const commands = resolution.commands_by_step || {};
@@ -106,11 +114,11 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
             </div>
           )}
           
-          {confidence && (
+          {overallConfidence && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/20">
               <Brain className="w-4 h-4 text-success" />
               <span className="text-sm">
-                <span className="font-semibold text-success">{Math.round(confidence * 100)}%</span>
+                <span className="font-semibold text-success">{Math.round(overallConfidence * 100)}%</span>
                 <span className="text-muted-foreground ml-1">Confidence</span>
               </span>
             </div>
@@ -131,15 +139,94 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
         </Card>
       )}
 
-      {/* Resolution Steps */}
+      {/* Resolution Recommendations */}
       <Card className="p-6 glass-card glow-border">
         <div className="space-y-4">
           <h3 className="font-semibold text-foreground flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-success" />
-            Resolution Steps
+            Resolution Recommendations
           </h3>
           <div className="space-y-3">
-            {steps && steps.length > 0 ? (
+            {recommendations && recommendations.length > 0 ? (
+              recommendations.map((rec: any, index: number) => {
+              const stepAction = rec.action || "";
+              const stepCondition = rec.condition || "";
+              const stepExpectedOutcome = rec.expected_outcome || "";
+              const stepRollback = rec.rollback || "";
+              const stepRiskLevel = rec.risk_level || "medium";
+              const stepConfidence = rec.confidence || 0;
+              const stepProvenance = rec.provenance || {};
+              const stepCommands = commands[index] || commands[index.toString()] || [];
+              const hasCommands = stepCommands && stepCommands.length > 0;
+              
+              return (
+                <div key={index} className="bg-background/50 border border-border/30 rounded-lg p-4 hover:border-primary/30 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
+                      {index + 1}
+                    </span>
+                    <div className="flex-1 space-y-2">
+                      {stepCondition && (
+                        <div>
+                          <span className="text-xs font-semibold text-muted-foreground">Condition: </span>
+                          <span className="text-sm text-foreground">{stepCondition}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-xs font-semibold text-muted-foreground">Action: </span>
+                        <p className="text-sm text-foreground leading-relaxed">{stepAction}</p>
+                      </div>
+                      {stepExpectedOutcome && (
+                        <div>
+                          <span className="text-xs font-semibold text-muted-foreground">Expected Outcome: </span>
+                          <span className="text-sm text-foreground">{stepExpectedOutcome}</span>
+                        </div>
+                      )}
+                      {stepRollback && (
+                        <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded">
+                          <span className="text-xs font-semibold text-warning">Rollback: </span>
+                          <span className="text-xs text-foreground">{stepRollback}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          stepRiskLevel === "low" ? "bg-success/20 text-success" :
+                          stepRiskLevel === "medium" ? "bg-warning/20 text-warning" :
+                          "bg-destructive/20 text-destructive"
+                        }`}>
+                          {stepRiskLevel.toUpperCase()} RISK
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Confidence: {Math.round(stepConfidence * 100)}%
+                        </span>
+                        {stepProvenance.runbook_id && (
+                          <span className="text-xs text-muted-foreground font-mono">
+                            Runbook: {stepProvenance.runbook_id.substring(0, 8)}...
+                          </span>
+                        )}
+                      </div>
+                      
+                      {hasCommands && (
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Terminal className="w-3 h-3" />
+                            <span>Commands:</span>
+                          </div>
+                          {stepCommands.map((cmd: string, cmdIdx: number) => (
+                            <pre key={cmdIdx} className="text-xs bg-black/20 border border-border/30 rounded p-2 overflow-x-auto">
+                              <code className="text-primary">{cmd}</code>
+                            </pre>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+            ) : steps && steps.length > 0 ? (
+              // Fallback to legacy steps format
               steps.map((step: string, index: number) => {
               const stepCommands = commands[index] || commands[index.toString()] || [];
               const hasCommands = stepCommands && stepCommands.length > 0;
@@ -174,7 +261,7 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No resolution steps available</p>
+                <p>No resolution recommendations available</p>
                 <p className="text-xs mt-1">Resolution data may be incomplete</p>
               </div>
             )}

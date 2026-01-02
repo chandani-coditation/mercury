@@ -91,12 +91,51 @@ const Index = () => {
       console.log("Response:", JSON.stringify(data, null, 2));
       
       setIncidentId(data.incident_id);
-      setTriageData(data.triage);
+      
+      // Extract triage data with new fields
+      const triage = data.triage || {};
+      
+      // Derive summary and likely_cause from alert if not in triage output
+      // Summary: Use alert description (first 200 chars) if no summary in triage
+      const summary = triage.summary || alert.description?.substring(0, 200) || "";
+      
+      // Likely cause: Try to infer from failure_type/error_class if available
+      let likely_cause = triage.likely_cause;
+      if (!likely_cause && triage.incident_signature) {
+        const failureType = triage.incident_signature.failure_type || "";
+        const errorClass = triage.incident_signature.error_class || "";
+        if (failureType || errorClass) {
+          likely_cause = `${failureType}${errorClass ? ` - ${errorClass}` : ""}`;
+        }
+      }
+      if (!likely_cause) {
+        likely_cause = "Analysis based on alert description and historical patterns.";
+      }
+      
+      // Recommended actions: Can be derived from matched runbooks or left empty
+      const recommended_actions = triage.recommended_actions || [];
+      
+      setTriageData({
+        ...triage,
+        severity: triage.severity || "medium",
+        confidence: triage.confidence || 0,
+        routing: triage.routing || null,
+        impact: triage.impact || null,
+        urgency: triage.urgency || null,
+        affected_services: triage.affected_services || alert.affected_services || [],
+        incident_signature: triage.incident_signature || {},
+        matched_evidence: triage.matched_evidence || {},
+        summary: summary,
+        likely_cause: likely_cause,
+        recommended_actions: recommended_actions,
+        category: triage.category || alert.labels?.category || alert.category || "other",
+      });
+      
       setPolicyData({
         policy_band: data.policy_band,
         policy_decision: data.policy_decision
       });
-      setRetrievalData(data.evidence_chunks || {
+      setRetrievalData(data.evidence || data.evidence_chunks || {
         chunks_used: 0,
         chunk_ids: [],
         chunk_sources: [],
@@ -164,19 +203,25 @@ const Index = () => {
       console.log("✅ Resolution generated successfully");
       console.log("Resolution response:", JSON.stringify(data, null, 2));
       
-      // Extract resolution steps from the response
-      // The API returns: { resolution: { steps: [...], ... }, ... }
+      // Extract resolution from the response
+      // New structure: { resolution: { recommendations: [...], overall_confidence, risk_level, reasoning }, ... }
+      // Legacy structure: { resolution: { steps: [...], ... }, ... }
       const resolution = data.resolution || data;
-      const steps = resolution.resolution_steps || resolution.steps || [];
+      const recommendations = resolution.recommendations || [];
+      const steps = recommendations.length > 0 
+        ? recommendations.map((rec: any) => rec.action || rec.step || "")
+        : (resolution.resolution_steps || resolution.steps || []);
       
       // Store all resolution data including rollback_plan if present
       // Preserve the original structure to handle both string and object rollback_plan
       setResolutionData({
         ...resolution, // Spread first to get all fields
-        resolution_steps: steps, // Ensure steps is always set
+        recommendations: recommendations, // New structure
+        resolution_steps: steps, // Ensure steps is always set for compatibility
         steps: steps, // Also set as 'steps' for compatibility
         // Keep rollback_plan as-is (can be string or object)
-        risk_level: resolution.risk_level || null,
+        risk_level: resolution.risk_level || data.risk_level || null,
+        overall_confidence: resolution.overall_confidence || resolution.confidence || null,
         estimated_time_minutes: resolution.estimated_time_minutes || resolution.estimated_duration || null,
         estimated_duration: resolution.estimated_duration || resolution.estimated_time_minutes || null,
       });
@@ -263,10 +308,33 @@ const Index = () => {
 
       // Extract data from incident
       setIncidentId(incident.incident_id || incident.id);
-      setAlertData(incident.alert || incident.raw_alert || {});
+      const rawAlert = incident.alert || incident.raw_alert || {};
+      setAlertData(rawAlert);
       
       // Set triage data (always set, even if empty, to avoid rendering issues)
-      setTriageData(incident.triage_output || {});
+      const triageOutput = incident.triage_output || {};
+      
+      // Derive summary and likely_cause if missing
+      const summary = triageOutput.summary || rawAlert.description?.substring(0, 200) || "";
+      let likely_cause = triageOutput.likely_cause;
+      if (!likely_cause && triageOutput.incident_signature) {
+        const failureType = triageOutput.incident_signature.failure_type || "";
+        const errorClass = triageOutput.incident_signature.error_class || "";
+        if (failureType || errorClass) {
+          likely_cause = `${failureType}${errorClass ? ` - ${errorClass}` : ""}`;
+        }
+      }
+      if (!likely_cause) {
+        likely_cause = "Analysis based on alert description and historical patterns.";
+      }
+      
+      setTriageData({
+        ...triageOutput,
+        summary: summary,
+        likely_cause: likely_cause,
+        recommended_actions: triageOutput.recommended_actions || [],
+        category: triageOutput.category || rawAlert.labels?.category || rawAlert.category || "other",
+      });
 
       // Set policy data (always set, even if empty)
       setPolicyData({

@@ -49,6 +49,7 @@ class IngestIncident(BaseModel):
     # For unstructured data
     raw_content: Optional[str] = None
     metadata: Optional[Dict] = None
+    tags: Optional[Dict] = None  # Tags for additional metadata (assignment_group, impact, urgency, etc.)
 
 
 class IngestRunbook(BaseModel):
@@ -104,3 +105,7 @@ class IncidentSignature(BaseModel):
     resolution_refs: Optional[List[str]] = None  # List of step_ids (e.g., ["RB123-S3"])
     service: Optional[str] = None
     component: Optional[str] = None
+    assignment_group: Optional[str] = None  # Team/group that handles this type of incident (e.g., "SE DBA SQL", "NOC")
+    impact: Optional[str] = None  # Typical impact value from historical incidents (e.g., "3 - Low", "1 - High")
+    urgency: Optional[str] = None  # Typical urgency value from historical incidents (e.g., "3 - Low", "1 - High")
+    close_notes: Optional[str] = None  # Resolution notes/close notes from historical incidents (for resolution agent)

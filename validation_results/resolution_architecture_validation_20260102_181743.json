@@ -1,0 +1,34 @@
+{
+  "total": 2,
+  "passed": 0,
+  "failed": 2,
+  "architecture_violations": 2,
+  "details": [
+    {
+      "incident_id": "INC6053761",
+      "title": "Volume is Critical: brprlgwc041.int.mgc.com-/apps/solr_data",
+      "passed": false,
+      "architecture_compliant": false,
+      "errors": [
+        "Error calling agents: HTTPConnectionPool(host='localhost', port=8001): Read timed out. (read timeout=60)"
+      ],
+      "warnings": [],
+      "evidence": {},
+      "triage_output": null,
+      "resolution_output": null
+    },
+    {
+      "incident_id": "INC6053489",
+      "title": "SE Windows - Volume is Critical State brprwprtg101.int.mgc.c",
+      "passed": false,
+      "architecture_compliant": false,
+      "errors": [
+        "Error calling agents: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+      ],
+      "warnings": [],
+      "evidence": {},
+      "triage_output": null,
+      "resolution_output": null
+    }
+  ]
+}

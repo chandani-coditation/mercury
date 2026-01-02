@@ -43,10 +43,10 @@ def rank_steps(
     
     for step in steps:
         step_id = step.get("step_id", "")
-        action = step.get("action", "").lower()
-        condition = step.get("condition", "").lower()
-        risk_level = step.get("risk_level", "medium").lower()
-        content = step.get("content", "").lower()
+        action = (step.get("action") or "").lower() if step.get("action") else ""
+        condition = (step.get("condition") or "").lower() if step.get("condition") else ""
+        risk_level = (step.get("risk_level") or "medium").lower() if step.get("risk_level") else "medium"
+        content = (step.get("content") or "").lower() if step.get("content") else ""
         
         # Initialize scores
         relevance_score = 0.0
@@ -139,9 +139,9 @@ def rank_steps(
     # Sort by combined score (descending)
     ranked_steps = sorted(scored_steps, key=lambda x: x["combined_score"], reverse=True)
     
+    top_scores = [f"{s['combined_score']:.3f}" for s in ranked_steps[:3]]
     logger.debug(
-        f"Ranked {len(ranked_steps)} steps. Top 3 scores: "
-        f"{[s['combined_score']:.3f for s in ranked_steps[:3]]}"
+        f"Ranked {len(ranked_steps)} steps. Top 3 scores: {top_scores}"
     )
     
     return ranked_steps

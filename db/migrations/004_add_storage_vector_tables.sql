@@ -117,6 +117,9 @@ CREATE TABLE IF NOT EXISTS incident_signatures (
     affected_service TEXT,
     service TEXT,
     component TEXT,
+    assignment_group TEXT, -- Team/group that handles this type of incident (e.g., "SE DBA SQL", "NOC")
+    impact TEXT, -- Typical impact value from historical incidents (e.g., "3 - Low", "1 - High")
+    urgency TEXT, -- Typical urgency value from historical incidents (e.g., "3 - Low", "1 - High")
     
     -- Resolution references (provenance)
     resolution_refs TEXT[],
@@ -144,6 +147,25 @@ CREATE TABLE IF NOT EXISTS incident_signatures (
     CONSTRAINT incident_signatures_symptoms_not_empty 
         CHECK (array_length(symptoms, 1) > 0)
 );
+
+-- Add assignment_group, impact, urgency columns if table already exists without them
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'incident_signatures') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name = 'incident_signatures' AND column_name = 'assignment_group') THEN
+            ALTER TABLE incident_signatures ADD COLUMN assignment_group TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name = 'incident_signatures' AND column_name = 'impact') THEN
+            ALTER TABLE incident_signatures ADD COLUMN impact TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name = 'incident_signatures' AND column_name = 'urgency') THEN
+            ALTER TABLE incident_signatures ADD COLUMN urgency TEXT;
+        END IF;
+    END IF;
+END $$;
 
 -- Indexes for incident_signatures
 CREATE INDEX IF NOT EXISTS incident_signatures_embedding_idx 
@@ -178,6 +200,18 @@ CREATE INDEX IF NOT EXISTS incident_signatures_service_idx
 CREATE INDEX IF NOT EXISTS incident_signatures_component_idx 
     ON incident_signatures(component) 
     WHERE component IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS incident_signatures_assignment_group_idx 
+    ON incident_signatures(assignment_group) 
+    WHERE assignment_group IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS incident_signatures_impact_idx 
+    ON incident_signatures(impact) 
+    WHERE impact IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS incident_signatures_urgency_idx 
+    ON incident_signatures(urgency) 
+    WHERE urgency IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS incident_signatures_symptoms_idx 
     ON incident_signatures 
@@ -215,6 +249,9 @@ CREATE TABLE IF NOT EXISTS triage_results (
     
     -- Policy decision (derived from classification)
     policy_band TEXT NOT NULL,
+    assignment_group TEXT, -- Team/group assigned to handle this incident (e.g., "SE DBA SQL", "NOC")
+    impact TEXT, -- Original impact value from alert (e.g., "3 - Low", "1 - High")
+    urgency TEXT, -- Original urgency value from alert (e.g., "3 - Low", "1 - High")
     
     -- Matched evidence (provenance)
     matched_signature_ids TEXT[],
@@ -236,6 +273,25 @@ CREATE TABLE IF NOT EXISTS triage_results (
     CONSTRAINT triage_results_policy_band_check 
         CHECK (policy_band IN ('AUTO', 'PROPOSE', 'REVIEW'))
 );
+
+-- Add assignment_group, impact, urgency columns if table already exists without them
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'triage_results') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name = 'triage_results' AND column_name = 'assignment_group') THEN
+            ALTER TABLE triage_results ADD COLUMN assignment_group TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name = 'triage_results' AND column_name = 'impact') THEN
+            ALTER TABLE triage_results ADD COLUMN impact TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name = 'triage_results' AND column_name = 'urgency') THEN
+            ALTER TABLE triage_results ADD COLUMN urgency TEXT;
+        END IF;
+    END IF;
+END $$;
 
 -- Indexes for triage_results
 CREATE INDEX IF NOT EXISTS triage_results_incident_id_idx 
@@ -266,6 +322,16 @@ CREATE INDEX IF NOT EXISTS triage_results_created_at_idx
 CREATE INDEX IF NOT EXISTS triage_results_completed_at_idx 
     ON triage_results(completed_at) 
     WHERE completed_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS triage_results_assignment_group_idx 
+    ON triage_results(assignment_group) 
+    WHERE assignment_group IS NOT NULL;
+CREATE INDEX IF NOT EXISTS triage_results_impact_idx 
+    ON triage_results(impact) 
+    WHERE impact IS NOT NULL;
+CREATE INDEX IF NOT EXISTS triage_results_urgency_idx 
+    ON triage_results(urgency) 
+    WHERE urgency IS NOT NULL;
 
 -- Foreign key constraint
 DO $$
@@ -459,6 +525,9 @@ BEGIN
     NEW.tsv := to_tsvector('english', 
         COALESCE(NEW.failure_type, '') || ' ' || 
         COALESCE(NEW.error_class, '') || ' ' || 
+        COALESCE(NEW.assignment_group, '') || ' ' ||
+        COALESCE(NEW.impact, '') || ' ' ||
+        COALESCE(NEW.urgency, '') || ' ' ||
         COALESCE(array_to_string(NEW.symptoms, ' '), '')
     );
     RETURN NEW;

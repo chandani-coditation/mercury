@@ -14,15 +14,16 @@ logger = get_logger(__name__)
 
 def retrieve_runbook_steps(runbook_ids: List[str]) -> List[Dict]:
     """
-    Retrieve runbook steps by runbook_id.
+    Retrieve runbook steps by runbook_id from runbook_steps table.
     
-    Per architecture: Each step is stored as an atomic chunk with metadata.
+    Per architecture: Resolution agent retrieves runbook steps using runbook_ids
+    from triage agent's matched_evidence.runbook_refs.
     
     Args:
-        runbook_ids: List of runbook_id values from triage output
+        runbook_ids: List of runbook_id values from triage output's matched_evidence
         
     Returns:
-        List of runbook step chunks with metadata
+        List of runbook step dictionaries with all step details
     """
     if not runbook_ids:
         return []
@@ -31,78 +32,157 @@ def retrieve_runbook_steps(runbook_ids: List[str]) -> List[Dict]:
     cur = conn.cursor()
     
     try:
-        # Build query to find chunks that are runbook steps
-        # Steps have metadata with runbook_id and step_id
+        # Query runbook_steps table directly (not chunks table)
         placeholders = ",".join(["%s"] * len(runbook_ids))
         
         query = f"""
         SELECT 
-            c.id as chunk_id,
-            c.document_id,
-            c.chunk_index,
-            c.content,
-            c.metadata,
-            d.title as doc_title,
-            d.doc_type,
-            d.service,
-            d.component
-        FROM chunks c
-        JOIN documents d ON c.document_id = d.id
-        WHERE d.doc_type = 'runbook'
-        AND c.metadata->>'runbook_id' IN ({placeholders})
-        AND c.metadata->>'step_id' IS NOT NULL
-        ORDER BY c.metadata->>'runbook_id', c.metadata->>'step_id'
+            id,
+            step_id,
+            runbook_id,
+            condition,
+            action,
+            expected_outcome,
+            rollback,
+            risk_level,
+            service,
+            component,
+            runbook_title,
+            runbook_document_id
+        FROM runbook_steps
+        WHERE runbook_id IN ({placeholders})
+        ORDER BY runbook_id, step_id
         """
         
-        cur.execute(query, runbook_ids)
+        # Execute with tuple of runbook_ids (psycopg requires tuple for IN clause)
+        cur.execute(query, tuple(runbook_ids))
         rows = cur.fetchall()
         
         steps = []
         for row in rows:
             if isinstance(row, dict):
-                metadata = row["metadata"] if isinstance(row["metadata"], dict) else {}
                 steps.append({
-                    "chunk_id": str(row["chunk_id"]),
-                    "document_id": str(row["document_id"]),
-                    "chunk_index": row["chunk_index"],
-                    "content": row["content"],
-                    "metadata": metadata,
-                    "doc_title": row["doc_title"],
-                    "doc_type": row["doc_type"],
-                    "service": row["service"],
-                    "component": row["component"],
-                    "step_id": metadata.get("step_id"),
-                    "runbook_id": metadata.get("runbook_id"),
-                    "condition": metadata.get("condition"),
-                    "action": metadata.get("action"),
-                    "expected_outcome": metadata.get("expected_outcome"),
-                    "rollback": metadata.get("rollback"),
-                    "risk_level": metadata.get("risk_level"),
+                    "step_id": row["step_id"],
+                    "runbook_id": row["runbook_id"],
+                    "condition": row["condition"],
+                    "action": row["action"],
+                    "expected_outcome": row.get("expected_outcome"),
+                    "rollback": row.get("rollback"),
+                    "risk_level": row.get("risk_level", "medium"),
+                    "service": row.get("service"),
+                    "component": row.get("component"),
+                    "runbook_title": row.get("runbook_title"),
+                    "runbook_document_id": str(row["runbook_document_id"]) if row.get("runbook_document_id") else None,
+                    # For compatibility with existing code that expects chunk_id
+                    "chunk_id": str(row["id"]),
+                    "document_id": str(row["runbook_document_id"]) if row.get("runbook_document_id") else None,
                 })
             else:
                 # Handle tuple result
-                metadata = row[4] if isinstance(row[4], dict) else {}
                 steps.append({
+                    "step_id": row[1],
+                    "runbook_id": row[2],
+                    "condition": row[3],
+                    "action": row[4],
+                    "expected_outcome": row[5],
+                    "rollback": row[6],
+                    "risk_level": row[7] if row[7] else "medium",
+                    "service": row[8],
+                    "component": row[9],
+                    "runbook_title": row[10],
+                    "runbook_document_id": str(row[11]) if row[11] else None,
+                    # For compatibility
                     "chunk_id": str(row[0]),
-                    "document_id": str(row[1]),
-                    "chunk_index": row[2],
-                    "content": row[3],
-                    "metadata": metadata,
-                    "doc_title": row[5],
-                    "doc_type": row[6],
-                    "service": row[7],
-                    "component": row[8],
-                    "step_id": metadata.get("step_id"),
-                    "runbook_id": metadata.get("runbook_id"),
-                    "condition": metadata.get("condition"),
-                    "action": metadata.get("action"),
-                    "expected_outcome": metadata.get("expected_outcome"),
-                    "rollback": metadata.get("rollback"),
-                    "risk_level": metadata.get("risk_level"),
+                    "document_id": str(row[11]) if row[11] else None,
                 })
         
-        logger.debug(f"Retrieved {len(steps)} runbook steps for runbook_ids: {runbook_ids}")
+        logger.info(f"Retrieved {len(steps)} runbook steps for runbook_ids: {runbook_ids}")
         return steps
+        
+    finally:
+        cur.close()
+        conn.close()
+
+
+def retrieve_close_notes_from_signatures(
+    incident_signature_ids: List[str],
+    limit: int = 10
+) -> List[Dict]:
+    """
+    Retrieve close_notes from incident signatures.
+    
+    This retrieves resolution notes/close notes from historical incidents
+    that match the incident signatures. These notes provide valuable context
+    about how similar incidents were resolved.
+    
+    Args:
+        incident_signature_ids: List of incident_signature_id values from triage output
+        limit: Maximum number of close_notes to return
+        
+    Returns:
+        List of dictionaries with close_notes and metadata:
+        [
+            {
+                "incident_signature_id": "SIG-123",
+                "close_notes": "Resolution notes...",
+                "failure_type": "SQL_AGENT_JOB_FAILURE",
+                "error_class": "STEP_EXECUTION_ERROR",
+                "match_count": 5
+            }
+        ]
+    """
+    if not incident_signature_ids:
+        return []
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        placeholders = ",".join(["%s"] * len(incident_signature_ids))
+        
+        query = f"""
+        SELECT 
+            incident_signature_id,
+            close_notes,
+            failure_type,
+            error_class,
+            match_count
+        FROM incident_signatures
+        WHERE incident_signature_id IN ({placeholders})
+        AND close_notes IS NOT NULL
+        AND close_notes != ''
+        ORDER BY match_count DESC, last_seen_at DESC
+        LIMIT %s
+        """
+        
+        params = list(incident_signature_ids) + [limit]
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        
+        close_notes_list = []
+        for row in rows:
+            if isinstance(row, dict):
+                close_notes_list.append({
+                    "incident_signature_id": row["incident_signature_id"],
+                    "close_notes": row["close_notes"],
+                    "failure_type": row["failure_type"],
+                    "error_class": row["error_class"],
+                    "match_count": row["match_count"],
+                })
+            else:
+                close_notes_list.append({
+                    "incident_signature_id": row[0],
+                    "close_notes": row[1],
+                    "failure_type": row[2],
+                    "error_class": row[3],
+                    "match_count": row[4],
+                })
+        
+        logger.debug(
+            f"Retrieved {len(close_notes_list)} close_notes "
+            f"for signature_ids: {incident_signature_ids}"
+        )
+        return close_notes_list
         
     finally:
         cur.close()

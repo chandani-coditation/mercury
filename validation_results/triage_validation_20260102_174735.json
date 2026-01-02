@@ -1,0 +1,133 @@
+{
+  "total": 3,
+  "passed": 3,
+  "failed": 0,
+  "file_results": [
+    {
+      "file": "tickets_data/updated high disk filtered - Sheet1.csv",
+      "results": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0,
+        "details": [
+          {
+            "incident_id": "INC6053761",
+            "title": "Volume is Critical: brprlgwc041.int.mgc.com-/apps/",
+            "expected_assignment_group": "NOC",
+            "triage_output": {
+              "incident_signature": {
+                "failure_type": "STORAGE_FAILURE",
+                "error_class": "CAPACITY_EXCEEDED"
+              },
+              "matched_evidence": {
+                "incident_signatures": [
+                  "SIG-716C8A22C65D",
+                  "SIG-D83258417E4A",
+                  "SIG-0C1741215011",
+                  "SIG-7A90B566D335",
+                  "SIG-FD795D31BAD2"
+                ],
+                "runbook_refs": [
+                  "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+                ]
+              },
+              "severity": "critical",
+              "confidence": 1.0,
+              "policy": "PROPOSE",
+              "routing": "NOC"
+            },
+            "validation": {
+              "passed": true,
+              "errors": [],
+              "warnings": [],
+              "evidence": {
+                "routing": "\u2713 Correctly routed to 'NOC'",
+                "severity": "\u2713 Severity: critical",
+                "failure_type": "\u2713 Failure Type: STORAGE_FAILURE",
+                "error_class": "\u2713 Error Class: CAPACITY_EXCEEDED",
+                "confidence": "\u2713 High confidence: 1.00",
+                "matched_signatures": "\u2713 Matched 5 signature(s)"
+              }
+            }
+          },
+          {
+            "incident_id": "INC6053489",
+            "title": "SE Windows - Volume is Critical State brprwprtg101",
+            "expected_assignment_group": "SE Windows",
+            "triage_output": {
+              "incident_signature": {
+                "failure_type": "STORAGE_FAILURE",
+                "error_class": "DISK_SPACE_CRITICAL"
+              },
+              "matched_evidence": {
+                "incident_signatures": [
+                  "SIG-C1F0D6B2EE8B",
+                  "SIG-1F945BD3A5E4",
+                  "SIG-82175DB2C3FF"
+                ],
+                "runbook_refs": [
+                  "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+                ]
+              },
+              "severity": "high",
+              "confidence": 0.9,
+              "policy": "PROPOSE",
+              "routing": "SE Windows"
+            },
+            "validation": {
+              "passed": true,
+              "errors": [],
+              "warnings": [],
+              "evidence": {
+                "routing": "\u2713 Correctly routed to 'SE Windows'",
+                "severity": "\u2713 Severity: high",
+                "failure_type": "\u2713 Failure Type: STORAGE_FAILURE",
+                "error_class": "\u2713 Error Class: DISK_SPACE_CRITICAL",
+                "confidence": "\u2713 High confidence: 0.90",
+                "matched_signatures": "\u2713 Matched 3 signature(s)"
+              }
+            }
+          },
+          {
+            "incident_id": "INC6053041",
+            "title": "SE Windows - Volume is Critical State BRPRWHYL313-",
+            "expected_assignment_group": "SE Windows",
+            "triage_output": {
+              "incident_signature": {
+                "failure_type": "STORAGE_FAILURE",
+                "error_class": "DISK_SPACE_CRITICAL"
+              },
+              "matched_evidence": {
+                "incident_signatures": [
+                  "SIG-C1F0D6B2EE8B",
+                  "SIG-1F945BD3A5E4",
+                  "SIG-82175DB2C3FF"
+                ],
+                "runbook_refs": [
+                  "4be6e6d6-a5c5-42aa-8bbe-1a6222986f48"
+                ]
+              },
+              "severity": "high",
+              "confidence": 0.9,
+              "policy": "PROPOSE",
+              "routing": "SE Windows"
+            },
+            "validation": {
+              "passed": true,
+              "errors": [],
+              "warnings": [],
+              "evidence": {
+                "routing": "\u2713 Correctly routed to 'SE Windows'",
+                "severity": "\u2713 Severity: high",
+                "failure_type": "\u2713 Failure Type: STORAGE_FAILURE",
+                "error_class": "\u2713 Error Class: DISK_SPACE_CRITICAL",
+                "confidence": "\u2713 High confidence: 0.90",
+                "matched_signatures": "\u2713 Matched 3 signature(s)"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

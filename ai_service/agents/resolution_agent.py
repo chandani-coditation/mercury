@@ -18,6 +18,7 @@ from ai_service.core import IncidentNotFoundError
 from retrieval.resolution_retrieval import (
     retrieve_runbook_steps,
     retrieve_historical_resolutions,
+    retrieve_close_notes_from_signatures,
     get_step_success_stats,
 )
 from ai_service.ranking import rank_steps, assemble_recommendations
@@ -108,6 +109,14 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     
     logger.info(f"Retrieved {len(historical_resolutions)} historical resolutions")
     
+    # 3. Retrieve close_notes from matching incident signatures
+    close_notes_list = retrieve_close_notes_from_signatures(
+        incident_signature_ids,
+        limit=10
+    )
+    
+    logger.info(f"Retrieved {len(close_notes_list)} close_notes from incident signatures")
+    
     # Validate retrieval boundaries (guardrail: wrong retrieval)
     is_valid_retrieval, retrieval_errors = validate_resolution_retrieval_boundaries(
         retrieved_runbook_steps=runbook_steps,
@@ -160,6 +169,7 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         triage_output=triage_output,
         runbook_steps=runbook_steps,
         historical_resolutions=historical_resolutions,
+        close_notes_list=close_notes_list,
         ranked_recommendations=recommendations,
     )
     
@@ -246,6 +256,7 @@ def _call_llm_for_ranking(
     triage_output: Dict[str, Any],
     runbook_steps: List[Dict],
     historical_resolutions: List[Dict],
+    close_notes_list: List[Dict],
     ranked_recommendations: List[Dict],
 ) -> Dict[str, Any]:
     """
@@ -306,6 +317,20 @@ def _call_llm_for_ranking(
     
     historical_resolutions_text_str = "\n---\n\n".join(historical_resolutions_text) if historical_resolutions_text else "No historical resolutions found."
     
+    # Format close_notes for prompt
+    close_notes_text = []
+    for notes in close_notes_list[:5]:  # Top 5
+        notes_text = (
+            f"Incident Signature: {notes.get('incident_signature_id')}\n"
+            f"Failure Type: {notes.get('failure_type')}\n"
+            f"Error Class: {notes.get('error_class')}\n"
+            f"Close Notes (Resolution Details): {notes.get('close_notes', 'N/A')}\n"
+            f"Match Count: {notes.get('match_count', 0)}\n"
+        )
+        close_notes_text.append(notes_text)
+    
+    close_notes_text_str = "\n---\n\n".join(close_notes_text) if close_notes_text else "No close notes found from matching incident signatures."
+    
     # Build prompt
     incident_sig = triage_output.get("incident_signature", {})
     matched_evidence = triage_output.get("matched_evidence", {})
@@ -319,6 +344,7 @@ def _call_llm_for_ranking(
         confidence=triage_output.get("confidence", 0.5),
         runbook_steps_text=runbook_steps_text_str,
         historical_resolutions_text=historical_resolutions_text_str,
+        close_notes_text=close_notes_text_str,
     )
     
     # Build request parameters

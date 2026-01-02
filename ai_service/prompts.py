@@ -244,14 +244,20 @@ Retrieved Runbook Steps:
 Historical Resolutions:
 {historical_resolutions_text}
 
+Close Notes from Matching Incident Signatures (Resolution Details from Previous Incidents):
+{close_notes_text}
+
 Your task:
 1. Review the provided runbook steps (DO NOT invent new ones)
 2. Consider historical success rates and relevance to the incident signature
-3. Order the steps by:
+3. Use close_notes from matching incident signatures to understand how similar incidents were resolved
+4. Order the steps by:
    - Relevance to failure_type and error_class
    - Historical success (from historical_resolutions)
+   - Alignment with close_notes (if available)
    - Risk level (prefer lower risk first)
-4. Assemble ordered recommendations with provenance
+5. Assemble ordered recommendations with provenance
+6. In reasoning, cite close_notes when they provide valuable context about resolution approach
 
 Provide a JSON response with the following structure:
 {{

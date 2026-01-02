@@ -1,0 +1,12 @@
+rule_id,rule_type,priority,pattern_type,pattern,value,context_field,notes
+FT-001,failure_type,1,keyword,SQL Agent|sql agent|sentryone,SQL_AGENT_JOB_FAILURE,title|description,SQL Agent job failures
+FT-002,failure_type,2,keyword,database|db,DATABASE_FAILURE,title|description,Database failures (non-SQL Agent)
+FT-003,failure_type,3,keyword,volume is critical|disk|storage,STORAGE_FAILURE,title|description,Storage/Disk failures
+FT-004,failure_type,4,keyword,cpu|memory|performance,PERFORMANCE_FAILURE,title|description,Performance issues
+FT-005,failure_type,5,keyword,network|connection,CONNECTION_FAILURE,title|description,Network/Connection failures
+FT-006,failure_type,6,keyword,timeout,TIMEOUT_FAILURE,title|description,Timeout failures
+FT-007,failure_type,7,keyword,operating system|os|windows,OPERATING_SYSTEM_FAILURE,title|description,OS failures
+FT-008,failure_type,8,keyword,authentication|authorization,AUTHENTICATION_FAILURE,title|description,Auth failures
+FT-009,failure_type,9,exact_match,Monitoring/Alert,UNKNOWN_FAILURE,category,Monitoring alerts without specific failure
+FT-010,failure_type,10,fallback,,UNKNOWN_FAILURE,,Default fallback
+

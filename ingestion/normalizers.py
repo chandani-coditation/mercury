@@ -351,83 +351,21 @@ def extract_runbook_steps(
     return steps
 
 
-def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
+def _extract_service_component(
+    incident: IngestIncident, 
+    failure_type: str
+) -> Tuple[Optional[str], Optional[str]]:
     """
-    Convert incident to incident signature (pattern, not raw text).
+    Extract service and component deterministically from incident data.
     
-    Per architecture: Signatures represent patterns, not stories.
-    Contains: failure_type, error_class, symptoms, affected_service, resolution_refs
-    
-    Returns:
-        IncidentSignature object
+    Rules:
+    1. Service: From affected_services[0] if available, split on '-' if present
+    2. Component: Derived from failure_type and incident metadata, not keyword guessing
     """
-    # Generate signature ID
-    sig_id = f"SIG-{uuid.uuid4().hex[:8].upper()}"
-    if incident.incident_id:
-        # Use part of incident_id if available
-        sig_id = f"SIG-{incident.incident_id[:8].upper()}"
-    
-    # Extract failure type from title, description, or category
-    failure_type = incident.category or "UNKNOWN_FAILURE"
-    if "sql" in (incident.title + " " + (incident.description or "")).lower():
-        failure_type = "SQL_AGENT_JOB_FAILURE"
-    elif "database" in (incident.title + " " + (incident.description or "")).lower():
-        failure_type = "DATABASE_FAILURE"
-    elif "connection" in (incident.title + " " + (incident.description or "")).lower():
-        failure_type = "CONNECTION_FAILURE"
-    elif "timeout" in (incident.title + " " + (incident.description or "")).lower():
-        failure_type = "TIMEOUT_FAILURE"
-    elif "authentication" in (incident.title + " " + (incident.description or "")).lower():
-        failure_type = "AUTHENTICATION_FAILURE"
-    
-    # Extract error class from root_cause or description
-    error_class = "UNKNOWN_ERROR"
-    search_text = (incident.root_cause or "") + " " + (incident.description or "")
-    search_lower = search_text.lower()
-    
-    if "service account" in search_lower and "disabled" in search_lower:
-        error_class = "SERVICE_ACCOUNT_DISABLED"
-    elif "permission" in search_lower or "access denied" in search_lower:
-        error_class = "PERMISSION_DENIED"
-    elif "timeout" in search_lower:
-        error_class = "TIMEOUT_ERROR"
-    elif "connection" in search_lower and "failed" in search_lower:
-        error_class = "CONNECTION_FAILED"
-    elif "authentication" in search_lower:
-        error_class = "AUTHENTICATION_ERROR"
-    
-    # Extract symptoms from description and title
-    symptoms = []
-    symptom_text = (incident.title or "") + " " + (incident.description or "")
-    
-    # Common symptom patterns
-    symptom_patterns = [
-        r"(\w+\s+)?(failed|failure|error|timeout|disconnected)",
-        r"(\w+\s+)?(unable to|cannot|could not)",
-        r"(\w+\s+)?(authentication|authorization|permission)",
-    ]
-    
-    for pattern in symptom_patterns:
-        matches = re.finditer(pattern, symptom_text, re.IGNORECASE)
-        for match in matches:
-            symptom = match.group(0).strip()
-            if symptom and symptom not in symptoms:
-                symptoms.append(symptom.lower())
-    
-    # If no symptoms found, use key phrases from description
-    if not symptoms:
-        # Split description into phrases
-        phrases = re.split(r"[.!?]\s+", incident.description or "")
-        symptoms = [p.strip().lower()[:50] for p in phrases[:3] if p.strip()]
-    
-    # Extract affected service
-    affected_service = None
-    if incident.affected_services and len(incident.affected_services) > 0:
-        affected_service = incident.affected_services[0]
-    
-    # Extract service/component for signature
     service = None
     component = None
+    
+    # Extract service from affected_services
     if incident.affected_services and len(incident.affected_services) > 0:
         raw_service = incident.affected_services[0]
         if "-" in raw_service:
@@ -435,20 +373,97 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
         else:
             service = raw_service
     
-    search_text = f"{incident.title} {incident.description or ''} {incident.category or ''}".lower()
-    if "database" in search_text or "sql" in search_text or "db" in search_text:
+    # Extract component deterministically based on failure_type and metadata
+    # This is rule-based, not keyword-based
+    if failure_type == "SQL_AGENT_JOB_FAILURE" or failure_type == "DATABASE_FAILURE":
         component = "Database"
-    elif "network" in search_text:
+    elif failure_type == "STORAGE_FAILURE":
+        component = None  # Storage signatures don't have component (per existing data)
+    elif failure_type == "CONNECTION_FAILURE" or failure_type == "TIMEOUT_FAILURE":
         component = "Network"
-    elif "disk" in search_text or "storage" in search_text:
-        component = "Disk"
-    elif "memory" in search_text:
-        component = "Memory"
-    elif "cpu" in search_text:
-        component = "CPU"
+    elif failure_type == "PERFORMANCE_FAILURE":
+        # Component can be determined from error_class if available
+        # But for now, leave as None to match existing behavior
+        component = None
+    elif failure_type == "OPERATING_SYSTEM_FAILURE":
+        component = "Operating System"
+    elif failure_type == "AUTHENTICATION_FAILURE":
+        component = "Security"
+    
+    return service, component
+
+
+def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
+    """
+    Convert incident to incident signature (pattern, not raw text).
+    
+    Per architecture: Signatures represent patterns, not stories.
+    Uses rule-based, deterministic classification with CSV-driven rules.
+    
+    Returns:
+        IncidentSignature object
+    """
+    from ingestion.classification import get_classifier
+    
+    # Get rule-based classifier
+    classifier = get_classifier()
+    
+    # Step 1: Classify failure_type using rules (deterministic)
+    failure_type = classifier.classify_failure_type(incident)
+    
+    # Step 2: Classify error_class using rules (deterministic, depends on failure_type)
+    error_class = classifier.classify_error_class(incident, failure_type)
+    
+    # Step 3: Generate deterministic signature ID (hash-based)
+    sig_id = classifier.generate_signature_id(incident, failure_type, error_class)
+    
+    # Step 4: Normalize symptoms using controlled vocabulary (deterministic)
+    symptoms = classifier.normalize_symptoms(incident)
+    
+    # Extract affected service
+    affected_service = None
+    if incident.affected_services and len(incident.affected_services) > 0:
+        affected_service = incident.affected_services[0]
+    
+    # Step 5: Extract service/component (deterministic parsing)
+    service, component = _extract_service_component(incident, failure_type)
     
     # Resolution refs will be populated later when linking to runbook steps
     resolution_refs = None
+    
+    # Extract assignment_group from metadata if available
+    assignment_group = None
+    if incident.metadata and isinstance(incident.metadata, dict):
+        assignment_group = incident.metadata.get("assignment_group")
+    # Also check tags if not in metadata (for backward compatibility)
+    if not assignment_group and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+        assignment_group = incident.tags.get("assignment_group")
+    # Also check if it's in the incident directly (for IngestIncident from CSV)
+    if not assignment_group and hasattr(incident, 'assignment_group'):
+        assignment_group = getattr(incident, 'assignment_group', None)
+    
+    # Extract impact and urgency from metadata if available
+    impact = None
+    urgency = None
+    close_notes = None
+    if incident.metadata and isinstance(incident.metadata, dict):
+        impact = incident.metadata.get("impact")
+        urgency = incident.metadata.get("urgency")
+        close_notes = incident.metadata.get("close_notes")
+    # Also check tags if not in metadata (for backward compatibility)
+    if not impact and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+        impact = incident.tags.get("impact")
+    if not urgency and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+        urgency = incident.tags.get("urgency")
+    if not close_notes and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+        close_notes = incident.tags.get("close_notes")
+    # Also check if they're in the incident directly (for IngestIncident from CSV)
+    if not impact and hasattr(incident, 'impact'):
+        impact = getattr(incident, 'impact', None)
+    if not urgency and hasattr(incident, 'urgency'):
+        urgency = getattr(incident, 'urgency', None)
+    if not close_notes and hasattr(incident, 'close_notes'):
+        close_notes = getattr(incident, 'close_notes', None)
     
     return IncidentSignature(
         incident_signature_id=sig_id,
@@ -459,6 +474,10 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
         resolution_refs=resolution_refs,
         service=service,
         component=component,
+        assignment_group=assignment_group,
+        impact=impact,
+        urgency=urgency,
+        close_notes=close_notes,
     )
 
 

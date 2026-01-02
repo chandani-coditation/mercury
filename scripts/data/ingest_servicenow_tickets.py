@@ -109,6 +109,11 @@ def map_csv_row_to_incident(
     if cmdb_ci:
         affected_services = [cmdb_ci]
 
+    # Extract assignment_group
+    assignment_group = row.get(
+        mappings.get("assignment_group", {}).get("source_column", "assignment_group"), ""
+    )
+
     # Build comprehensive tags
     tags = {
         "type": "historical_incident",
@@ -116,9 +121,7 @@ def map_csv_row_to_incident(
         "canonical_incident_key": incident_id,  # Using incident number as canonical key
         "category": category,
         "severity": severity,
-        "assignment_group": row.get(
-            mappings.get("assignment_group", {}).get("source_column", "assignment_group"), ""
-        ),
+        "assignment_group": assignment_group,
         "state": row.get(mappings.get("state", {}).get("source_column", "state"), ""),
         "impact": impact,
         "urgency": urgency,
@@ -129,7 +132,11 @@ def map_csv_row_to_incident(
     if problem_id:
         tags["problem_id"] = problem_id
 
-    # Build metadata
+    # Extract close_notes
+    close_notes = row.get("close_notes", "")
+    
+    # Build metadata - IMPORTANT: assignment_group, impact, urgency, and close_notes must be in metadata
+    # so that create_incident_signature() can extract them for the incident_signatures table
     metadata = {
         "source": "servicenow",
         "opened_by": row.get(mappings.get("opened_by", {}).get("source_column", "opened_by"), ""),
@@ -139,6 +146,11 @@ def map_csv_row_to_incident(
         "u_reopen_count": row.get(
             mappings.get("u_reopen_count", {}).get("source_column", "u_reopen_count"), ""
         ),
+        # Store assignment_group, impact, urgency, and close_notes in metadata for incident_signatures table
+        "assignment_group": assignment_group if assignment_group else None,
+        "impact": impact if impact else None,
+        "urgency": urgency if urgency else None,
+        "close_notes": close_notes if close_notes else None,
     }
 
     return IngestIncident(

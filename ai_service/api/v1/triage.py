@@ -51,12 +51,21 @@ async def triage(
 
     try:
         # Convert alert to dict
-        alert_dict = alert.model_dump()
+        alert_dict = alert.model_dump(mode="json", exclude_none=True)
         # Handle ts: use provided timestamp or default to current time
         if alert.ts:
             alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
         else:
             alert_dict["ts"] = datetime.utcnow().isoformat()
+        # Ensure affected_services is preserved if present
+        if hasattr(alert, 'affected_services') and alert.affected_services is not None:
+            alert_dict["affected_services"] = alert.affected_services
+        # Also preserve from raw dict if Alert model didn't capture it
+        if "affected_services" not in alert_dict and hasattr(alert, '__dict__'):
+            # Check if it was in the original request
+            logger.debug(f"Alert model dump keys: {list(alert_dict.keys())}")
+            if hasattr(alert, 'affected_services'):
+                logger.debug(f"Alert.affected_services attribute: {alert.affected_services}")
 
         # Call triager agent (LangGraph, state-based, or synchronous)
         if use_lg:
