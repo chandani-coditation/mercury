@@ -46,6 +46,7 @@ class TriageOutput(BaseModel):
     routing: Optional[str] = None  # Team queue assignment (e.g., "SE DBA SQL") - derived from assignment_group
     impact: Optional[str] = None  # Original impact value from historical evidence (e.g., "2 - Medium", "1 - High")
     urgency: Optional[str] = None  # Original urgency value from historical evidence (e.g., "2 - Medium", "1 - High")
+    likely_cause: Optional[str] = None  # Most likely root cause based on alert description and matched incident signatures (max 300 chars)
 
 
 class RollbackPlan(BaseModel):

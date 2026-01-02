@@ -24,7 +24,7 @@ export const InfoCard = ({ icon: Icon, title, children, className, variant = "de
         </div>
         <h4 className="font-semibold text-foreground">{title}</h4>
       </div>
-      <div className="text-sm text-muted-foreground leading-relaxed">
+      <div className="text-sm text-foreground leading-relaxed">
         {children}
       </div>
     </div>

@@ -21,6 +21,12 @@ interface EvidenceChunkProps {
       service?: string;
       doc_type?: string;
       component?: string;
+      incident_signature_id?: string;
+      source_incident_ids?: string[];
+      match_count?: number;
+      failure_type?: string;
+      error_class?: string;
+      symptoms?: string[];
     };
   };
   index: number;
@@ -68,13 +74,39 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 mt-1">
-              <div className="flex items-center gap-1">
-                <Hash className="w-3 h-3 text-muted-foreground" />
-                <span className="text-xs font-mono text-muted-foreground truncate max-w-[150px]">
-                  {chunk.chunk_id.slice(0, 8)}...
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              {/* Show incident IDs instead of signature ID for incident signatures */}
+              {metadata.source_incident_ids && metadata.source_incident_ids.length > 0 ? (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <Hash className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {metadata.source_incident_ids.slice(0, 3).map((incidentId: string, idx: number) => (
+                      <span key={idx} className="text-xs font-mono text-primary font-semibold">
+                        {incidentId}
+                        {idx < Math.min(metadata.source_incident_ids!.length, 3) - 1 && ","}
+                      </span>
+                    ))}
+                    {metadata.source_incident_ids.length > 3 && (
+                      <span className="text-xs text-muted-foreground">
+                        +{metadata.source_incident_ids.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Hash className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-xs font-mono text-muted-foreground truncate max-w-[150px]">
+                    {chunk.chunk_id.slice(0, 8)}...
+                  </span>
+                </div>
+              )}
+              {/* Show match count for incident signatures */}
+              {metadata.match_count !== undefined && metadata.match_count > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  ({metadata.match_count} {metadata.match_count === 1 ? 'incident' : 'incidents'})
                 </span>
-              </div>
+              )}
               {metadata.service && (
                 <span className="text-xs text-muted-foreground">
                   {metadata.service}
@@ -135,10 +167,33 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
           
           {/* Content */}
           <div className="p-3 rounded-lg bg-background/50 border border-border/30">
-            <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed overflow-auto max-h-64">
+            <pre className="text-sm text-foreground whitespace-pre-wrap leading-relaxed overflow-auto max-h-64">
               {chunk.content}
             </pre>
           </div>
+          
+          {/* Additional metadata for incident signatures */}
+          {metadata.failure_type && metadata.error_class && (
+            <div className="p-3 rounded-lg bg-background/50 border border-border/30">
+              <div className="text-xs text-muted-foreground mb-2">Incident Classification:</div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground">Failure Type:</span>
+                  <span className="text-xs text-foreground">{metadata.failure_type}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground">Error Class:</span>
+                  <span className="text-xs text-foreground">{metadata.error_class}</span>
+                </div>
+                {metadata.symptoms && metadata.symptoms.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">Symptoms:</span>
+                    <span className="text-xs text-foreground">{metadata.symptoms.join(", ")}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Metadata */}
           <div className="flex flex-wrap items-center gap-3 text-xs">

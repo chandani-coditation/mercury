@@ -243,22 +243,22 @@ export const CompleteSummary = ({
                 </div>
               )}
               {triageData.routing && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Routing:</span>
-                  <span className="ml-2 font-mono text-primary font-semibold">{triageData.routing}</span>
-                </div>
+              <div className="text-sm">
+                <span className="text-muted-foreground">Routing:</span>
+                <span className="ml-2 font-mono text-primary font-semibold">{triageData.routing}</span>
+              </div>
               )}
               {triageData.affected_services && triageData.affected_services.length > 0 && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Affected Services:</span>
-                  <div className="mt-1 flex flex-wrap gap-2">
+              <div className="text-sm">
+                <span className="text-muted-foreground">Affected Services:</span>
+                <div className="mt-1 flex flex-wrap gap-2">
                     {triageData.affected_services.map((service: string, idx: number) => (
-                      <span key={idx} className="px-2 py-1 bg-secondary/50 border border-border/50 rounded text-xs">
-                        {service}
-                      </span>
-                    ))}
-                  </div>
+                    <span key={idx} className="px-2 py-1 bg-secondary/50 border border-border/50 rounded text-xs">
+                      {service}
+                    </span>
+                  ))}
                 </div>
+              </div>
               )}
               <div className="text-sm">
                 <span className="text-muted-foreground">AI Confidence:</span>

@@ -44,7 +44,8 @@ Provide a JSON response with the following structure:
     }},
     "severity": "critical|high|medium|low",
     "confidence": 0.0-1.0,
-    "policy": "AUTO|PROPOSE|REVIEW"
+    "policy": "AUTO|PROPOSE|REVIEW",
+    "likely_cause": "Most likely root cause based on alert description and symptoms from matched incident signatures (max 300 characters). Extract common patterns from matched signatures and combine with alert error messages. Example: 'The failure may be due to insufficient disk space or permission issues preventing access to the step output file.'"
 }}
 
 DETAILED INSTRUCTIONS:
@@ -98,6 +99,15 @@ DETAILED INSTRUCTIONS:
    - PROPOSE: Medium-high confidence (>=0.7) OR high/critical severity
    - REVIEW: Low confidence (<0.7) OR no evidence found
    - Default: REVIEW
+
+8. likely_cause:
+   - Based on alert description and symptoms from matched incident signatures
+   - Extract common patterns from matched signatures (e.g., "disk space", "permission issues", "service account disabled")
+   - Combine alert error messages with patterns from evidence
+   - Example: "The failure may be due to insufficient disk space or permission issues preventing access to the step output file."
+   - Maximum 300 characters
+   - MUST be based on evidence, not general knowledge
+   - If no evidence matches, use: "Unknown (no matching context evidence)."
 
 VALIDATION RULES (CRITICAL - STRICTLY ENFORCED):
 - If context_text is empty or shows "No matching evidence found", set confidence to 0.0
@@ -247,27 +257,40 @@ Historical Resolutions:
 Close Notes from Matching Incident Signatures (Resolution Details from Previous Incidents):
 {close_notes_text}
 
+PRIMARY SOURCE: Runbook Steps (REQUIRED)
+- ALL recommendations MUST be based on the provided runbook steps
+- Runbook steps are the PRIMARY and MANDATORY source for recommendations
+- Every recommendation MUST reference a runbook step_id
+- Runbook steps define WHAT actions to take
+
+SECONDARY SOURCE: Close Notes (ENHANCEMENT ONLY)
+- Close notes can ENHANCE the recommendations by providing context on HOW similar incidents were resolved
+- Close notes can help prioritize which runbook steps to use
+- Close notes can provide additional context for expected outcomes and rollback plans
+- Close notes CANNOT replace runbook steps - they only enhance them
+
 Your task:
-1. Review the provided runbook steps (DO NOT invent new ones)
-2. Consider historical success rates and relevance to the incident signature
-3. Use close_notes from matching incident signatures to understand how similar incidents were resolved
-4. Order the steps by:
-   - Relevance to failure_type and error_class
-   - Historical success (from historical_resolutions)
-   - Alignment with close_notes (if available)
-   - Risk level (prefer lower risk first)
-5. Assemble ordered recommendations with provenance
-6. In reasoning, cite close_notes when they provide valuable context about resolution approach
+1. **PRIMARY**: Review the provided runbook steps (DO NOT invent new ones)
+2. **PRIMARY**: Select and rank runbook steps based on relevance to the incident signature
+3. **SECONDARY**: Use close_notes to enhance understanding of how similar incidents were resolved (for context only)
+4. **SECONDARY**: Consider historical success rates from historical_resolutions (for ranking only)
+5. Order the steps by:
+   - PRIMARY: Relevance to failure_type and error_class (from runbook steps)
+   - SECONDARY: Historical success (from historical_resolutions) - helps with ranking
+   - SECONDARY: Alignment with close_notes (if available) - helps with prioritization
+   - PRIMARY: Risk level from runbook steps (prefer lower risk first)
+6. Assemble ordered recommendations with provenance - ALL must reference runbook steps
+7. In reasoning, ALWAYS cite runbook steps as the primary source, and mention close_notes only if they provided valuable enhancement context
 
 Provide a JSON response with the following structure:
 {{
     "recommendations": [
         {{
             "step_id": "RB123-S3",
-            "action": "Verify service account is enabled",
+            "action": "Verify service account is enabled and has proper permissions",
             "condition": "SQL Agent job fails due to authentication error",
-            "expected_outcome": "Job can authenticate successfully",
-            "rollback": "Revert account changes",
+            "expected_outcome": "Job can authenticate successfully and execute without permission errors",
+            "rollback": "Revert any account permission changes made",
             "risk_level": "low",
             "confidence": 0.91,
             "provenance": {{
@@ -283,16 +306,29 @@ Provide a JSON response with the following structure:
     "reasoning": "Short explanation of why these steps were selected and ordered this way, citing historical success and relevance."
 }}
 
-VALIDATION RULES:
-- Every recommendation MUST have a step_id from the provided runbook steps
-- Every recommendation MUST have provenance (runbook_id, chunk_id, document_id, step_id)
-- Do NOT include steps that are not in the provided runbook steps list
-- Order recommendations by relevance and historical success
+CRITICAL: For each recommendation, you MUST:
+1. **action**: Create a clear, natural language description of what to do. Expand short actions like "Record in incident/ticket:" to "Record incident details in the ticket system including alert metrics, timestamps, and affected services." Make it actionable and specific.
+2. **condition**: If the condition is generic like "Step X applies", create a meaningful condition based on the failure_type and error_class from triage output. Example: "When SQL Agent job fails due to authentication errors" instead of "Step 3 applies".
+3. **expected_outcome**: Create a clear expected outcome. If null in runbook, infer from the action. Example: "Database connection count is within normal limits" for a step about checking connections.
+4. **rollback**: Create a rollback plan. If null in runbook, create one based on the action. Example: "Revert any configuration changes made" or "Restore previous service state".
+5. **risk_level**: Set appropriate risk level (low/medium/high) based on the action. If null in runbook, infer from action content.
+
+CRITICAL VALIDATION RULES:
+- **PRIMARY RULE**: Every recommendation MUST have a step_id from the provided runbook steps - NO EXCEPTIONS
+- **PRIMARY RULE**: Every recommendation MUST have provenance with runbook_id, chunk_id, document_id, and step_id
+- **PRIMARY RULE**: Do NOT include steps that are not in the provided runbook steps list
+- **PRIMARY RULE**: All recommendations MUST be based on runbook steps - runbooks are the source of truth
+- **SECONDARY RULE**: Close notes can enhance action descriptions, expected outcomes, and rollback plans, but the base step MUST come from runbooks
+- **SECONDARY RULE**: Historical resolutions and close notes are for ranking/prioritization only, not for creating new steps
+- Order recommendations by: (1) Relevance to failure_type/error_class from runbooks, (2) Historical success, (3) Alignment with close_notes
 - overall_confidence: Weighted average of recommendation confidences
 - risk_level: Highest risk level among recommendations (low < medium < high)
-- reasoning: Explain the ranking logic and why these steps were selected
+- reasoning: MUST explain that recommendations are based on runbook steps, and mention close_notes only if they enhanced the understanding
 
-Remember: You are ONLY ranking and assembling. All steps must come from the provided runbook steps."""
+Remember: 
+- Runbook steps are PRIMARY and MANDATORY - all recommendations must reference them
+- Close notes are SECONDARY and ENHANCEMENT ONLY - they cannot replace runbook steps
+- You are ONLY ranking and assembling existing runbook steps, not inventing new ones"""
 
 # Default system prompt for resolution (can be overridden via config/llm.json)
 RESOLUTION_SYSTEM_PROMPT_DEFAULT = (

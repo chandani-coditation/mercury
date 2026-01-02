@@ -172,13 +172,52 @@ def assemble_recommendations(
         if step["combined_score"] < min_confidence:
             continue
         
+        # Build a more descriptive action from condition and action
+        action_text = step.get("action", "")
+        condition_text = step.get("condition", "")
+        
+        # Create a natural language action description
+        if action_text and condition_text:
+            # Combine condition and action into a more descriptive step
+            if condition_text.lower() not in ["step applies", "n/a", ""]:
+                enhanced_action = f"{condition_text}. {action_text}"
+            else:
+                enhanced_action = action_text
+        elif action_text:
+            enhanced_action = action_text
+        elif condition_text:
+            enhanced_action = condition_text
+        else:
+            enhanced_action = f"Execute step {step.get('step_id', 'unknown')}"
+        
+        # Ensure we have expected_outcome, rollback, and risk_level
+        expected_outcome = step.get("expected_outcome")
+        if not expected_outcome and action_text:
+            # Generate a reasonable expected outcome from the action
+            expected_outcome = f"Complete {action_text.lower()}"
+        
+        rollback = step.get("rollback")
+        if not rollback:
+            rollback = "Revert any changes made in this step"
+        
+        risk_level = step.get("risk_level")
+        if not risk_level:
+            # Infer risk level from action content
+            action_lower = enhanced_action.lower()
+            if any(word in action_lower for word in ["kill", "delete", "drop", "remove", "stop", "restart"]):
+                risk_level = "high"
+            elif any(word in action_lower for word in ["update", "modify", "change", "alter"]):
+                risk_level = "medium"
+            else:
+                risk_level = "low"
+        
         recommendation = {
             "step_id": step.get("step_id"),
-            "action": step.get("action"),
-            "condition": step.get("condition"),
-            "expected_outcome": step.get("expected_outcome"),
-            "rollback": step.get("rollback"),
-            "risk_level": step.get("risk_level", "medium"),
+            "action": enhanced_action,
+            "condition": condition_text if condition_text and condition_text.lower() not in ["step applies", "n/a"] else None,
+            "expected_outcome": expected_outcome,
+            "rollback": rollback,
+            "risk_level": risk_level,
             "confidence": step["combined_score"],
             "provenance": {
                 "runbook_id": step.get("runbook_id"),

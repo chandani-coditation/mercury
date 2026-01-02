@@ -1,30 +1,49 @@
 """Retrieval functions for Resolution Agent.
 
 Per architecture: Resolution agent retrieves:
-- Runbook steps (by runbook_id from triage output)
+- Runbook steps (by runbook_id from triage output, using semantic search for relevance)
 - Historical resolution references (from incident signatures)
 """
 
 from typing import List, Dict, Optional
 from db.connection import get_db_connection
 from ai_service.core import get_logger
+from ingestion.embeddings import embed_text
 
 logger = get_logger(__name__)
 
 
-def retrieve_runbook_steps(runbook_ids: List[str]) -> List[Dict]:
+def retrieve_runbook_steps(
+    runbook_ids: List[str] = None,
+    document_ids: List[str] = None,
+    query_text: Optional[str] = None,
+    failure_type: Optional[str] = None,
+    error_class: Optional[str] = None,
+    limit: int = 20
+) -> List[Dict]:
     """
-    Retrieve runbook steps by runbook_id from runbook_steps table.
+    Retrieve relevant runbook steps from chunks table using document_id (preferred) or runbook_steps table.
     
-    Per architecture: Resolution agent retrieves runbook steps using runbook_ids
-    from triage agent's matched_evidence.runbook_refs.
+    Per architecture Section 7.3: Resolution agent retrieves "only relevant steps".
+    
+    Preferred method: Use document_id from triage to fetch chunks (contains full recommendations).
+    Fallback method: Use runbook_id to fetch from runbook_steps table.
     
     Args:
-        runbook_ids: List of runbook_id values from triage output's matched_evidence
+        runbook_ids: Optional list of runbook_id values (fallback method)
+        document_ids: Optional list of document_id values from triage runbook_metadata (preferred method)
+        query_text: Optional query text for semantic search (e.g., alert description)
+        failure_type: Optional failure type for relevance filtering
+        error_class: Optional error class for relevance filtering
+        limit: Maximum number of steps to return (default 20)
         
     Returns:
-        List of runbook step dictionaries with all step details
+        List of runbook step dictionaries with all step details, ordered by relevance
     """
+    # Prefer document_ids over runbook_ids (chunks contain full recommendations)
+    if document_ids:
+        return retrieve_runbook_chunks_by_document_id(document_ids, query_text, limit)
+    
     if not runbook_ids:
         return []
     
@@ -32,36 +51,80 @@ def retrieve_runbook_steps(runbook_ids: List[str]) -> List[Dict]:
     cur = conn.cursor()
     
     try:
-        # Query runbook_steps table directly (not chunks table)
         placeholders = ",".join(["%s"] * len(runbook_ids))
         
-        query = f"""
-        SELECT 
-            id,
-            step_id,
-            runbook_id,
-            condition,
-            action,
-            expected_outcome,
-            rollback,
-            risk_level,
-            service,
-            component,
-            runbook_title,
-            runbook_document_id
-        FROM runbook_steps
-        WHERE runbook_id IN ({placeholders})
-        ORDER BY runbook_id, step_id
-        """
+        # If query_text is provided, use semantic search to find relevant steps
+        if query_text:
+            try:
+                # Generate query embedding for semantic search
+                query_embedding = embed_text(query_text)
+                embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+                
+                # Build query with semantic similarity
+                # Parameters: $1 = embedding (for similarity), $2-$N = runbook_ids, $N+1 = embedding (for ORDER BY), $N+2 = limit
+                query = f"""
+                SELECT 
+                    rs.id,
+                    rs.step_id,
+                    rs.runbook_id,
+                    rs.condition,
+                    rs.action,
+                    rs.expected_outcome,
+                    rs.rollback,
+                    rs.risk_level,
+                    rs.service,
+                    rs.component,
+                    rs.runbook_title,
+                    rs.runbook_document_id,
+                    1 - (rs.embedding <=> %s::vector) as similarity_score
+                FROM runbook_steps rs
+                WHERE rs.runbook_id IN ({placeholders})
+                AND rs.embedding IS NOT NULL
+                ORDER BY rs.embedding <=> %s::vector
+                LIMIT %s
+                """
+                
+                # Execute with: embedding (for similarity calc), runbook_ids, embedding (for ORDER BY), limit
+                params = (embedding_str,) + tuple(runbook_ids) + (embedding_str, limit)
+                cur.execute(query, params)
+                logger.info(f"Retrieved relevant runbook steps using semantic search for query: {query_text[:50]}...")
+            except Exception as e:
+                logger.warning(f"Semantic search failed, falling back to direct retrieval: {e}")
+                # Fall back to direct retrieval without semantic search
+                query_text = None
         
-        # Execute with tuple of runbook_ids (psycopg requires tuple for IN clause)
-        cur.execute(query, tuple(runbook_ids))
+        # If no query_text or semantic search failed, retrieve all steps (fallback)
+        if not query_text:
+            query = f"""
+            SELECT 
+                id,
+                step_id,
+                runbook_id,
+                condition,
+                action,
+                expected_outcome,
+                rollback,
+                risk_level,
+                service,
+                component,
+                runbook_title,
+                runbook_document_id,
+                1.0 as similarity_score
+            FROM runbook_steps
+            WHERE runbook_id IN ({placeholders})
+            ORDER BY runbook_id, step_id
+            LIMIT %s
+            """
+            
+            # Execute with runbook_ids and limit
+            cur.execute(query, tuple(runbook_ids) + (limit,))
+        
         rows = cur.fetchall()
         
         steps = []
         for row in rows:
             if isinstance(row, dict):
-                steps.append({
+                step = {
                     "step_id": row["step_id"],
                     "runbook_id": row["runbook_id"],
                     "condition": row["condition"],
@@ -76,10 +139,14 @@ def retrieve_runbook_steps(runbook_ids: List[str]) -> List[Dict]:
                     # For compatibility with existing code that expects chunk_id
                     "chunk_id": str(row["id"]),
                     "document_id": str(row["runbook_document_id"]) if row.get("runbook_document_id") else None,
-                })
+                }
+                # Add similarity score if available (from semantic search)
+                if "similarity_score" in row:
+                    step["similarity_score"] = float(row["similarity_score"]) if row["similarity_score"] else 0.0
+                steps.append(step)
             else:
                 # Handle tuple result
-                steps.append({
+                step = {
                     "step_id": row[1],
                     "runbook_id": row[2],
                     "condition": row[3],
@@ -94,9 +161,149 @@ def retrieve_runbook_steps(runbook_ids: List[str]) -> List[Dict]:
                     # For compatibility
                     "chunk_id": str(row[0]),
                     "document_id": str(row[11]) if row[11] else None,
-                })
+                }
+                # Add similarity score if available (from semantic search)
+                if len(row) > 12:
+                    step["similarity_score"] = float(row[12]) if row[12] else 0.0
+                steps.append(step)
         
         logger.info(f"Retrieved {len(steps)} runbook steps for runbook_ids: {runbook_ids}")
+        return steps
+        
+    finally:
+        cur.close()
+        conn.close()
+
+
+def retrieve_runbook_chunks_by_document_id(
+    document_ids: List[str],
+    query_text: Optional[str] = None,
+    limit: int = 20
+) -> List[Dict]:
+    """
+    Retrieve runbook steps from chunks table using document_id.
+    
+    This is the preferred method because chunks contain full recommendation text.
+    Per architecture: Resolution agent should use chunks when available.
+    
+    Args:
+        document_ids: List of document_id values from triage runbook_metadata
+        query_text: Optional query text for semantic search
+        limit: Maximum number of chunks to return
+        
+    Returns:
+        List of runbook step dictionaries with full content from chunks
+    """
+    if not document_ids:
+        return []
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        placeholders = ",".join(["%s"] * len(document_ids))
+        
+        # If query_text is provided, use semantic search
+        if query_text:
+            try:
+                query_embedding = embed_text(query_text)
+                embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+                
+                query = f"""
+                SELECT 
+                    c.id,
+                    c.document_id,
+                    c.chunk_index,
+                    c.content,
+                    c.metadata,
+                    1 - (c.embedding <=> %s::vector) as similarity_score,
+                    d.title as runbook_title,
+                    d.tags->>'runbook_id' as runbook_id
+                FROM chunks c
+                JOIN documents d ON c.document_id = d.id
+                WHERE c.document_id IN ({placeholders})
+                AND d.doc_type = 'runbook'
+                AND c.embedding IS NOT NULL
+                ORDER BY c.embedding <=> %s::vector
+                LIMIT %s
+                """
+                
+                # Execute with: embedding (for similarity calc), document_ids, embedding (for ORDER BY), limit
+                params = (embedding_str,) + tuple(document_ids) + (embedding_str, limit)
+                cur.execute(query, params)
+                logger.info(f"Retrieved runbook chunks using semantic search for document_ids: {document_ids}")
+            except Exception as e:
+                logger.warning(f"Semantic search failed, falling back to direct retrieval: {e}")
+                query_text = None
+        
+        # Fallback: retrieve all chunks for document_ids
+        if not query_text:
+            query = f"""
+            SELECT 
+                c.id,
+                c.document_id,
+                c.chunk_index,
+                c.content,
+                c.metadata,
+                1.0 as similarity_score,
+                d.title as runbook_title,
+                d.tags->>'runbook_id' as runbook_id
+            FROM chunks c
+            JOIN documents d ON c.document_id = d.id
+            WHERE c.document_id IN ({placeholders})
+            AND d.doc_type = 'runbook'
+            ORDER BY c.chunk_index
+            LIMIT %s
+            """
+            
+            cur.execute(query, tuple(document_ids) + (limit,))
+        
+        rows = cur.fetchall()
+        
+        steps = []
+        for row in rows:
+            if isinstance(row, dict):
+                metadata = row.get("metadata", {}) if isinstance(row.get("metadata"), dict) else {}
+                step = {
+                    "step_id": metadata.get("step_id") or f"chunk-{row['id']}",
+                    "runbook_id": row.get("runbook_id") or metadata.get("runbook_id"),
+                    "condition": metadata.get("condition") or "Step applies",
+                    "action": row.get("content") or metadata.get("action") or "",
+                    "expected_outcome": metadata.get("expected_outcome"),
+                    "rollback": metadata.get("rollback"),
+                    "risk_level": metadata.get("risk_level", "medium"),
+                    "service": metadata.get("service"),
+                    "component": metadata.get("component"),
+                    "runbook_title": row.get("runbook_title"),
+                    "runbook_document_id": str(row.get("document_id")),
+                    "chunk_id": str(row.get("id")),
+                    "document_id": str(row.get("document_id")),
+                }
+                if "similarity_score" in row:
+                    step["similarity_score"] = float(row["similarity_score"]) if row["similarity_score"] else 0.0
+                steps.append(step)
+            else:
+                metadata = row[4] if isinstance(row[4], dict) else {}
+                step = {
+                    "step_id": metadata.get("step_id") if isinstance(metadata, dict) else f"chunk-{row[0]}",
+                    "runbook_id": row[7] or (metadata.get("runbook_id") if isinstance(metadata, dict) else None),
+                    "condition": metadata.get("condition") if isinstance(metadata, dict) else "Step applies",
+                    "action": row[3] or (metadata.get("action") if isinstance(metadata, dict) else ""),
+                    "expected_outcome": metadata.get("expected_outcome") if isinstance(metadata, dict) else None,
+                    "rollback": metadata.get("rollback") if isinstance(metadata, dict) else None,
+                    "risk_level": metadata.get("risk_level", "medium") if isinstance(metadata, dict) else "medium",
+                    "service": metadata.get("service") if isinstance(metadata, dict) else None,
+                    "component": metadata.get("component") if isinstance(metadata, dict) else None,
+                    "runbook_title": row[6],
+                    "runbook_document_id": str(row[1]),
+                    "chunk_id": str(row[0]),
+                    "document_id": str(row[1]),
+                }
+                if len(row) > 5:
+                    step["similarity_score"] = float(row[5]) if row[5] else 0.0
+                steps.append(step)
+        
+        logger.info(f"Retrieved {len(steps)} runbook chunks for document_ids: {document_ids}")
         return steps
         
     finally:

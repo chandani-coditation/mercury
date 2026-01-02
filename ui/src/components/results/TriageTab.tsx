@@ -1,4 +1,4 @@
-import { FileText, Lightbulb, Route, Server, ListChecks, AlertCircle, Target, TrendingUp } from "lucide-react";
+import { FileText, Lightbulb, Route, Server, ListChecks, AlertCircle, Target, TrendingUp, Info } from "lucide-react";
 import { SeverityBadge } from "./SeverityBadge";
 import { ConfidenceMeter } from "./ConfidenceMeter";
 import { InfoCard } from "./InfoCard";
@@ -45,42 +45,72 @@ export const TriageTab = ({ data }: TriageTabProps) => {
 
       {/* Summary */}
       {data.summary && (
-        <InfoCard icon={FileText} title="Summary" variant="highlighted">
-          {data.summary}
-        </InfoCard>
+        <div className="space-y-2">
+          <InfoCard icon={FileText} title="Summary" variant="highlighted">
+            {data.summary}
+          </InfoCard>
+          <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
+            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+            <span>This is the AI's analysis of your alert. It summarizes what the problem is, when it started, and what impact it might have on your systems.</span>
+          </p>
+        </div>
       )}
 
       {/* Likely Cause */}
       {data.likely_cause && (
-        <InfoCard icon={Lightbulb} title="Likely Cause">
-          {data.likely_cause}
-        </InfoCard>
+        <div className="space-y-2">
+          <InfoCard icon={Lightbulb} title="Likely Cause">
+            {data.likely_cause}
+          </InfoCard>
+          <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
+            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+            <span>Based on the alert details and knowledge base, the AI has identified the most probable root cause. This helps you understand why the problem occurred and where to focus your investigation.</span>
+          </p>
+        </div>
       )}
 
       {/* Impact and Urgency - New fields added (between Likely Cause and Routing) */}
       {(data.impact || data.urgency) && (
         <div className="grid grid-cols-2 gap-3">
           {data.impact && (
-            <InfoCard icon={TrendingUp} title="Impact">
-              <span className="font-semibold text-primary text-lg">{data.impact}</span>
-            </InfoCard>
+            <div className="space-y-2">
+              <InfoCard icon={TrendingUp} title="Impact">
+                <span className="text-sm font-semibold text-primary">{data.impact}</span>
+              </InfoCard>
+              <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
+                <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                <span>The extent of the impact on business operations. Higher impact means more users or critical systems are affected.</span>
+              </p>
+            </div>
           )}
           {data.urgency && (
-            <InfoCard icon={TrendingUp} title="Urgency">
-              <span className="font-semibold text-primary text-lg">{data.urgency}</span>
-            </InfoCard>
+            <div className="space-y-2">
+              <InfoCard icon={TrendingUp} title="Urgency">
+                <span className="text-sm font-semibold text-primary">{data.urgency}</span>
+              </InfoCard>
+              <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
+                <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                <span>How quickly the issue needs to be resolved. Higher urgency means immediate action is required.</span>
+              </p>
+            </div>
           )}
         </div>
       )}
 
       {/* Routing - Highlighted for Demo */}
       {data.routing && (
-        <InfoCard icon={Route} title="Routing Assignment" variant="highlighted">
-          <div className="relative">
-            <span className="font-mono text-primary font-semibold text-lg">{data.routing}</span>
-            <div className="absolute -inset-1 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
-          </div>
-        </InfoCard>
+        <div className="space-y-2">
+          <InfoCard icon={Route} title="Routing Assignment" variant="highlighted">
+            <div className="relative">
+              <span className="font-mono text-primary font-semibold text-lg">{data.routing}</span>
+              <div className="absolute -inset-1 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
+            </div>
+          </InfoCard>
+          <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
+            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+            <span>This is the team or person who should handle this incident. The AI automatically routes tickets based on the type of issue, affected services, and your organization's routing rules. This ensures the right experts get the ticket.</span>
+          </p>
+        </div>
       )}
 
       {/* Affected Services */}
@@ -92,11 +122,15 @@ export const TriageTab = ({ data }: TriageTabProps) => {
             </div>
             <h4 className="font-semibold text-foreground">Affected Services</h4>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mb-2">
             {data.affected_services.map((service, index) => (
               <ServiceTag key={index} service={service} />
             ))}
           </div>
+          <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+            <span>These are the services, databases, or systems that are impacted by this alert. Knowing which services are affected helps you understand the scope of the issue and who might need to be notified.</span>
+          </p>
         </div>
       )}
 
@@ -117,73 +151,19 @@ export const TriageTab = ({ data }: TriageTabProps) => {
         </div>
       )}
 
-      {/* Incident Classification - Collapsible/Expandable section for technical details */}
-      {data.incident_signature && (data.incident_signature.failure_type || data.incident_signature.error_class) && (
-        <details className="space-y-3">
-          <summary className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <Target className="w-4 h-4" />
-            <span>Incident Classification (Technical Details)</span>
-          </summary>
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            {data.incident_signature.failure_type && (
-              <InfoCard icon={AlertCircle} title="Failure Type">
-                <span className="font-mono text-sm">{data.incident_signature.failure_type}</span>
-              </InfoCard>
-            )}
-            {data.incident_signature.error_class && (
-              <InfoCard icon={AlertCircle} title="Error Class">
-                <span className="font-mono text-sm">{data.incident_signature.error_class}</span>
-              </InfoCard>
-            )}
-          </div>
-        </details>
-      )}
-
-      {/* Matched Evidence - Collapsible/Expandable section for technical details */}
-      {data.matched_evidence && (
-        <details className="space-y-3">
-          <summary className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ListChecks className="w-4 h-4" />
-            <span>Matched Evidence (Technical Details)</span>
-          </summary>
-          <div className="space-y-3 mt-3">
-            {data.matched_evidence.incident_signatures && data.matched_evidence.incident_signatures.length > 0 && (
-              <InfoCard icon={FileText} title="Historical Incidents">
-                <div className="flex flex-wrap gap-2">
-                  {data.matched_evidence.incident_signatures.slice(0, 5).map((sig, index) => (
-                    <span key={index} className="px-2 py-1 rounded bg-secondary text-xs font-mono">
-                      {sig}
-                    </span>
-                  ))}
-                  {data.matched_evidence.incident_signatures.length > 5 && (
-                    <span className="px-2 py-1 rounded bg-secondary text-xs text-muted-foreground">
-                      +{data.matched_evidence.incident_signatures.length - 5} more
-                    </span>
-                  )}
-                </div>
-              </InfoCard>
-            )}
-            {data.matched_evidence.runbook_refs && data.matched_evidence.runbook_refs.length > 0 && (
-              <InfoCard icon={FileText} title="Matched Runbooks">
-                <div className="flex flex-wrap gap-2">
-                  {data.matched_evidence.runbook_refs.map((ref, index) => (
-                    <span key={index} className="px-2 py-1 rounded bg-secondary text-xs font-mono">
-                      {ref.substring(0, 8)}...
-                    </span>
-                  ))}
-                </div>
-              </InfoCard>
-            )}
-          </div>
-        </details>
-      )}
 
       {/* Confidence Meter - Highlighted for Demo */}
-      <div className="glass-card p-5 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
-        <div className="absolute -inset-0.5 bg-primary/10 rounded-lg blur opacity-30" />
-        <div className="relative">
-          <ConfidenceMeter confidence={data.confidence} />
+      <div className="space-y-2">
+        <div className="glass-card p-5 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
+          <div className="absolute -inset-0.5 bg-primary/10 rounded-lg blur opacity-30" />
+          <div className="relative">
+            <ConfidenceMeter confidence={data.confidence} />
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
+          <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+          <span>This shows how confident the AI is in its analysis. Higher confidence (80%+) means the AI found strong matches in the knowledge base and is very sure about its assessment. Lower confidence means you should review the analysis more carefully, as the AI may need more information or the issue might be unusual.</span>
+        </p>
       </div>
     </div>
   );

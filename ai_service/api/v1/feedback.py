@@ -7,6 +7,7 @@ from ai_service.services import IncidentService, FeedbackService
 from ai_service.core import (
     get_logger,
     get_workflow_config,
+    get_guardrail_config,
     IncidentNotFoundError,
     DatabaseError,
     ValidationError,
@@ -77,14 +78,63 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                     logger.error(f"User-edited triage output validation failed: {error_msg}")
                     raise ValidationError(error_msg)
 
-                # Validate that user_edited has the same structure (no new fields)
-                # Check that all keys in user_edited exist in original system_output
+                # Validate that user_edited only contains allowed fields
+                # Get allowed fields from guardrails config and TriageOutput model
+                guardrail_config = get_guardrail_config().get("triage", {})
+                required_fields = guardrail_config.get("required_fields", [])
+                
+                # Define allowed fields for triage output
+                # Core required fields from TriageOutput model
+                allowed_fields = {
+                    "incident_signature",
+                    "matched_evidence",
+                    "severity",
+                    "confidence",
+                    "policy",
+                    "routing",  # Optional from model
+                    "impact",  # Optional from model
+                    "urgency",  # Optional from model
+                }
+                
+                # Add fields from guardrails config (these are valid triage fields)
+                if required_fields:
+                    for field in required_fields:
+                        allowed_fields.add(field)
+                    logger.debug(f"Added {len(required_fields)} fields from guardrails config: {required_fields}")
+                else:
+                    logger.warning("No required_fields found in guardrails config - using only core fields")
+                
+                # Also allow fields that might be in the original output (for backward compatibility)
                 original_keys = set(system_output.keys())
+                allowed_fields.update(original_keys)
+                
+                logger.debug(f"Total allowed fields: {len(allowed_fields)} - {sorted(allowed_fields)}")
+                logger.debug(f"Original system_output keys: {sorted(original_keys)}")
+                logger.debug(f"User edited keys: {sorted(set(feedback.user_edited.keys()))}")
+                
+                # Forbidden fields that indicate hallucination (resolution-related)
+                forbidden_fields = {
+                    "resolution_steps", "steps", "fixes", "solutions", 
+                    "commands", "rollback_plan", "estimated_time_minutes",
+                    "risk_level", "requires_approval", "reasoning", "rationale",
+                    "provenance"
+                }
+                
+                # Check user_edited fields
                 user_keys = set(feedback.user_edited.keys())
-                if not user_keys.issubset(original_keys):
-                    extra_keys = user_keys - original_keys
-                    error_msg = f"Cannot add new fields to triage output. Extra fields: {', '.join(extra_keys)}"
-                    logger.error(f"User tried to add new fields: {error_msg}")
+                
+                # Check for forbidden fields
+                forbidden_found = user_keys.intersection(forbidden_fields)
+                if forbidden_found:
+                    error_msg = f"Cannot add resolution-related fields to triage output. Forbidden fields: {', '.join(forbidden_found)}"
+                    logger.error(f"User tried to add forbidden fields: {error_msg}")
+                    raise ValidationError(error_msg)
+                
+                # Check for fields not in allowed set
+                extra_keys = user_keys - allowed_fields
+                if extra_keys:
+                    error_msg = f"Cannot add new fields to triage output. Extra fields: {', '.join(extra_keys)}. Allowed fields: {', '.join(sorted(allowed_fields))}"
+                    logger.error(f"User tried to add disallowed fields: {error_msg}")
                     raise ValidationError(error_msg)
 
                 incident_service.update_triage_output(incident_id, feedback.user_edited)
@@ -137,15 +187,30 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
 
             # Log current policy before update
             current_policy_band = incident.get("policy_band")
-            current_policy_decision = incident.get("policy_decision")
+            current_policy_decision = incident.get("policy_decision") or {}
             logger.info(
                 f"Updating policy via feedback: incident_id={incident_id}, "
                 f"current_policy_band={current_policy_band}, new_policy_band={feedback.policy_band}"
             )
 
+            # Preserve original policy_band if this is the first time it's being changed
+            # This allows us to distinguish between system-determined AUTO and user-approved AUTO
+            original_policy_band = current_policy_decision.get("original_policy_band")
+            if not original_policy_band:
+                # First time policy is being set/changed - preserve the original
+                original_policy_band = current_policy_band
+                logger.info(
+                    f"Preserving original policy_band: {original_policy_band} for incident {incident_id}"
+                )
+
             # Recompute policy decision with the new policy band
             policy_decision = get_policy_from_config(triage_output)
             policy_decision["policy_band"] = feedback.policy_band
+            # Preserve original policy band and track that this was user-approved
+            policy_decision["original_policy_band"] = original_policy_band
+            policy_decision["user_approved"] = True
+            policy_decision["approved_at"] = datetime.utcnow().isoformat()
+            
             if feedback.policy_band == "AUTO":
                 policy_decision["can_auto_apply"] = True
                 policy_decision["requires_approval"] = False

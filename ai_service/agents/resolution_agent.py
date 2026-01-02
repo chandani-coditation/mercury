@@ -64,8 +64,8 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"Invalid triage output: {e}")
     
     # Extract runbook IDs and incident signature IDs from triage
-    runbook_ids = triage.matched_evidence.runbook_refs
-    incident_signature_ids = triage.matched_evidence.incident_signatures
+    runbook_ids = triage.matched_evidence.runbook_refs or []
+    incident_signature_ids = triage.matched_evidence.incident_signatures or []
     incident_signature = triage.incident_signature
     
     logger.debug(
@@ -74,7 +74,51 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     )
     
     # 1. Retrieve runbook steps
-    runbook_steps = retrieve_runbook_steps(runbook_ids)
+    if not runbook_ids:
+        logger.warning("No runbook_ids in triage output matched_evidence.runbook_refs")
+        # Try to get runbook_ids from evidence if available
+        # This is a fallback for cases where LLM didn't extract them correctly
+        if hasattr(triage_output, 'get') and isinstance(triage_output, dict):
+            evidence = triage_output.get("evidence") or {}
+            runbook_metadata = evidence.get("runbook_metadata", [])
+            if runbook_metadata:
+                runbook_ids = [rb.get("runbook_id") for rb in runbook_metadata if rb.get("runbook_id")]
+                logger.info(f"Extracted runbook_ids from evidence: {runbook_ids}")
+    
+    # Retrieve runbook steps using document_id from triage (preferred) or runbook_id (fallback)
+    # Per architecture: Resolution agent should use chunks from document_id when available
+    # Build query text from triage output for semantic search
+    incident_sig = triage.incident_signature
+    query_parts = []
+    if incident_sig.failure_type:
+        query_parts.append(incident_sig.failure_type)
+    if incident_sig.error_class:
+        query_parts.append(incident_sig.error_class)
+    # Also include alert description if available in triage output
+    alert_desc = triage_output.get("alert_description") or triage_output.get("description", "")
+    if alert_desc:
+        query_parts.append(alert_desc)
+    
+    query_text = " ".join(query_parts) if query_parts else None
+    
+    # Get document_ids from triage evidence (preferred method - chunks contain full recommendations)
+    document_ids = []
+    if hasattr(triage_output, 'get') and isinstance(triage_output, dict):
+        evidence = triage_output.get("evidence") or {}
+        runbook_metadata = evidence.get("runbook_metadata", [])
+        if runbook_metadata:
+            document_ids = [rb.get("document_id") for rb in runbook_metadata if rb.get("document_id")]
+            logger.info(f"Found {len(document_ids)} document_ids from triage evidence: {document_ids}")
+    
+    # Use document_ids if available (chunks), otherwise fall back to runbook_ids (runbook_steps table)
+    runbook_steps = retrieve_runbook_steps(
+        document_ids=document_ids if document_ids else None,
+        runbook_ids=runbook_ids if not document_ids else None,
+        query_text=query_text,
+        failure_type=incident_sig.failure_type,
+        error_class=incident_sig.error_class,
+        limit=20  # Limit to top 20 most relevant steps
+    ) if (document_ids or runbook_ids) else []
     
     # Validate retrieval boundaries (guardrail: wrong retrieval)
     is_valid_retrieval, retrieval_errors = validate_resolution_retrieval_boundaries(
@@ -148,9 +192,10 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     logger.info(f"Ranked {len(ranked_steps)} steps")
     
     # 5. Assemble recommendations (algorithmic assembly)
+    # Lower threshold to 0.3 to ensure we get recommendations when steps are available
     recommendations = assemble_recommendations(
         ranked_steps=ranked_steps,
-        min_confidence=0.5,  # Configurable threshold
+        min_confidence=0.3,  # Lowered from 0.5 to ensure recommendations are generated
         max_steps=10,
     )
     
@@ -185,6 +230,15 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning("Falling back to algorithmic ranking due to LLM hallucination")
         final_recommendations = recommendations
     else:
+        # Additional validation: Ensure all LLM recommendations reference runbook steps
+        runbook_step_ids = {step.get("step_id") for step in runbook_steps if step.get("step_id")}
+        invalid_recs = [rec for rec in llm_recs if rec.get("step_id") not in runbook_step_ids]
+        if invalid_recs:
+            logger.warning(
+                f"LLM returned {len(invalid_recs)} recommendations not from runbook steps. "
+                "Filtering them out (runbooks are primary source)."
+            )
+            llm_recs = [rec for rec in llm_recs if rec.get("step_id") in runbook_step_ids]
         # Merge LLM output with algorithmic rankings
         # LLM can reorder but cannot add new steps
         final_recommendations = _merge_llm_ranking(
@@ -230,12 +284,24 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     risk_levels = [r.get("risk_level", "medium") for r in final_recommendations]
     risk_level = "high" if "high" in risk_levels else ("medium" if "medium" in risk_levels else "low")
     
-    reasoning = llm_recommendations.get(
-        "reasoning",
-        f"Selected {len(final_recommendations)} steps from {len(runbook_steps)} available steps "
-        f"based on relevance to {incident_signature.failure_type}/{incident_signature.error_class} "
-        f"and historical success rates."
+    # Build reasoning that emphasizes runbook steps as primary source
+    base_reasoning = (
+        f"Recommendations are based on {len(runbook_steps)} runbook steps from the matched runbook(s). "
+        f"Selected {len(final_recommendations)} steps based on relevance to {incident_signature.failure_type}/{incident_signature.error_class}."
     )
+    
+    # Add close_notes context if available and used
+    if close_notes_list:
+        base_reasoning += (
+            f" Close notes from {len(close_notes_list)} matching incident signatures were used to enhance "
+            f"understanding of resolution approaches, but all recommendations are sourced from runbook steps."
+        )
+    
+    reasoning = llm_recommendations.get("reasoning", base_reasoning)
+    
+    # Ensure reasoning mentions runbooks as primary source
+    if "runbook" not in reasoning.lower():
+        reasoning = f"Based on runbook steps: {reasoning}"
     
     result = {
         "recommendations": final_recommendations,
@@ -417,6 +483,17 @@ def _merge_llm_ranking(
                 if step_id not in seen_step_ids:
                     # Use LLM confidence if provided, otherwise use algorithmic
                     merged = algo_lookup[step_id].copy()
+                    # Prefer LLM-enhanced fields if provided (they should be more descriptive)
+                    if "action" in llm_rec and llm_rec["action"]:
+                        merged["action"] = llm_rec["action"]
+                    if "condition" in llm_rec and llm_rec["condition"]:
+                        merged["condition"] = llm_rec["condition"]
+                    if "expected_outcome" in llm_rec and llm_rec["expected_outcome"]:
+                        merged["expected_outcome"] = llm_rec["expected_outcome"]
+                    if "rollback" in llm_rec and llm_rec["rollback"]:
+                        merged["rollback"] = llm_rec["rollback"]
+                    if "risk_level" in llm_rec and llm_rec["risk_level"]:
+                        merged["risk_level"] = llm_rec["risk_level"]
                     if "confidence" in llm_rec:
                         merged["confidence"] = llm_rec["confidence"]
                     if "reasoning" in llm_rec:

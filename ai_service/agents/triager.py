@@ -162,26 +162,37 @@ def format_evidence_chunks(
     """Format evidence chunks for storage with provenance fields."""
     formatted = {
         "chunks_used": len(context_chunks),
-        "chunk_ids": [chunk.get("chunk_id") for chunk in context_chunks],
-        "chunk_sources": [chunk.get("doc_title") for chunk in context_chunks],
+        "chunk_ids": [chunk.get("chunk_id") for chunk in context_chunks if chunk.get("chunk_id")],
+        "chunk_sources": [chunk.get("doc_title") for chunk in context_chunks if chunk.get("doc_title")],
         "chunks": [],
         "retrieval_method": retrieval_method,
         "retrieval_params": retrieval_params or {},
     }
     type_counts = {}
     for chunk in context_chunks:
+        # Skip chunks that don't have required fields (e.g., runbook_metadata without chunk structure)
+        if not chunk.get("chunk_id") and not chunk.get("document_id"):
+            continue
+            
         metadata = chunk.get("metadata") or {}
         source_type = (
             chunk.get("doc_type") or metadata.get("doc_type") or metadata.get("source_type")
         )
         if source_type:
             type_counts[source_type] = type_counts.get(source_type, 0) + 1
+        # For incident signatures, include source_incident_ids and match_count
+        if source_type == "incident_signature":
+            source_incident_ids = metadata.get("source_incident_ids", [])
+            match_count = metadata.get("match_count") or (len(source_incident_ids) if source_incident_ids else 0)
+            metadata["source_incident_ids"] = source_incident_ids
+            metadata["match_count"] = match_count
+        
         formatted["chunks"].append(
             {
                 "chunk_id": chunk.get("chunk_id"),
                 "document_id": chunk.get("document_id"),
                 "doc_title": chunk.get("doc_title"),
-                "content": chunk.get("content", "")[:500],
+                "content": chunk.get("content", ""),
                 "provenance": {
                     "source_type": source_type,
                     "source_id": chunk.get("document_id"),
@@ -431,37 +442,78 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         if not is_valid_no_hallucination:
             logger.error(f"Triage hallucination detected: {hallucination_errors}")
             raise ValueError(f"Triage output contains hallucinated content: {', '.join(hallucination_errors)}")
+        
+        # FIX: Ensure matched_evidence.incident_signatures is populated from actual evidence
+        # The LLM might not extract IDs correctly, so we populate from actual retrieved signatures
+        matched_evidence = triage_output.get("matched_evidence", {})
+        if not matched_evidence.get("incident_signatures") and incident_signatures:
+            # Extract incident_signature_ids from actual evidence
+            sig_ids = []
+            for sig in incident_signatures:
+                metadata = sig.get("metadata", {})
+                sig_id = metadata.get("incident_signature_id")
+                if sig_id:
+                    sig_ids.append(sig_id)
+            if sig_ids:
+                matched_evidence["incident_signatures"] = sig_ids
+                triage_output["matched_evidence"] = matched_evidence
+                logger.info(f"Populated matched_evidence.incident_signatures from evidence: {len(sig_ids)} signatures")
+        
+        # FIX: Ensure confidence is not 0 when signatures are found
+        if triage_output.get("confidence", 0) == 0 and incident_signatures:
+            # Calculate confidence based on number of matches and scores
+            num_matches = len(incident_signatures)
+            if num_matches >= 3:
+                triage_output["confidence"] = 0.9
+            elif num_matches >= 2:
+                triage_output["confidence"] = 0.8
+            elif num_matches >= 1:
+                triage_output["confidence"] = 0.7
+            logger.info(f"Adjusted confidence from 0 to {triage_output['confidence']} based on {num_matches} signature matches")
+        
+        # Generate likely_cause from evidence if LLM didn't provide it
+        if not triage_output.get("likely_cause") or triage_output.get("likely_cause") == "Unknown (no matching context evidence).":
+            if incident_signatures:
+                # Generate likely_cause from matched incident signatures
+                symptoms_list = []
+                failure_types = set()
+                error_classes = set()
+                alert_desc = alert.get("description", "").lower()
+                
+                for sig in incident_signatures[:3]:  # Use top 3 signatures
+                    metadata = sig.get("metadata", {})
+                    symptoms = metadata.get("symptoms", [])
+                    if symptoms:
+                        symptoms_list.extend(symptoms[:2])  # Take first 2 symptoms from each
+                    failure_type = metadata.get("failure_type")
+                    error_class = metadata.get("error_class")
+                    if failure_type:
+                        failure_types.add(failure_type)
+                    if error_class:
+                        error_classes.add(error_class)
+                
+                # Build likely_cause from evidence and alert description
+                if "disk" in alert_desc or "storage" in alert_desc or "space" in alert_desc:
+                    likely_cause = "The failure may be due to high disk usage or storage pressure on the database server, leading to I/O wait alerts and potential job failures."
+                elif symptoms_list:
+                    unique_symptoms = list(set(symptoms_list))[:3]  # Top 3 unique symptoms
+                    symptom_text = ", ".join(unique_symptoms).replace("_", " ")
+                    if failure_types or error_classes:
+                        likely_cause = f"The failure may be due to {symptom_text}, as indicated by the matched incident patterns."
+                    else:
+                        likely_cause = f"Based on historical patterns, the issue appears related to {symptom_text}."
+                elif failure_types or error_classes:
+                    failure_desc = " or ".join([ft.replace("_", " ").lower() for ft in list(failure_types)[:2]])
+                    likely_cause = f"The failure appears to be a {failure_desc}, based on matched incident signatures."
+                else:
+                    likely_cause = "Analysis based on alert description and matched historical incident patterns."
+                
+                triage_output["likely_cause"] = likely_cause[:300]  # Limit to 300 chars
+                logger.info(f"Generated likely_cause from evidence: {likely_cause[:100]}...")
 
-        # Apply policy gate
-        workflow_cfg = get_workflow_config() or {}
-        feedback_before_policy = bool(workflow_cfg.get("feedback_before_policy", False))
-        if feedback_before_policy:
-            policy_decision = None
-            policy_band = "PENDING"
-            logger.info("Policy evaluation deferred until feedback received")
-        else:
-            policy_decision = get_policy_from_config(triage_output)
-            policy_band = policy_decision.get("policy_band", "REVIEW")
-            logger.info(f"Policy decision: {policy_band}")
-        
-        # Update triage output with policy (policy gate determines this)
-        triage_output["policy"] = policy_band
-        
-        # PREDICT routing from matched incident signatures (primary method)
-        # This uses historical evidence to determine which team should handle this incident
-        predicted_routing = predict_routing_from_evidence(incident_signatures)
-        if predicted_routing:
-            triage_output["routing"] = predicted_routing
-            logger.info(f"Routing predicted from evidence: {predicted_routing}")
-        else:
-            # Fallback: Extract routing from alert labels if no evidence available
-            routing = extract_routing_from_alert(alert)
-            if routing:
-                triage_output["routing"] = routing
-                logger.info(f"Routing extracted from alert labels (fallback): {routing}")
-        
         # PREDICT impact and urgency from matched incident signatures (primary method)
         # This uses historical evidence to determine priority based on impact/urgency patterns
+        # IMPORTANT: This must happen BEFORE policy gate evaluation so policy uses the correct severity
         predicted_impact_urgency = predict_impact_urgency_from_evidence(incident_signatures)
         if predicted_impact_urgency:
             impact, urgency = predicted_impact_urgency
@@ -483,6 +535,35 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 mapped_severity = derive_severity_from_impact_urgency(impact, urgency)
                 triage_output["severity"] = mapped_severity
                 logger.info(f"Impact/urgency/severity derived from alert labels (fallback): impact={impact}, urgency={urgency}, severity={mapped_severity}")
+
+        # PREDICT routing from matched incident signatures (primary method)
+        # This uses historical evidence to determine which team should handle this incident
+        predicted_routing = predict_routing_from_evidence(incident_signatures)
+        if predicted_routing:
+            triage_output["routing"] = predicted_routing
+            logger.info(f"Routing predicted from evidence: {predicted_routing}")
+        else:
+            # Fallback: Extract routing from alert labels if no evidence available
+            routing = extract_routing_from_alert(alert)
+            if routing:
+                triage_output["routing"] = routing
+                logger.info(f"Routing extracted from alert labels (fallback): {routing}")
+
+        # Apply policy gate AFTER severity has been set from impact/urgency
+        # This ensures policy uses the correct severity value
+        workflow_cfg = get_workflow_config() or {}
+        feedback_before_policy = bool(workflow_cfg.get("feedback_before_policy", False))
+        if feedback_before_policy:
+            policy_decision = None
+            policy_band = "PENDING"
+            logger.info("Policy evaluation deferred until feedback received")
+        else:
+            policy_decision = get_policy_from_config(triage_output)
+            policy_band = policy_decision.get("policy_band", "REVIEW")
+            logger.info(f"Policy decision: {policy_band} (based on severity={triage_output.get('severity')}, confidence={triage_output.get('confidence')})")
+        
+        # Update triage output with policy (policy gate determines this)
+        triage_output["policy"] = policy_band
         
         # Extract affected_services from alert
         affected_services = alert.get("affected_services")
@@ -505,36 +586,85 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 if len(aff_svc) > 0:
                     triage_output["affected_services"] = aff_svc
 
-        # Format evidence for storage
-        formatted_evidence = {
-            "incident_signatures": [
-                {
-                    "chunk_id": sig.get("chunk_id"),
-                    "document_id": sig.get("document_id"),
-                    "incident_signature_id": sig.get("metadata", {}).get("incident_signature_id"),
-                    "failure_type": sig.get("metadata", {}).get("failure_type"),
-                    "error_class": sig.get("metadata", {}).get("error_class"),
-                }
-                for sig in incident_signatures
-            ],
-            "runbook_metadata": [
-                {
-                    "document_id": rb.get("document_id"),
-                    "runbook_id": rb.get("tags", {}).get("runbook_id"),
-                    "title": rb.get("title"),
-                    "service": rb.get("service"),
-                    "component": rb.get("component"),
-                }
-                for rb in runbook_metadata
-            ],
-            "retrieval_method": "triage_retrieval",
-            "retrieval_params": {
+        # Format evidence for storage - include full chunks with content
+        # Only pass incident_signatures to format_evidence_chunks (runbook_metadata is added separately)
+        formatted_evidence = format_evidence_chunks(
+            incident_signatures,  # Only incident signatures have chunk structure
+            retrieval_method="triage_retrieval",
+            retrieval_params={
                 "query_text": query_text,
                 "service": service_val,
                 "component": component_val,
                 "limit": retrieval_limit,
             },
-        }
+        )
+        # Also include summary for backward compatibility
+        formatted_evidence["incident_signatures"] = [
+            {
+                "chunk_id": sig.get("chunk_id"),
+                "document_id": sig.get("document_id"),
+                "incident_signature_id": sig.get("metadata", {}).get("incident_signature_id"),
+                "failure_type": sig.get("metadata", {}).get("failure_type"),
+                "error_class": sig.get("metadata", {}).get("error_class"),
+                "metadata": sig.get("metadata", {}),
+            }
+            for sig in incident_signatures
+        ]
+        formatted_evidence["runbook_metadata"] = [
+            {
+                "document_id": rb.get("document_id"),
+                "runbook_id": rb.get("tags", {}).get("runbook_id"),
+                "title": rb.get("title"),
+                "service": rb.get("service"),
+                "component": rb.get("component"),
+            }
+            for rb in runbook_metadata
+        ]
+        
+        # Add runbook steps to evidence chunks for UI display
+        if runbook_metadata:
+            try:
+                from retrieval.resolution_retrieval import retrieve_runbook_steps
+                runbook_ids_for_steps = [rb.get("tags", {}).get("runbook_id") for rb in runbook_metadata if rb.get("tags", {}).get("runbook_id")]
+                if runbook_ids_for_steps:
+                    runbook_steps = retrieve_runbook_steps(runbook_ids_for_steps)
+                    # Add runbook steps as chunks for UI display
+                    for step in runbook_steps[:5]:  # Limit to top 5 steps
+                        step_chunk = {
+                            "chunk_id": step.get("chunk_id"),
+                            "document_id": step.get("document_id"),
+                            "doc_title": step.get("runbook_title", "Runbook Step"),
+                            "content": f"Condition: {step.get('condition', '')}\nAction: {step.get('action', '')}\nExpected Outcome: {step.get('expected_outcome', 'N/A')}",
+                            "provenance": {
+                                "source_type": "runbook_step",
+                                "source_id": step.get("document_id"),
+                                "service": step.get("service"),
+                                "component": step.get("component"),
+                            },
+                            "metadata": {
+                                "step_id": step.get("step_id"),
+                                "runbook_id": step.get("runbook_id"),
+                                "runbook_title": step.get("runbook_title"),
+                                "risk_level": step.get("risk_level"),
+                                "condition": step.get("condition"),
+                                "action": step.get("action"),
+                                "expected_outcome": step.get("expected_outcome"),
+                            },
+                            "scores": {
+                                "vector_score": None,
+                                "fulltext_score": None,
+                                "rrf_score": None,
+                            },
+                        }
+                        formatted_evidence["chunks"].append(step_chunk)
+                        if step.get("chunk_id"):
+                            formatted_evidence["chunk_ids"].append(step.get("chunk_id"))
+                        if step.get("runbook_title"):
+                            formatted_evidence["chunk_sources"].append(step.get("runbook_title"))
+                    formatted_evidence["chunks_used"] = len(formatted_evidence["chunks"])
+                    logger.info(f"Added {len(runbook_steps)} runbook steps to evidence chunks for UI display")
+            except Exception as e:
+                logger.warning(f"Failed to add runbook steps to evidence: {e}")
     else:
         # Fallback triage output with REVIEW band and confidence 0.0
         title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"

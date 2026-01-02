@@ -53,7 +53,10 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
           <div className="relative z-10">
             <p className="text-xs text-muted-foreground">Unique Sources</p>
             <p className="text-2xl font-bold font-mono text-foreground">
-              {[...new Set(chunkSources)].length}
+              {(() => {
+                const sourceTypes = new Set(chunks.map((c: any) => c.provenance?.source_type || 'unknown').filter(Boolean));
+                return sourceTypes.size || 0;
+              })()}
             </p>
           </div>
         </div>

@@ -107,13 +107,19 @@ def get_policy_from_config(triage_output: Dict) -> Dict:
         if all_conditions_match:
             # Found matching band
             actions = band_config.get("actions", {})
+            # Create a more descriptive policy reason
+            severity_display = severity.capitalize() if severity else "Unknown"
+            confidence_display = f"{confidence:.1%}" if isinstance(confidence, (int, float)) else str(confidence)
+            policy_reason = f"Matched {band_name} band based on severity={severity_display} and confidence={confidence_display}"
+            
             policy_decision = {
                 "policy_band": band_name,
+                "original_policy_band": band_name,  # Track original system-determined policy band
                 "can_auto_apply": actions.get("can_auto_apply", False),
                 "requires_approval": actions.get("requires_approval", True),
                 "notification_required": actions.get("notification_required", False),
                 "rollback_required": actions.get("rollback_required", False),
-                "policy_reason": f"Matched {band_name} band based on severity={severity} and confidence={confidence}",
+                "policy_reason": policy_reason,
             }
             logger.info(
                 f"Policy band matched: {band_name} for severity={severity}, confidence={confidence}"
@@ -127,6 +133,7 @@ def get_policy_from_config(triage_output: Dict) -> Dict:
     )
     return {
         "policy_band": "REVIEW",
+        "original_policy_band": "REVIEW",  # Track original system-determined policy band
         "can_auto_apply": default_band.get("can_auto_apply", False),
         "requires_approval": default_band.get("requires_approval", True),
         "notification_required": default_band.get("notification_required", True),

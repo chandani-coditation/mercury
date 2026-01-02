@@ -99,18 +99,9 @@ const Index = () => {
       // Summary: Use alert description (first 200 chars) if no summary in triage
       const summary = triage.summary || alert.description?.substring(0, 200) || "";
       
-      // Likely cause: Try to infer from failure_type/error_class if available
-      let likely_cause = triage.likely_cause;
-      if (!likely_cause && triage.incident_signature) {
-        const failureType = triage.incident_signature.failure_type || "";
-        const errorClass = triage.incident_signature.error_class || "";
-        if (failureType || errorClass) {
-          likely_cause = `${failureType}${errorClass ? ` - ${errorClass}` : ""}`;
-        }
-      }
-      if (!likely_cause) {
-        likely_cause = "Analysis based on alert description and historical patterns.";
-      }
+      // Likely cause: Use LLM-generated value from triage output (based on evidence)
+      // If not provided, use a simple fallback
+      const likely_cause = triage.likely_cause || "Analysis based on alert description and historical patterns.";
       
       // Recommended actions: Can be derived from matched runbooks or left empty
       const recommended_actions = triage.recommended_actions || [];
@@ -135,11 +126,58 @@ const Index = () => {
         policy_band: data.policy_band,
         policy_decision: data.policy_decision
       });
-      setRetrievalData(data.evidence || data.evidence_chunks || {
-        chunks_used: 0,
-        chunk_ids: [],
-        chunk_sources: [],
-        chunks: []
+      // Transform evidence structure for RetrievalTab
+      const evidence = data.evidence || data.evidence_chunks || {};
+      
+      // Use chunks from evidence if available (full content), otherwise build from incident_signatures/runbook_metadata
+      let chunks = evidence.chunks || [];
+      
+      if (chunks.length === 0) {
+        // Fallback: build chunks from incident_signatures and runbook_metadata
+        const incidentSigs = evidence.incident_signatures || [];
+        const runbookMeta = evidence.runbook_metadata || [];
+        
+        chunks = [
+          ...incidentSigs.map((sig: any) => {
+            const metadata = sig.metadata || {};
+            const symptoms = metadata.symptoms || [];
+            const symptomsText = Array.isArray(symptoms) ? symptoms.join(', ') : '';
+            return {
+              chunk_id: sig.chunk_id || sig.incident_signature_id || '',
+              document_id: sig.document_id || 'None',
+              doc_title: `Incident Signature: ${sig.incident_signature_id || 'Unknown'}`,
+              content: `Failure Type: ${sig.failure_type || metadata.failure_type || 'N/A'}\nError Class: ${sig.error_class || metadata.error_class || 'N/A'}${symptomsText ? `\nSymptoms: ${symptomsText}` : ''}\nService: ${metadata.service || metadata.affected_service || 'N/A'}\nComponent: ${metadata.component || 'N/A'}`,
+              provenance: {
+                source_type: 'incident_signature',
+                source_id: sig.incident_signature_id,
+              },
+              metadata: metadata,
+            };
+          }),
+          ...runbookMeta.map((rb: any) => ({
+            chunk_id: rb.runbook_id || rb.document_id || '',
+            document_id: rb.document_id || '',
+            doc_title: rb.title || `Runbook: ${rb.runbook_id || 'Unknown'}`,
+            content: `Service: ${rb.service || 'N/A'}\nComponent: ${rb.component || 'N/A'}`,
+            provenance: {
+              source_type: 'runbook',
+              source_id: rb.runbook_id,
+            },
+            metadata: {
+              service: rb.service,
+              component: rb.component,
+            },
+          })),
+        ];
+      }
+      
+      setRetrievalData({
+        chunks_used: chunks.length,
+        chunk_ids: chunks.map((c: any) => c.chunk_id).filter(Boolean),
+        chunk_sources: chunks.map((c: any) => c.doc_title).filter(Boolean),
+        chunks: chunks,
+        retrieval_method: evidence.retrieval_method || 'triage_retrieval',
+        retrieval_params: evidence.retrieval_params || {},
       });
       setCurrentStep("triage");
     } catch (err: any) {
@@ -316,17 +354,10 @@ const Index = () => {
       
       // Derive summary and likely_cause if missing
       const summary = triageOutput.summary || rawAlert.description?.substring(0, 200) || "";
-      let likely_cause = triageOutput.likely_cause;
-      if (!likely_cause && triageOutput.incident_signature) {
-        const failureType = triageOutput.incident_signature.failure_type || "";
-        const errorClass = triageOutput.incident_signature.error_class || "";
-        if (failureType || errorClass) {
-          likely_cause = `${failureType}${errorClass ? ` - ${errorClass}` : ""}`;
-        }
-      }
-      if (!likely_cause) {
-        likely_cause = "Analysis based on alert description and historical patterns.";
-      }
+      
+      // Likely cause: Use LLM-generated value from triage output (based on evidence)
+      // If not provided, use a simple fallback
+      const likely_cause = triageOutput.likely_cause || "Analysis based on alert description and historical patterns.";
       
       setTriageData({
         ...triageOutput,
@@ -343,10 +374,57 @@ const Index = () => {
       });
 
       // Set retrieval/evidence data (always set, even if empty)
-      setRetrievalData(incident.triage_evidence || incident.resolution_evidence || {
-        chunks_used: 0,
-        chunk_sources: [],
-        chunks: []
+      const evidence = incident.triage_evidence || incident.resolution_evidence || {};
+      
+      // Use chunks from evidence if available (full content), otherwise build from incident_signatures/runbook_metadata
+      let chunks = evidence.chunks || [];
+      
+      if (chunks.length === 0) {
+        // Fallback: build chunks from incident_signatures and runbook_metadata
+        const incidentSigs = evidence.incident_signatures || [];
+        const runbookMeta = evidence.runbook_metadata || [];
+        
+        chunks = [
+          ...incidentSigs.map((sig: any) => {
+            const metadata = sig.metadata || {};
+            const symptoms = metadata.symptoms || [];
+            const symptomsText = Array.isArray(symptoms) ? symptoms.join(', ') : '';
+            return {
+              chunk_id: sig.chunk_id || sig.incident_signature_id || '',
+              document_id: sig.document_id || 'None',
+              doc_title: `Incident Signature: ${sig.incident_signature_id || 'Unknown'}`,
+              content: `Failure Type: ${sig.failure_type || metadata.failure_type || 'N/A'}\nError Class: ${sig.error_class || metadata.error_class || 'N/A'}${symptomsText ? `\nSymptoms: ${symptomsText}` : ''}\nService: ${metadata.service || metadata.affected_service || 'N/A'}\nComponent: ${metadata.component || 'N/A'}`,
+              provenance: {
+                source_type: 'incident_signature',
+                source_id: sig.incident_signature_id,
+              },
+              metadata: metadata,
+            };
+          }),
+          ...runbookMeta.map((rb: any) => ({
+            chunk_id: rb.runbook_id || rb.document_id || '',
+            document_id: rb.document_id || '',
+            doc_title: rb.title || `Runbook: ${rb.runbook_id || 'Unknown'}`,
+            content: `Service: ${rb.service || 'N/A'}\nComponent: ${rb.component || 'N/A'}`,
+            provenance: {
+              source_type: 'runbook',
+              source_id: rb.runbook_id,
+            },
+            metadata: {
+              service: rb.service,
+              component: rb.component,
+            },
+          })),
+        ];
+      }
+      
+      setRetrievalData({
+        chunks_used: chunks.length,
+        chunk_ids: chunks.map((c: any) => c.chunk_id).filter(Boolean),
+        chunk_sources: chunks.map((c: any) => c.doc_title).filter(Boolean),
+        chunks: chunks,
+        retrieval_method: evidence.retrieval_method || 'triage_retrieval',
+        retrieval_params: evidence.retrieval_params || {},
       });
 
       // Set resolution data if exists

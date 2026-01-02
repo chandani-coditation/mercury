@@ -1,5 +1,7 @@
 """Hybrid search combining vector similarity and full-text search."""
 
+from retrieval.incident_descriptions import get_incident_descriptions
+
 import os
 import time
 from typing import List, Dict, Optional
@@ -482,7 +484,8 @@ def triage_retrieval(
                     'assignment_group', s.assignment_group,
                     'impact', s.impact,
                     'urgency', s.urgency,
-                    'source_incident_ids', s.source_incident_ids
+                    'source_incident_ids', s.source_incident_ids,
+                    'match_count', COALESCE(array_length(s.source_incident_ids, 1), 0)
                 ) as metadata,
                 COALESCE(s.affected_service, s.service) as doc_title,
                 'incident_signature' as doc_type,
@@ -517,7 +520,8 @@ def triage_retrieval(
                     'assignment_group', s.assignment_group,
                     'impact', s.impact,
                     'urgency', s.urgency,
-                    'source_incident_ids', s.source_incident_ids
+                    'source_incident_ids', s.source_incident_ids,
+                    'match_count', COALESCE(array_length(s.source_incident_ids, 1), 0)
                 ) as metadata,
                 COALESCE(s.affected_service, s.service) as doc_title,
                 'incident_signature' as doc_type,
@@ -590,15 +594,54 @@ def triage_retrieval(
         cur.execute(incident_sig_query, sig_params)
         incident_sig_rows = cur.fetchall()
         
+        # Collect all source_incident_ids to fetch descriptions
+        all_source_incident_ids = []
+        for row in incident_sig_rows:
+            if isinstance(row, dict):
+                metadata = row.get("metadata", {})
+            else:
+                metadata = row[4] if isinstance(row[4], dict) else {}
+            source_ids = metadata.get("source_incident_ids", [])
+            if source_ids:
+                all_source_incident_ids.extend(source_ids)
+        
+        # Fetch original incident descriptions
+        incident_descriptions = {}
+        if all_source_incident_ids:
+            unique_incident_ids = list(set(all_source_incident_ids))
+            try:
+                incident_descriptions = get_incident_descriptions(unique_incident_ids)
+            except Exception as e:
+                logger.warning(f"Failed to fetch incident descriptions: {e}")
+        
         incident_signatures = []
         for row in incident_sig_rows:
             if isinstance(row, dict):
+                metadata = row["metadata"] if isinstance(row["metadata"], dict) else {}
+                source_ids = metadata.get("source_incident_ids", [])
+                
+                # Enhance content with original incident descriptions
+                enhanced_content = row["content"]
+                if source_ids and incident_descriptions:
+                    desc_parts = []
+                    for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
+                        if inc_id in incident_descriptions:
+                            desc = incident_descriptions[inc_id]
+                            if desc.get("title"):
+                                desc_parts.append(f"Original Incident {inc_id} - Title: {desc['title']}")
+                            if desc.get("description"):
+                                # Truncate description to 200 chars
+                                desc_text = desc["description"][:200] + ("..." if len(desc["description"]) > 200 else "")
+                                desc_parts.append(f"Original Incident {inc_id} - Description: {desc_text}")
+                    if desc_parts:
+                        enhanced_content = row["content"] + "\n\n" + "\n".join(desc_parts)
+                
                 incident_signatures.append({
                     "chunk_id": str(row["id"]),
                     "document_id": str(row["document_id"]),
                     "chunk_index": row["chunk_index"],
-                    "content": row["content"],
-                    "metadata": row["metadata"] if isinstance(row["metadata"], dict) else {},
+                    "content": enhanced_content,
+                    "metadata": metadata,
                     "doc_title": row["doc_title"],
                     "doc_type": row["doc_type"],
                     "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
@@ -607,12 +650,31 @@ def triage_retrieval(
                 })
             else:
                 # Handle tuple result
+                metadata = row[4] if isinstance(row[4], dict) else {}
+                source_ids = metadata.get("source_incident_ids", [])
+                
+                # Enhance content with original incident descriptions
+                enhanced_content = row[3]
+                if source_ids and incident_descriptions:
+                    desc_parts = []
+                    for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
+                        if inc_id in incident_descriptions:
+                            desc = incident_descriptions[inc_id]
+                            if desc.get("title"):
+                                desc_parts.append(f"Original Incident {inc_id} - Title: {desc['title']}")
+                            if desc.get("description"):
+                                # Truncate description to 200 chars
+                                desc_text = desc["description"][:200] + ("..." if len(desc["description"]) > 200 else "")
+                                desc_parts.append(f"Original Incident {inc_id} - Description: {desc_text}")
+                    if desc_parts:
+                        enhanced_content = row[3] + "\n\n" + "\n".join(desc_parts)
+                
                 incident_signatures.append({
                     "chunk_id": str(row[0]),
                     "document_id": str(row[1]),
                     "chunk_index": row[2],
-                    "content": row[3],
-                    "metadata": row[4] if isinstance(row[4], dict) else {},
+                    "content": enhanced_content,
+                    "metadata": metadata,
                     "doc_title": row[5],
                     "doc_type": row[6],
                     "vector_score": float(row[7]) if row[7] else 0.0,
