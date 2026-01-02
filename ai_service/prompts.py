@@ -287,10 +287,9 @@ Provide a JSON response with the following structure:
     "recommendations": [
         {{
             "step_id": "RB123-S3",
-            "action": "Verify service account is enabled and has proper permissions",
-            "condition": "SQL Agent job fails due to authentication error",
-            "expected_outcome": "Job can authenticate successfully and execute without permission errors",
-            "rollback": "Revert any account permission changes made",
+            "title": "Verify service account permissions",
+            "action": "Verify that the service account used by SQL Agent is enabled and has the necessary permissions to access the step output file location. Check the account status in Active Directory and verify file system permissions on the output directory.",
+            "expected_outcome": "The service account is enabled and has proper permissions, allowing the SQL Agent job to authenticate and access required files successfully",
             "risk_level": "low",
             "confidence": 0.91,
             "provenance": {{
@@ -306,12 +305,28 @@ Provide a JSON response with the following structure:
     "reasoning": "Short explanation of why these steps were selected and ordered this way, citing historical success and relevance."
 }}
 
+CRITICAL FORMATTING RULES:
+- **title**: Create a short, UI-friendly title (3-6 words) that summarizes the action. Example: "Identify disk usage contributors", "Check for excessive connections"
+- **action**: Plain English description of HOW TO FIX THE ISSUE. No SQL queries, no commands, no code snippets
+- **expected_outcome**: Clear description of what success looks like
+- Do NOT include rollback plans - focus only on resolution steps
+- Write in a way that any user can understand and follow
+
 CRITICAL: For each recommendation, you MUST:
-1. **action**: Create a clear, natural language description of what to do. Expand short actions like "Record in incident/ticket:" to "Record incident details in the ticket system including alert metrics, timestamps, and affected services." Make it actionable and specific.
+1. **action**: Create a clear, plain English description of HOW TO FIX THE ISSUE. Write it as an actionable step that a user can follow. 
+   - Expand short actions like "Record in incident/ticket:" to "Record the incident details in the ticket system, including the alert metrics, timestamps, affected services, and any error messages observed."
+   - Make it specific and clear: "Check the database connection pool status and verify if connections are being properly released" instead of "Check connections"
+   - Focus on WHAT TO DO to resolve the issue, not technical commands or SQL queries
+   - Write in plain English that any user can understand
+   - Example: "Verify that the service account used by SQL Agent has the necessary permissions to access the step output file location"
 2. **condition**: If the condition is generic like "Step X applies", create a meaningful condition based on the failure_type and error_class from triage output. Example: "When SQL Agent job fails due to authentication errors" instead of "Step 3 applies".
-3. **expected_outcome**: Create a clear expected outcome. If null in runbook, infer from the action. Example: "Database connection count is within normal limits" for a step about checking connections.
-4. **rollback**: Create a rollback plan. If null in runbook, create one based on the action. Example: "Revert any configuration changes made" or "Restore previous service state".
-5. **risk_level**: Set appropriate risk level (low/medium/high) based on the action. If null in runbook, infer from action content.
+3. **expected_outcome**: Create a clear expected outcome in plain English. If null in runbook, infer from the action. Example: "The SQL Agent job can authenticate successfully and execute without permission errors" for a step about checking permissions.
+4. **risk_level**: Set appropriate risk level (low/medium/high) based on the action. If null in runbook, infer from action content.
+
+IMPORTANT: 
+- DO NOT include SQL queries, command-line commands, or technical code in the action field
+- DO NOT include rollback plans - focus only on steps to fix the issue
+- Write recommendations as plain English instructions that explain the approach to solve the problem
 
 CRITICAL VALIDATION RULES:
 - **PRIMARY RULE**: Every recommendation MUST have a step_id from the provided runbook steps - NO EXCEPTIONS

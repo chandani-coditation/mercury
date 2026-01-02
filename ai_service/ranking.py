@@ -7,9 +7,50 @@ Per architecture: Steps are ranked by:
 """
 
 from typing import List, Dict, Optional
+import re
 from ai_service.core import get_logger
 
 logger = get_logger(__name__)
+
+
+def _clean_action_for_plain_english(action: str) -> str:
+    """
+    Clean action text to remove SQL queries, commands, and technical code.
+    Convert to plain English instructions.
+    
+    Args:
+        action: Raw action text that may contain SQL, commands, or technical details
+        
+    Returns:
+        Cleaned plain English action description
+    """
+    if not action:
+        return action
+    
+    # Remove SQL queries (lines starting with SELECT, INSERT, UPDATE, DELETE, etc.)
+    lines = action.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        line_stripped = line.strip()
+        # Skip SQL statements
+        if re.match(r'^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|EXEC|EXECUTE|USE|DECLARE)\s+', line_stripped, re.IGNORECASE):
+            continue
+        # Skip command-line commands (lines starting with $, #, or common command patterns)
+        if re.match(r'^\s*[$#]|^\s*(sudo|systemctl|kubectl|docker|psql|mysql)', line_stripped, re.IGNORECASE):
+            continue
+        # Skip code blocks
+        if line_stripped.startswith('```') or line_stripped.endswith('```'):
+            continue
+        cleaned_lines.append(line)
+    
+    cleaned = '\n'.join(cleaned_lines).strip()
+    
+    # Remove inline SQL patterns
+    cleaned = re.sub(r'\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|EXEC|EXECUTE|USE|DECLARE)\s+[^.]*\.', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'```[\s\S]*?```', '', cleaned)  # Remove code blocks
+    cleaned = re.sub(r'\$[^\s]+', '', cleaned)  # Remove command-line patterns like $command
+    
+    return cleaned.strip()
 
 
 def rank_steps(
@@ -190,15 +231,15 @@ def assemble_recommendations(
         else:
             enhanced_action = f"Execute step {step.get('step_id', 'unknown')}"
         
-        # Ensure we have expected_outcome, rollback, and risk_level
+        # Ensure we have expected_outcome and risk_level (no rollback needed)
         expected_outcome = step.get("expected_outcome")
         if not expected_outcome and action_text:
             # Generate a reasonable expected outcome from the action
-            expected_outcome = f"Complete {action_text.lower()}"
+            expected_outcome = f"The issue is resolved and {action_text.lower()}"
         
-        rollback = step.get("rollback")
-        if not rollback:
-            rollback = "Revert any changes made in this step"
+        # Remove any SQL queries or technical commands from action
+        # Clean up action to be plain English only
+        enhanced_action = _clean_action_for_plain_english(enhanced_action)
         
         risk_level = step.get("risk_level")
         if not risk_level:
@@ -216,7 +257,6 @@ def assemble_recommendations(
             "action": enhanced_action,
             "condition": condition_text if condition_text and condition_text.lower() not in ["step applies", "n/a"] else None,
             "expected_outcome": expected_outcome,
-            "rollback": rollback,
             "risk_level": risk_level,
             "confidence": step["combined_score"],
             "provenance": {

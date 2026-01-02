@@ -90,6 +90,8 @@ def retrieve_runbook_steps(
                 logger.info(f"Retrieved relevant runbook steps using semantic search for query: {query_text[:50]}...")
             except Exception as e:
                 logger.warning(f"Semantic search failed, falling back to direct retrieval: {e}")
+                # Rollback the failed transaction before trying fallback
+                conn.rollback()
                 # Fall back to direct retrieval without semantic search
                 query_text = None
         
@@ -117,7 +119,8 @@ def retrieve_runbook_steps(
             """
             
             # Execute with runbook_ids and limit
-            cur.execute(query, tuple(runbook_ids) + (limit,))
+            params = tuple(runbook_ids) + (limit,)
+            cur.execute(query, params)
         
         rows = cur.fetchall()
         
@@ -234,6 +237,8 @@ def retrieve_runbook_chunks_by_document_id(
                 logger.info(f"Retrieved runbook chunks using semantic search for document_ids: {document_ids}")
             except Exception as e:
                 logger.warning(f"Semantic search failed, falling back to direct retrieval: {e}")
+                # Rollback the failed transaction before trying fallback
+                conn.rollback()
                 query_text = None
         
         # Fallback: retrieve all chunks for document_ids

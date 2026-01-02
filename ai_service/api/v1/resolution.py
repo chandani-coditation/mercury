@@ -52,9 +52,8 @@ async def resolution(
 
     **Response:**
     - incident_id: Incident identifier
-    - resolution: Resolution steps, commands, rollback plan
-    - policy_band: Policy decision
-    - evidence_chunks: Retrieved context chunks
+    - resolution: Resolution steps with titles, actions, expected outcomes
+    - evidence: Retrieved context information
     """
     # Determine if LangGraph should be used
     use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH
@@ -107,11 +106,9 @@ async def resolution(
                     result = {
                         "incident_id": incident_id,
                         "resolution": resolution_result,
-                        "policy_band": incident.get("policy_band"),
-                        "policy_decision": incident.get("policy_decision"),
                         "evidence": {
                             "retrieval_method": "resolution_retrieval",
-                            "runbook_steps": len(resolution_result.get("recommendations", [])),
+                            "runbook_steps": len(resolution_result.get("steps", [])),
                         }
                     }
                 except IncidentNotFoundError:
