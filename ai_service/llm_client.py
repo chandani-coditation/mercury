@@ -15,6 +15,11 @@ from ai_service.prompts import (
     RESOLUTION_USER_PROMPT_TEMPLATE,
     RESOLUTION_SYSTEM_PROMPT_DEFAULT
 )
+from ai_service.private_gateway_client import (
+    call_private_gateway,
+    format_gateway_response_for_triage,
+    format_gateway_response_for_resolution
+)
 
 load_dotenv()
 
@@ -25,6 +30,16 @@ MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 1.0  # seconds
 MAX_RETRY_DELAY = 60.0  # seconds
 RETRY_EXPONENTIAL_BASE = 2.0
+
+
+def use_private_gateway() -> bool:
+    """
+    Check if private LLM gateway should be used.
+
+    Returns:
+        True if PRIVATE_LLM_GATEWAY env var is set to 'true', False otherwise
+    """
+    return os.getenv("PRIVATE_LLM_GATEWAY", "false").lower() == "true"
 
 
 def get_llm_client():
