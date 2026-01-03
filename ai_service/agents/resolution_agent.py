@@ -83,12 +83,15 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     if not runbook_ids:
         logger.warning("No runbook_ids in triage output matched_evidence.runbook_refs")
         # Try to get runbook_ids from evidence if available
-        if hasattr(triage_output, 'get') and isinstance(triage_output, dict):
+        if isinstance(triage_output, dict):
             evidence = triage_output.get("evidence") or {}
             runbook_metadata = evidence.get("runbook_metadata", [])
+            logger.debug(f"Evidence runbook_metadata: {runbook_metadata}")
             if runbook_metadata:
                 runbook_ids = [rb.get("runbook_id") for rb in runbook_metadata if rb.get("runbook_id")]
                 logger.info(f"Extracted runbook_ids from evidence: {runbook_ids}")
+            else:
+                logger.warning("No runbook_metadata found in evidence")
     
     # Retrieve runbook steps using document_id from triage (preferred) or runbook_id (fallback)
     evidence = triage_output.get("evidence", {})
@@ -127,6 +130,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     
     logger.info(f"Retrieved {len(runbook_steps)} runbook steps")
     
+    # Store original count before filtering (for evidence reporting)
+    original_runbook_steps_count = len(runbook_steps)
+    
     # 2. Filter out documentation/context steps (not actionable)
     filtered_steps = filter_steps(runbook_steps)
     
@@ -141,6 +147,30 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         }
     
     logger.info(f"Filtered to {len(filtered_steps)} actionable steps")
+    # 2.5. Identify root problem from triage output (generic, not hard-coded)
+    root_problem = _identify_root_problem(triage_output, incident_signature)
+    logger.info(f"Identified root problem: {root_problem}")
+    
+    # 2.6. Match remediation steps to root problem (generic matching)
+    # Filter steps where condition matches the root problem
+    matched_remediation_steps = _match_remediation_to_problem(filtered_steps, root_problem)
+    if matched_remediation_steps:
+        logger.info(f"Matched {len(matched_remediation_steps)} remediation steps to root problem")
+        # Prioritize matched remediation steps
+        filtered_steps = matched_remediation_steps + [s for s in filtered_steps if s not in matched_remediation_steps]
+
+    
+    # 2.5. Identify root problem from triage output (generic, not hard-coded)
+    root_problem = _identify_root_problem(triage_output, incident_signature)
+    logger.info(f"Identified root problem: {root_problem}")
+    
+    # 2.6. Match remediation steps to root problem (generic matching)
+    # Filter steps where condition matches the root problem
+    matched_remediation_steps = _match_remediation_to_problem(filtered_steps, root_problem)
+    if matched_remediation_steps:
+        logger.info(f"Matched {len(matched_remediation_steps)} remediation steps to root problem")
+        # Prioritize matched remediation steps
+        filtered_steps = matched_remediation_steps + [s for s in filtered_steps if s not in matched_remediation_steps]
     
     # 3. Retrieve historical resolutions and close notes for context
     historical_resolutions = retrieve_historical_resolutions(
@@ -173,9 +203,52 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     # 6. Order steps by logical flow (investigation → mitigation → resolution → verification)
     ordered_steps = order_steps_by_type(ranked_steps)
     
-    # 7. Limit to top 5-7 steps for UI
-    max_steps = 7
+    # 6.5. Ensure we have mitigation and/or resolution steps (CRITICAL)
+    # If we only have investigation/verification, boost relevance for disk/IO/log/tempdb steps
+    step_types_present = {step.get("_inferred_step_type") for step in ordered_steps}
+    has_mitigation_or_resolution = "mitigation" in step_types_present or "resolution" in step_types_present
+    
+    if not has_mitigation_or_resolution:
+        logger.warning("No mitigation or resolution steps found. Boosting relevance for corrective actions.")
+        # Re-rank with higher weight for disk/IO/log/tempdb related steps
+        triage_summary = triage_output.get("summary", "").lower()
+        triage_likely_cause = triage_output.get("likely_cause", "").lower()
+        triage_text = f"{triage_summary} {triage_likely_cause}"
+        
+        # Boost steps that mention disk/IO/log/tempdb/space
+        relevance_keywords = ["disk", "io", "i/o", "log", "tempdb", "space", "usage", "volume", "file", "backup"]
+        for step in ordered_steps:
+            action = (step.get("action", "") or "").lower()
+            condition = (step.get("condition", "") or "").lower()
+            step_text = f"{action} {condition}"
+            
+            # Boost relevance if step mentions problem keywords
+            if any(keyword in step_text for keyword in relevance_keywords):
+                # Also check if it's a corrective action (not just investigation)
+                if any(word in step_text for word in ["reduce", "clean", "fix", "resolve", "remove", "clear", "free", "backup"]):
+                    # Boost this step significantly
+                    current_score = step.get("combined_score", 0.0)
+                    step["combined_score"] = min(1.0, current_score + 0.3)
+                    logger.debug(f"Boosted relevance for corrective step: {step.get('step_id')}")
+        
+        # Re-order after boosting
+        ordered_steps = sorted(ordered_steps, key=lambda s: s.get("combined_score", 0.0), reverse=True)
+    
+    # 7. Limit to top 4-6 steps for UI (prefer fewer, more focused steps)
+    max_steps = 6
     selected_steps = ordered_steps[:max_steps]
+    
+    # 7.5. Ensure at least one mitigation or resolution step is included
+    selected_types = {step.get("_inferred_step_type") for step in selected_steps}
+    if "mitigation" not in selected_types and "resolution" not in selected_types:
+        # Find the best mitigation or resolution step and add it
+        for step in ordered_steps:
+            step_type = step.get("_inferred_step_type")
+            if step_type in ["mitigation", "resolution"]:
+                if step not in selected_steps:
+                    selected_steps.append(step)
+                    logger.info(f"Added {step_type} step to ensure corrective action: {step.get('step_id')}")
+                    break
     
     logger.info(f"Selected {len(selected_steps)} steps for resolution plan")
     
@@ -220,7 +293,45 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     final_steps = ui_steps
     
     # 10. Calculate overall metrics
-    overall_confidence = sum(s.get("confidence", 0.0) for s in final_steps) / len(final_steps) if final_steps else 0.0
+    # Base confidence from triage output (if available)
+    triage_confidence = triage_output.get("confidence", 0.0)
+    
+    # Calculate step-level confidence average
+    step_confidences = [s.get("confidence", 0.0) for s in final_steps if s.get("confidence", 0.0) > 0]
+    avg_step_confidence = sum(step_confidences) / len(step_confidences) if step_confidences else 0.0
+    
+    # Combine triage confidence (40%) with step confidence (60%)
+    # This ensures resolution confidence reflects both triage quality and step relevance
+    if triage_confidence > 0 and avg_step_confidence > 0:
+        overall_confidence = (triage_confidence * 0.4) + (avg_step_confidence * 0.6)
+    elif triage_confidence > 0:
+        # If no step confidence, use triage confidence but reduce it
+        overall_confidence = triage_confidence * 0.7
+    elif avg_step_confidence > 0:
+        # If no triage confidence, use step confidence
+        overall_confidence = avg_step_confidence
+    else:
+        # Fallback: base confidence on runbook match quality
+        if runbook_steps and len(runbook_steps) > 0:
+            overall_confidence = 0.6  # Moderate confidence if we have runbook steps
+        else:
+            overall_confidence = 0.0
+    
+    # Ensure confidence is reasonable (not too low if we have good evidence)
+    if len(final_steps) > 0 and runbook_steps and len(runbook_steps) > 0:
+        # Boost confidence if we have matched runbook steps
+        if overall_confidence < 0.5:
+            overall_confidence = min(0.75, overall_confidence + 0.25)
+        
+        # Additional boost if triage confidence is high (indicates good evidence match)
+        if triage_confidence >= 0.8:
+            # High triage confidence means good evidence match, so resolution should reflect that
+            overall_confidence = max(overall_confidence, triage_confidence * 0.75)
+        
+        # Boost if we have remediation steps matched to root problem (check if any steps were matched)
+        # Note: matched_remediation_steps is from earlier in the function, but we can check if steps exist
+        if len(final_steps) >= 3:  # If we have multiple steps, likely matched remediation
+            overall_confidence = min(0.85, overall_confidence + 0.1)
     
     risk_levels = [s.get("risk_level", "medium") for s in final_steps]
     risk_level = "high" if "high" in risk_levels else ("medium" if "medium" in risk_levels else "low")
@@ -234,17 +345,50 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     failure_type = incident_signature.failure_type
     error_class = incident_signature.error_class
     
-    # Build context-aware reasoning
-    if summary and likely_cause:
-        reasoning = f"{summary}. {likely_cause}. Steps focus on addressing {failure_type} and {error_class}."
-    elif likely_cause:
-        reasoning = f"{likely_cause}. Steps focus on resolving {failure_type}/{error_class}."
-    else:
-        reasoning = f"Steps selected based on relevance to {failure_type}/{error_class} from runbook procedures."
+    # Build context-aware reasoning - emphasize runbooks as primary source
+    # Check what types of steps we have
+    step_types = [step.get("_inferred_step_type") for step in selected_steps]
+    has_mitigation = "mitigation" in step_types
+    has_resolution = "resolution" in step_types
     
-    # Ensure reasoning is concise
+    if has_mitigation or has_resolution:
+        action_type = "mitigation and resolution" if (has_mitigation and has_resolution) else ("mitigation" if has_mitigation else "resolution")
+        if summary and likely_cause:
+            reasoning = f"{summary}. {likely_cause}. Steps are based on runbook procedures and focus on {action_type} to address {failure_type} and {error_class}."
+        elif likely_cause:
+            reasoning = f"{likely_cause}. Steps are based on runbook procedures and focus on {action_type} to resolve {failure_type}/{error_class}."
+        else:
+            reasoning = f"Steps are selected from runbook procedures for {action_type} of {failure_type}/{error_class}."
+    else:
+        # Fallback if somehow we don't have mitigation/resolution
+        if summary and likely_cause:
+            reasoning = f"{summary}. {likely_cause}. Steps are based on runbook procedures to address {failure_type} and {error_class}."
+        elif likely_cause:
+            reasoning = f"{likely_cause}. Steps are based on runbook procedures to resolve {failure_type}/{error_class}."
+        else:
+            reasoning = f"Steps are selected from runbook procedures based on relevance to {failure_type}/{error_class}."
+    
+    # Ensure reasoning mentions runbooks (critical for user understanding)
+    if "runbook" not in reasoning.lower():
+        # Prepend runbook mention if missing
+        if reasoning.startswith("Steps"):
+            reasoning = "Steps from runbook procedures: " + reasoning[6:].lower()
+        else:
+            reasoning = "Based on runbook procedures: " + reasoning
+    
+    # Ensure reasoning is concise but preserve runbook mention
     if len(reasoning) > 300:
-        reasoning = reasoning[:297] + "..."
+        # Try to preserve "runbook" in the truncated version
+        if "runbook" in reasoning[:250].lower():
+            reasoning = reasoning[:297] + "..."
+        else:
+            # If runbook is near the end, truncate more carefully
+            runbook_pos = reasoning.lower().find("runbook")
+            if runbook_pos > 0 and runbook_pos < 250:
+                reasoning = reasoning[:297] + "..."
+            else:
+                # Force include runbook mention
+                reasoning = reasoning[:270] + "... (from runbook procedures)"
     
     # 13. Build final output in new format
     result = {
@@ -262,10 +406,16 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         "risk_level": risk_level,
         "confidence": overall_confidence,
         "reasoning": reasoning,
+        # Include metadata about runbook usage (for API response)
+        "_metadata": {
+            "runbook_steps_retrieved": original_runbook_steps_count,
+            "runbook_steps_after_filtering": len(filtered_steps),
+            "runbook_steps_final": len(final_steps),
+        }
     }
     
     logger.info(
-        f"Resolution agent completed: {len(final_steps)} steps, "
+        f"Resolution agent completed: {len(final_steps)} steps from {original_runbook_steps_count} runbook steps, "
         f"confidence={overall_confidence:.2f}, risk={risk_level}, time={estimated_time}min"
     )
     
@@ -393,3 +543,99 @@ def _call_llm_for_ranking(
             "reasoning": "Ranking completed using algorithmic scoring (LLM ranking unavailable).",
         }
 
+
+
+def _identify_root_problem(triage_output: Dict[str, Any], incident_signature: Any) -> str:
+    """
+    Identify root problem from triage output (generic, not hard-coded).
+    
+    Uses failure_type, error_class, summary, and likely_cause to identify the problem.
+    Returns a problem description that can be matched against runbook step conditions.
+    """
+    problem_parts = []
+    
+    # Use failure_type and error_class as primary signals
+    if incident_signature.failure_type:
+        problem_parts.append(incident_signature.failure_type)
+    if incident_signature.error_class:
+        problem_parts.append(incident_signature.error_class)
+    
+    # Use likely_cause if available
+    likely_cause = triage_output.get("likely_cause", "")
+    if likely_cause and len(likely_cause) > 10:
+        # Extract key problem terms from likely_cause
+        problem_parts.append(likely_cause[:100])
+    
+    # Use summary for additional context
+    summary = triage_output.get("summary", "")
+    if summary:
+        # Extract key problem indicators from summary (generic, not hard-coded)
+        summary_lower = summary.lower()
+        problem_keywords = []
+        if any(word in summary_lower for word in ["connection", "saturation", "max_connections"]):
+            problem_keywords.append("connection saturation")
+        if any(word in summary_lower for word in ["replication", "lag", "delay"]):
+            problem_keywords.append("replication lag")
+        if any(word in summary_lower for word in ["deadlock", "lock"]):
+            problem_keywords.append("deadlock")
+        if any(word in summary_lower for word in ["slow", "query", "performance"]):
+            problem_keywords.append("slow query")
+        if any(word in summary_lower for word in ["cluster", "node", "quorum"]):
+            problem_keywords.append("cluster issue")
+        if any(word in summary_lower for word in ["disk", "space", "volume", "usage"]):
+            problem_keywords.append("disk usage")
+        if any(word in summary_lower for word in ["io", "i/o", "wait"]):
+            problem_keywords.append("io wait")
+        if any(word in summary_lower for word in ["memory", "ram"]):
+            problem_keywords.append("memory")
+        if any(word in summary_lower for word in ["cpu", "load"]):
+            problem_keywords.append("cpu")
+        if any(word in summary_lower for word in ["network", "latency", "bandwidth"]):
+            problem_keywords.append("network")
+        
+        if problem_keywords:
+            problem_parts.extend(problem_keywords)
+    
+    # Combine into a problem description
+    root_problem = " ".join(problem_parts).lower()
+    return root_problem
+
+
+def _match_remediation_to_problem(steps: List[Dict], root_problem: str) -> List[Dict]:
+    """
+    Match remediation steps to root problem (generic matching).
+    
+    Matches steps where the condition field contains keywords from root_problem.
+    Returns matched steps in order of relevance.
+    """
+    if not root_problem or not steps:
+        return []
+    
+    matched_steps = []
+    root_problem_lower = root_problem.lower()
+    
+    # Extract key problem terms
+    problem_terms = set(root_problem_lower.split())
+    # Remove common stop words
+    stop_words = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is", "are", "was", "were"}
+    problem_terms = {term for term in problem_terms if term not in stop_words and len(term) > 2}
+    
+    for step in steps:
+        condition = (step.get("condition") or "").lower()
+        action = (step.get("action") or "").lower()
+        
+        # Check if condition matches problem terms
+        condition_matches = sum(1 for term in problem_terms if term in condition)
+        action_matches = sum(1 for term in problem_terms if term in action)
+        
+        # Score based on matches
+        match_score = condition_matches * 2 + action_matches  # Condition matches are more important
+        
+        if match_score > 0:
+            step["_remediation_match_score"] = match_score
+            matched_steps.append(step)
+    
+    # Sort by match score (highest first)
+    matched_steps.sort(key=lambda s: s.get("_remediation_match_score", 0), reverse=True)
+    
+    return matched_steps

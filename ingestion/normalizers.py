@@ -157,13 +157,29 @@ def extract_runbook_steps(
             rollback = None
             risk_level = None
             
+            # Parse remediation steps that may be in format "Problem: Solution" or "Problem: Action"
+            # Example: "Connection saturation: Kill idle sessions, increase max_connections if safe."
+            if ":" in step_text and len(step_text.split(":")) == 2:
+                parts = step_text.split(":", 1)
+                condition = parts[0].strip()  # Problem/condition
+                action = parts[1].strip()  # Remediation action
+            
             # Try to extract condition if present (e.g., "If X, then Y")
-            if "if" in step_text.lower() or "when" in step_text.lower():
+            elif "if" in step_text.lower() or "when" in step_text.lower():
                 # Simple heuristic: split on "then" or "do"
                 parts = re.split(r"\s+then\s+|\s+do\s+", step_text, flags=re.IGNORECASE)
                 if len(parts) >= 2:
                     condition = parts[0].strip()
                     action = parts[1].strip()
+            
+            # Infer risk level from action text (generic, not hard-coded)
+            action_lower = action.lower()
+            if any(word in action_lower for word in ["kill", "restart", "terminate", "remove", "delete", "drop"]):
+                risk_level = "medium"
+            elif any(word in action_lower for word in ["increase", "decrease", "adjust", "tune", "optimize"]):
+                risk_level = "low"
+            elif any(word in action_lower for word in ["escalate", "restore", "recover", "repair"]):
+                risk_level = "high"
             
             # Extract rollback from rollback_procedures if available
             if runbook.rollback_procedures:

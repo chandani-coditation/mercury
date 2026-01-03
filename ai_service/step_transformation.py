@@ -40,16 +40,51 @@ def classify_step_type(step: Dict) -> str:
     condition = (step.get("condition") or "").lower()
     combined = f"{action} {condition}".lower()
     
-    # Documentation/Context steps (should be filtered out)
-    doc_keywords = [
-        "document", "record", "log", "note", "track", "update ticket",
-        "identify context", "gather context", "collect context"
+    # Documentation/Context steps (should be filtered out) - AGGRESSIVE FILTERING
+    # Check for documentation/impact assessment patterns FIRST (before other classifications)
+    action_lower = action.lower()
+    condition_lower = condition.lower()
+    
+    # Hard filter: If action is primarily about documenting/recording/impact assessment
+    doc_phrases = [
+        "document actions", "record actions", "document all actions",
+        "documentation", "for future reference", "for audits", 
+        "for accountability", "documentation will", "documentation is",
+        "impact assessment", "assess impact", "evaluate impact",
+        "conduct impact", "impact evaluation", "follow-up tasks",
+        "follow up tasks", "follow-up", "follow up"
     ]
-    if any(keyword in combined for keyword in doc_keywords):
-        # Check if it's just documentation or if it has actionable content
-        if any(word in action for word in ["document", "record", "log", "note", "track"]):
-            if not any(word in action for word in ["check", "verify", "analyze", "review", "identify", "gather"]):
-                return "documentation"
+    
+    # Check if action contains documentation/impact phrases
+    if any(phrase in action_lower for phrase in doc_phrases):
+        return "documentation"
+    
+    # Check if action starts with document/record/log/note and is ONLY about that
+    if action_lower.startswith(("document", "record", "log", "note", "track")):
+        # Only allow if it also has a corrective action (not just documenting)
+        corrective_words = ["check", "verify", "analyze", "review", "identify", "fix", "resolve", "reduce", "clean", "remove", "clear", "gather", "collect", "examine"]
+        if not any(word in action_lower for word in corrective_words):
+            return "documentation"
+    
+    # Also check if action contains "record all actions" or "document all actions" - these are always documentation
+    if "record all actions" in action_lower or "document all actions" in action_lower:
+        return "documentation"
+    
+    # Check if action is about recording/documenting actions taken (past tense indicates documentation)
+    if any(phrase in action_lower for phrase in [
+        "actions taken", "actions that were", "actions which were",
+        "record all actions", "document all actions", "log all actions"
+    ]):
+        return "documentation"
+    
+    # Check for "assess impact" or "impact assessment" patterns
+    if "assess impact" in action_lower or "impact assessment" in action_lower or "evaluate impact" in action_lower:
+        return "documentation"
+    
+    # Check for "follow-up" patterns that are just administrative
+    if "follow-up" in action_lower or "follow up" in action_lower:
+        if "identify" in action_lower or "assess" in action_lower:
+            return "documentation"
     
     # Investigation steps
     investigation_keywords = [
@@ -60,20 +95,23 @@ def classify_step_type(step: Dict) -> str:
     if any(keyword in combined for keyword in investigation_keywords):
         return "investigation"
     
-    # Mitigation steps (quick relief)
+    # Mitigation steps (quick relief) - PRIORITIZE THESE
     mitigation_keywords = [
         "reduce", "decrease", "lower", "minimize", "alleviate", "ease",
         "temporary", "quick fix", "stop", "pause", "suspend", "disable",
-        "clean up", "free up", "release", "terminate", "kill"
+        "clean up", "free up", "release", "terminate", "kill",
+        "clear", "remove", "delete", "archive", "clean", "purge",
+        "backup", "truncate", "shrink", "compress", "expand"
     ]
     if any(keyword in combined for keyword in mitigation_keywords):
         return "mitigation"
     
-    # Resolution steps (root fix)
+    # Resolution steps (root fix) - PRIORITIZE THESE
     resolution_keywords = [
         "fix", "resolve", "repair", "correct", "restore", "recover",
         "reconfigure", "restart", "reboot", "reinstall", "update",
-        "upgrade", "patch", "apply", "implement", "deploy"
+        "upgrade", "patch", "apply", "implement", "deploy",
+        "re-run", "rerun", "execute", "run", "perform"
     ]
     if any(keyword in combined for keyword in resolution_keywords):
         return "resolution"

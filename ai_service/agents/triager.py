@@ -446,8 +446,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # FIX: Ensure matched_evidence.incident_signatures is populated from actual evidence
         # The LLM might not extract IDs correctly, so we populate from actual retrieved signatures
         matched_evidence = triage_output.get("matched_evidence", {})
+        
+        # Extract incident_signature_ids from actual evidence (if not already populated)
         if not matched_evidence.get("incident_signatures") and incident_signatures:
-            # Extract incident_signature_ids from actual evidence
             sig_ids = []
             for sig in incident_signatures:
                 metadata = sig.get("metadata", {})
@@ -456,8 +457,17 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                     sig_ids.append(sig_id)
             if sig_ids:
                 matched_evidence["incident_signatures"] = sig_ids
-                triage_output["matched_evidence"] = matched_evidence
                 logger.info(f"Populated matched_evidence.incident_signatures from evidence: {len(sig_ids)} signatures")
+        
+        # Extract runbook_ids from runbook_metadata (always populate if available)
+        if runbook_metadata:
+            runbook_ids = [rb.get("tags", {}).get("runbook_id") for rb in runbook_metadata if rb.get("tags", {}).get("runbook_id")]
+            if runbook_ids:
+                matched_evidence["runbook_refs"] = runbook_ids
+                logger.info(f"Populated matched_evidence.runbook_refs from evidence: {len(runbook_ids)} runbooks")
+        
+        # Update triage_output with matched_evidence
+        triage_output["matched_evidence"] = matched_evidence
         
         # FIX: Ensure confidence is not 0 when signatures are found
         if triage_output.get("confidence", 0) == 0 and incident_signatures:
@@ -684,7 +694,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             },
             "matched_evidence": {
                 "incident_signatures": [],
-                "runbook_refs": []
+                "runbook_refs": [rb.get("tags", {}).get("runbook_id") for rb in runbook_metadata if rb.get("tags", {}).get("runbook_id")]
             },
             "severity": severity,
             "confidence": 0.0,

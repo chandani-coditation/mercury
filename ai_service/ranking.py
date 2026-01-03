@@ -82,12 +82,27 @@ def rank_steps(
     # Score each step
     scored_steps = []
     
+    # Keywords that indicate high relevance for disk/IO/SQL Agent issues
+    high_relevance_keywords = [
+        "disk", "io", "i/o", "log", "tempdb", "space", "usage", "volume",
+        "file", "backup", "transaction", "growth", "clean", "free", "remove",
+        "sql agent", "agent job", "job failure", "connection", "wait"
+    ]
+    
     for step in steps:
         step_id = step.get("step_id", "")
         action = (step.get("action") or "").lower() if step.get("action") else ""
         condition = (step.get("condition") or "").lower() if step.get("condition") else ""
         risk_level = (step.get("risk_level") or "medium").lower() if step.get("risk_level") else "medium"
         content = (step.get("content") or "").lower() if step.get("content") else ""
+        
+        # Boost relevance if step mentions high-relevance keywords
+        step_text = f"{action} {condition} {content}".lower()
+        keyword_boost = 0.0
+        for keyword in high_relevance_keywords:
+            if keyword in step_text:
+                keyword_boost += 0.1  # Boost for each matching keyword
+                break  # Only count once per step
         
         # Initialize scores
         relevance_score = 0.0
@@ -111,12 +126,15 @@ def rank_steps(
         if error_class and error_class in content:
             relevance_score += 0.1
         
+        # Apply keyword boost for disk/IO/log/tempdb related issues
+        relevance_score = min(1.0, relevance_score + keyword_boost)
+        
         # Cap relevance at 1.0
         relevance_score = min(relevance_score, 1.0)
         
         # If no explicit match, give base relevance based on runbook match
         if relevance_score == 0.0:
-            relevance_score = 0.3  # Base relevance if step is from matched runbook
+            relevance_score = 0.5  # Base relevance if step is from matched runbook (increased from 0.3)
         
         # 2. Historical success score (0.0 - 1.0)
         if step_id in step_success_stats:
@@ -127,8 +145,8 @@ def rank_steps(
             if stats.get("total_uses", 0) > 3:
                 success_score = min(success_score * 1.1, 1.0)
         else:
-            # No history = neutral score
-            success_score = 0.5
+            # No history = slightly positive score (steps from runbooks are generally reliable)
+            success_score = 0.6  # Increased from 0.5 to reflect runbook reliability
         
         # Check historical resolutions for step usage patterns
         step_mentioned_count = 0

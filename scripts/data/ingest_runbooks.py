@@ -85,6 +85,7 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
     rollback_triggers = []
 
     current_section = None
+    remediation_steps = []  # Store remediation steps separately
 
     for element in doc.element.body:
         if isinstance(element, CT_P):
@@ -95,15 +96,38 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                 continue
 
             # Detect section headers (usually bold or all caps)
+            # But don't treat remediation step lines as headers even if bold
             is_header = False
-            for run in para.runs:
-                if run.bold or text.isupper():
-                    is_header = True
-                    break
+            # Check if this looks like a remediation step first (has colon separating problem: solution)
+            is_remediation_step = (
+                current_section == "remediation" 
+                and ":" in text 
+                and len(text.split(":")) == 2
+                and len(text.split(":")[1].strip()) > 10  # Has meaningful action text
+            )
+            
+            if not is_remediation_step:
+                # Only check for header if it's not a remediation step
+                for run in para.runs:
+                    if run.bold or text.isupper():
+                        is_header = True
+                        break
 
             if is_header:
                 text_lower = text.lower()
-                if "step" in text_lower or "procedure" in text_lower:
+                # Detect remediation sections (generic, not hard-coded)
+                if (
+                    "remediation" in text_lower
+                    or "suggest remediation" in text_lower
+                    or "remedy" in text_lower
+                    or ("resolution" in text_lower and "output" not in text_lower)
+                    or "mitigation" in text_lower
+                    or "corrective action" in text_lower
+                    or ("fix" in text_lower and len(text) > 10)  # Avoid false positives
+                    or ("solution" in text_lower and len(text) > 10)
+                ):
+                    current_section = "remediation"
+                elif "step" in text_lower or "procedure" in text_lower:
                     # Check if it's rollback steps
                     if "rollback" in text_lower or "revert" in text_lower:
                         current_section = "rollback_steps"
@@ -135,14 +159,29 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                     or "rollback criteria" in text_lower
                 ):
                     current_section = "rollback_triggers"
-                else:
+                elif (
+                    "validate" in text_lower and "recovery" in text_lower
+                    or "documentation" in text_lower and "requirement" in text_lower
+                    or "threshold" in text_lower and "tuning" in text_lower
+                ):
+                    # Clear remediation section when we hit these sections
+                    current_section = None
+                # Don't reset current_section if we're in remediation and hit a non-section header
+                # (remediation steps might be formatted as headers)
+                elif current_section != "remediation":
                     current_section = None
 
                 # Add header without markdown markers
                 full_content_parts.append(f"\n{text.upper()}\n{'='*len(text)}\n")
             else:
                 # Add to appropriate section
-                if current_section == "steps":
+                if current_section == "remediation":
+                    # Extract remediation steps (can be colon-separated like "Connection saturation: Kill idle sessions")
+                    # Only add if it's not empty and looks like a remediation step
+                    if text and len(text.strip()) > 5:
+                        remediation_steps.append(text)
+                        full_content_parts.append(f"  • {text}\n")
+                elif current_section == "steps":
                     steps.append(text)
                     full_content_parts.append(f"  • {text}\n")
                 elif current_section == "commands":
@@ -183,6 +222,10 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
 
     full_content = "".join(full_content_parts)
 
+    # Prioritize remediation steps over generic steps
+    # If remediation steps exist, use them; otherwise use generic steps
+    final_steps = remediation_steps if remediation_steps else steps
+    
     # Build structured rollback procedures
     rollback_procedures = None
     if rollback_steps:
@@ -198,11 +241,12 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
 
     return {
         "title": title,
-        "steps": steps,
+        "steps": final_steps,
         "commands": commands,
         "prerequisites": prerequisites,
         "rollback_procedures": rollback_procedures,
         "content": full_content,
+        "remediation_steps": remediation_steps,  # Keep separate for metadata
     }
 
 

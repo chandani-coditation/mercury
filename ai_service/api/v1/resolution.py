@@ -102,13 +102,23 @@ async def resolution(
                         )
                     # Call new resolution_agent with triage_output
                     resolution_result = resolution_agent(triage_output)
+                    
+                    # Get runbook steps count from resolution result metadata (actual steps retrieved)
+                    metadata = resolution_result.get("_metadata", {})
+                    original_runbook_steps_count = metadata.get("runbook_steps_retrieved", 0)
+                    
+                    # Remove internal metadata from response
+                    if "_metadata" in resolution_result:
+                        del resolution_result["_metadata"]
+                    
                     # Format response to match expected structure
                     result = {
                         "incident_id": incident_id,
                         "resolution": resolution_result,
                         "evidence": {
                             "retrieval_method": "resolution_retrieval",
-                            "runbook_steps": len(resolution_result.get("steps", [])),
+                            "runbook_steps": original_runbook_steps_count,  # Actual runbook steps retrieved from DB
+                            "steps_retrieved": len(resolution_result.get("steps", [])),  # Final UI steps count
                         }
                     }
                 except IncidentNotFoundError:
