@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { postTriage, getIncident, putFeedback, postResolution } from "./api/client";
+import {
+  postTriage,
+  getIncident,
+  putFeedback,
+  postResolution,
+} from "./api/client";
 
-const allowedCategories = ["database", "network", "application", "infrastructure", "security", "other"];
+const allowedCategories = [
+  "database",
+  "network",
+  "application",
+  "infrastructure",
+  "security",
+  "other",
+];
 
 const emptyLabels = {
   service: "Database",
@@ -30,7 +42,8 @@ const makeInitialAlert = () => ({
 
 const statusPill = (status) => {
   if (status === "success") return "pill success";
-  if (status === "warn" || status === "needs-approval" || status === "pending") return "pill warn";
+  if (status === "warn" || status === "needs-approval" || status === "pending")
+    return "pill warn";
   if (status === "error" || status === "blocked") return "pill error";
   return "pill";
 };
@@ -50,40 +63,55 @@ function App() {
   const [sideOpen, setSideOpen] = useState(true);
   const [resultTab, setResultTab] = useState("triage");
   const [acknowledgeNoEvidence, setAcknowledgeNoEvidence] = useState(false);
-  const hasResults = triage || policy || retrieval || resolution || resolutionError;
+  const hasResults =
+    triage || policy || retrieval || resolution || resolutionError;
 
   const needsApproval = useMemo(() => {
-    const band = policy?.policy_band || policy?.policy?.policy_band || triage?.policy_band;
-    const canAutoApply = policy?.policy_decision?.can_auto_apply ?? policy?.policy?.can_auto_apply;
+    const band =
+      policy?.policy_band || policy?.policy?.policy_band || triage?.policy_band;
+    const canAutoApply =
+      policy?.policy_decision?.can_auto_apply ?? policy?.policy?.can_auto_apply;
     const requiresApproval =
-      policy?.policy_decision?.requires_approval ?? policy?.policy?.requires_approval;
+      policy?.policy_decision?.requires_approval ??
+      policy?.policy?.requires_approval;
     const hasEvidence = (retrieval?.chunks_used ?? 0) > 0;
     // Require approval if: PROPOSE/REVIEW band, or AUTO band but no evidence (safety)
     return (
-      band === "PROPOSE" || 
-      band === "REVIEW" || 
-      requiresApproval === true || 
+      band === "PROPOSE" ||
+      band === "REVIEW" ||
+      requiresApproval === true ||
       canAutoApply === false ||
       (band === "AUTO" && !hasEvidence) // AUTO but no evidence requires approval
     );
   }, [policy, triage, retrieval]);
 
   const canAutoProceed = useMemo(() => {
-    const band = policy?.policy_band || policy?.policy?.policy_band || triage?.policy_band;
-    const canAutoApply = policy?.policy_decision?.can_auto_apply ?? policy?.policy?.can_auto_apply;
+    const band =
+      policy?.policy_band || policy?.policy?.policy_band || triage?.policy_band;
+    const canAutoApply =
+      policy?.policy_decision?.can_auto_apply ?? policy?.policy?.can_auto_apply;
     const requiresApproval =
-      policy?.policy_decision?.requires_approval ?? policy?.policy?.requires_approval;
+      policy?.policy_decision?.requires_approval ??
+      policy?.policy?.requires_approval;
     const hasEvidence = (retrieval?.chunks_used ?? 0) > 0;
     // Only auto-proceed if AUTO band AND has evidence (safety check)
-    return band === "AUTO" && canAutoApply === true && requiresApproval === false && hasEvidence;
+    return (
+      band === "AUTO" &&
+      canAutoApply === true &&
+      requiresApproval === false &&
+      hasEvidence
+    );
   }, [policy, triage, retrieval]);
 
   // Compute policy details for display
   const policyDetails = useMemo(() => {
-    const band = policy?.policy_band || policy?.policy?.policy_band || triage?.policy_band;
-    const canAutoApply = policy?.policy_decision?.can_auto_apply ?? policy?.policy?.can_auto_apply;
+    const band =
+      policy?.policy_band || policy?.policy?.policy_band || triage?.policy_band;
+    const canAutoApply =
+      policy?.policy_decision?.can_auto_apply ?? policy?.policy?.can_auto_apply;
     const requiresApproval =
-      policy?.policy_decision?.requires_approval ?? policy?.policy?.requires_approval;
+      policy?.policy_decision?.requires_approval ??
+      policy?.policy?.requires_approval;
     const confidence = triage?.confidence ?? 0;
     const severity = triage?.severity ?? "unknown";
     const evidenceCount = retrieval?.chunks_used ?? 0;
@@ -151,14 +179,18 @@ function App() {
           const data = await postResolution(incidentId);
           if (data.detail?.error === "approval_required") {
             setResolutionStatus("blocked");
-            setError(data.detail?.message || "Approval required before resolution.");
+            setError(
+              data.detail?.message || "Approval required before resolution.",
+            );
             return;
           }
           setResolution(data.resolution || data);
           setResolutionStatus("success");
         } catch (err) {
           // Capture error detail for display in right panel
-          const errorDetail = err.response?.data || { detail: err.message || String(err) };
+          const errorDetail = err.response?.data || {
+            detail: err.message || String(err),
+          };
           setResolutionError(errorDetail);
           setError(err.message || String(err));
           setResolutionStatus("error");
@@ -166,7 +198,15 @@ function App() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [canAutoProceed, incidentId, triageStatus, policyStatus, resolutionStatus, resolution, resolutionError]);
+  }, [
+    canAutoProceed,
+    incidentId,
+    triageStatus,
+    policyStatus,
+    resolutionStatus,
+    resolution,
+    resolutionError,
+  ]);
 
   const handleAlertChange = (field, value) => {
     setAlert((prev) => ({ ...prev, [field]: value }));
@@ -186,8 +226,13 @@ function App() {
   useEffect(() => {
     setAlert((prev) => {
       if (prev.category === prev.labels.category) return prev;
-      const nextCategory = prev.category || prev.labels.category || emptyLabels.category;
-      return { ...prev, category: nextCategory, labels: { ...prev.labels, category: nextCategory } };
+      const nextCategory =
+        prev.category || prev.labels.category || emptyLabels.category;
+      return {
+        ...prev,
+        category: nextCategory,
+        labels: { ...prev.labels, category: nextCategory },
+      };
     });
   }, []);
 
@@ -197,10 +242,10 @@ function App() {
     setIncidentId("");
     setTriage(null);
     setPolicy(null);
-      setResolution(null);
-      setResolutionError(null);
-      setRetrieval(null);
-      setAcknowledgeNoEvidence(false);
+    setResolution(null);
+    setResolutionError(null);
+    setRetrieval(null);
+    setAcknowledgeNoEvidence(false);
     setTriageStatus("loading");
     setPolicyStatus("pending");
     setResolutionStatus("idle");
@@ -208,7 +253,10 @@ function App() {
       const data = await postTriage(alert);
       setIncidentId(data.incident_id);
       setTriage(data.triage);
-      setPolicy({ policy_band: data.policy_band, policy_decision: data.policy_decision });
+      setPolicy({
+        policy_band: data.policy_band,
+        policy_decision: data.policy_decision,
+      });
       setRetrieval(data.evidence_chunks);
       setTriageStatus("success");
       setPolicyStatus("success");
@@ -222,7 +270,9 @@ function App() {
   const handleApprove = async () => {
     if (!incidentId || !triage) return;
     if (!policyDetails.hasEvidence && !acknowledgeNoEvidence) {
-      setError("Please acknowledge that resolution will be generated without evidence");
+      setError(
+        "Please acknowledge that resolution will be generated without evidence",
+      );
       return;
     }
     setError("");
@@ -231,18 +281,21 @@ function App() {
       const payload = {
         feedback_type: "triage",
         user_edited: triage,
-        notes: policyDetails.hasEvidence 
-          ? "Approved via UI" 
+        notes: policyDetails.hasEvidence
+          ? "Approved via UI"
           : "Approved via UI - acknowledged no evidence",
         policy_band: "AUTO",
       };
       await putFeedback(incidentId, payload);
       const refreshed = await getIncident(incidentId);
       setTriage(refreshed.triage_output || triage);
-      setPolicy({ policy_band: refreshed.policy_band, policy_decision: refreshed.policy_decision });
+      setPolicy({
+        policy_band: refreshed.policy_band,
+        policy_decision: refreshed.policy_decision,
+      });
       setPolicyStatus("success");
       setAcknowledgeNoEvidence(false); // Reset after approval
-      
+
       // Automatically trigger resolution generation after approval
       setResolutionError(null);
       setResolutionStatus("loading");
@@ -250,14 +303,18 @@ function App() {
         const data = await postResolution(incidentId);
         if (data.detail?.error === "approval_required") {
           setResolutionStatus("blocked");
-          setError(data.detail?.message || "Approval required before resolution.");
+          setError(
+            data.detail?.message || "Approval required before resolution.",
+          );
           return;
         }
         setResolution(data.resolution || data);
         setResolutionStatus("success");
       } catch (err) {
         // Capture error detail for display in right panel
-        const errorDetail = err.response?.data || { detail: err.message || String(err) };
+        const errorDetail = err.response?.data || {
+          detail: err.message || String(err),
+        };
         setResolutionError(errorDetail);
         setError(err.message || String(err));
         setResolutionStatus("error");
@@ -277,14 +334,18 @@ function App() {
       const data = await postResolution(incidentId);
       if (data.detail?.error === "approval_required") {
         setResolutionStatus("blocked");
-        setError(data.detail?.message || "Approval required before resolution.");
+        setError(
+          data.detail?.message || "Approval required before resolution.",
+        );
         return;
       }
       setResolution(data.resolution || data);
       setResolutionStatus("success");
     } catch (err) {
       // Capture error detail for display in right panel
-      const errorDetail = err.response?.data || { detail: err.message || String(err) };
+      const errorDetail = err.response?.data || {
+        detail: err.message || String(err),
+      };
       setResolutionError(errorDetail);
       setError(err.message || String(err));
       setResolutionStatus("error");
@@ -300,15 +361,24 @@ function App() {
 
   return (
     <div className="app">
-      <h2 className="page-title">NOC Agent UI — Triage → Policy → Resolution</h2>
+      <h2 className="page-title">
+        NOC Agent UI — Triage → Policy → Resolution
+      </h2>
 
       <div className="stepper">
-        <div className={stepState(triageStatus === "success", triageStatus === "loading")}>
+        <div
+          className={stepState(
+            triageStatus === "success",
+            triageStatus === "loading",
+          )}
+        >
           <div className="dot" />
           <div className="text">
             <div className="title">Triage</div>
             <div className="subtitle">
-              {incidentId ? `Incident: ${incidentId}` : "Create incident from alert"}
+              {incidentId
+                ? `Incident: ${incidentId}`
+                : "Create incident from alert"}
             </div>
           </div>
         </div>
@@ -316,7 +386,7 @@ function App() {
           className={stepState(
             policyStatus === "success" && !needsApproval,
             policyStatus === "loading" || (needsApproval && !canAutoProceed),
-            policyStatus === "error"
+            policyStatus === "error",
           )}
         >
           <div className="dot" />
@@ -326,8 +396,8 @@ function App() {
               {canAutoProceed
                 ? `AUTO band - Auto-proceeding to resolution...`
                 : needsApproval
-                ? `${policyDetails.band || "PROPOSE/REVIEW"} band - Requires approval`
-                : policy?.policy_band || "Awaiting decision"}
+                  ? `${policyDetails.band || "PROPOSE/REVIEW"} band - Requires approval`
+                  : policy?.policy_band || "Awaiting decision"}
             </div>
           </div>
         </div>
@@ -335,7 +405,7 @@ function App() {
           className={stepState(
             resolutionStatus === "success",
             resolutionStatus === "loading",
-            resolutionStatus === "blocked"
+            resolutionStatus === "blocked",
           )}
         >
           <div className="dot" />
@@ -345,8 +415,8 @@ function App() {
               {resolutionStatus === "success"
                 ? "Complete"
                 : resolutionStatus === "blocked"
-                ? "Approval required"
-                : "Pending"}
+                  ? "Approval required"
+                  : "Pending"}
             </div>
           </div>
         </div>
@@ -357,7 +427,9 @@ function App() {
           <div className="progress-strip">
             {(triageStatus === "loading" ||
               policyStatus === "loading" ||
-              resolutionStatus === "loading") && <div className="spinner" aria-label="loading" />}
+              resolutionStatus === "loading") && (
+              <div className="spinner" aria-label="loading" />
+            )}
             <div className="progress-chip">
               <span>Triage</span>
               <span className={statusPill(triageStatus)}>{triageStatus}</span>
@@ -368,16 +440,18 @@ function App() {
             </div>
             <div className="progress-chip">
               <span>Resolution</span>
-              <span className={statusPill(resolutionStatus)}>{resolutionStatus}</span>
+              <span className={statusPill(resolutionStatus)}>
+                {resolutionStatus}
+              </span>
             </div>
             <div className="progress-note-inline">
               {triageStatus === "loading"
                 ? "Submitting triage…"
                 : policyStatus === "loading"
-                ? "Evaluating policy…"
-                : resolutionStatus === "loading"
-                ? "Generating resolution…"
-                : "Idle"}
+                  ? "Evaluating policy…"
+                  : resolutionStatus === "loading"
+                    ? "Generating resolution…"
+                    : "Idle"}
             </div>
           </div>
           <div className="card">
@@ -388,7 +462,9 @@ function App() {
                 <input
                   className="input"
                   value={alert.alert_id}
-                  onChange={(e) => handleAlertChange("alert_id", e.target.value)}
+                  onChange={(e) =>
+                    handleAlertChange("alert_id", e.target.value)
+                  }
                   required
                 />
               </div>
@@ -407,7 +483,9 @@ function App() {
                   <input
                     className="input"
                     value={alert.labels.service}
-                    onChange={(e) => handleLabelChange("service", e.target.value)}
+                    onChange={(e) =>
+                      handleLabelChange("service", e.target.value)
+                    }
                     placeholder="database"
                     required
                   />
@@ -417,7 +495,9 @@ function App() {
                   <input
                     className="input"
                     value={alert.labels.component}
-                    onChange={(e) => handleLabelChange("component", e.target.value)}
+                    onChange={(e) =>
+                      handleLabelChange("component", e.target.value)
+                    }
                     placeholder="sql-server"
                     required
                   />
@@ -429,7 +509,9 @@ function App() {
                   <input
                     className="input"
                     value={alert.labels.cmdb_ci}
-                    onChange={(e) => handleLabelChange("cmdb_ci", e.target.value)}
+                    onChange={(e) =>
+                      handleLabelChange("cmdb_ci", e.target.value)
+                    }
                     placeholder="Database-SQL"
                   />
                 </div>
@@ -438,7 +520,9 @@ function App() {
                   <select
                     className="select"
                     value={alert.category || alert.labels.category}
-                    onChange={(e) => handleLabelChange("category", e.target.value)}
+                    onChange={(e) =>
+                      handleLabelChange("category", e.target.value)
+                    }
                     required
                   >
                     {allowedCategories.map((cat) => (
@@ -463,7 +547,9 @@ function App() {
                 <textarea
                   className="textarea"
                   value={alert.description}
-                  onChange={(e) => handleAlertChange("description", e.target.value)}
+                  onChange={(e) =>
+                    handleAlertChange("description", e.target.value)
+                  }
                   required
                 />
               </div>
@@ -476,9 +562,18 @@ function App() {
                   placeholder={new Date().toISOString()}
                 />
               </div>
-              <div className="full-width" style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-                <button className="button" type="submit" disabled={triageStatus === "loading"}>
-                  {triageStatus === "loading" ? "Submitting..." : "Submit & Triage"}
+              <div
+                className="full-width"
+                style={{ display: "flex", alignItems: "flex-end", gap: 12 }}
+              >
+                <button
+                  className="button"
+                  type="submit"
+                  disabled={triageStatus === "loading"}
+                >
+                  {triageStatus === "loading"
+                    ? "Submitting..."
+                    : "Submit & Triage"}
                 </button>
                 <button
                   type="button"
@@ -494,44 +589,67 @@ function App() {
           {(incidentId || triage || policy || retrieval || resolution) && (
             <div className="card">
               <div className="section-title">Controls & Status</div>
-              
+
               {/* Policy Details Section */}
               {policy && triage && (
                 <>
                   <div className="divider" />
-                  <div className="section-title" style={{ fontSize: "0.9em", marginBottom: "8px" }}>
+                  <div
+                    className="section-title"
+                    style={{ fontSize: "0.9em", marginBottom: "8px" }}
+                  >
                     Policy Decision
                   </div>
-                  <div style={{ marginBottom: "12px", fontSize: "0.85em", lineHeight: "1.5" }}>
-                    <div><strong>Policy Band:</strong> {policyDetails.band}</div>
-                    <div><strong>Reason:</strong> {policyDetails.reason}</div>
-                    <div><strong>Evidence Found:</strong> {policyDetails.evidenceCount} chunk(s)</div>
-                    <div><strong>Action:</strong> {
-                      canAutoProceed 
-                        ? "Auto-proceeding (AUTO band with evidence)"
-                        : needsApproval
-                        ? policyDetails.band === "AUTO" && !policyDetails.hasEvidence
-                          ? "Requires approval (AUTO band but no evidence found)"
-                          : `Requires approval (${policyDetails.band} band)`
-                        : "Awaiting decision"
-                    }</div>
-                  </div>
-                  
-                  {/* Warning when no evidence */}
-                  {!policyDetails.hasEvidence && (
-                    <div style={{ 
-                      padding: "12px", 
-                      backgroundColor: "rgba(255, 193, 7, 0.15)", 
-                      border: "1px solid #ffc107",
-                      borderRadius: "4px",
+                  <div
+                    style={{
                       marginBottom: "12px",
                       fontSize: "0.85em",
-                      color: "#ffc107"
-                    }}>
-                      <strong style={{ color: "#ffc107" }}>⚠️ No Evidence Found:</strong>{" "}
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    <div>
+                      <strong>Policy Band:</strong> {policyDetails.band}
+                    </div>
+                    <div>
+                      <strong>Reason:</strong> {policyDetails.reason}
+                    </div>
+                    <div>
+                      <strong>Evidence Found:</strong>{" "}
+                      {policyDetails.evidenceCount} chunk(s)
+                    </div>
+                    <div>
+                      <strong>Action:</strong>{" "}
+                      {canAutoProceed
+                        ? "Auto-proceeding (AUTO band with evidence)"
+                        : needsApproval
+                          ? policyDetails.band === "AUTO" &&
+                            !policyDetails.hasEvidence
+                            ? "Requires approval (AUTO band but no evidence found)"
+                            : `Requires approval (${policyDetails.band} band)`
+                          : "Awaiting decision"}
+                    </div>
+                  </div>
+
+                  {/* Warning when no evidence */}
+                  {!policyDetails.hasEvidence && (
+                    <div
+                      style={{
+                        padding: "12px",
+                        backgroundColor: "rgba(255, 193, 7, 0.15)",
+                        border: "1px solid #ffc107",
+                        borderRadius: "4px",
+                        marginBottom: "12px",
+                        fontSize: "0.85em",
+                        color: "#ffc107",
+                      }}
+                    >
+                      <strong style={{ color: "#ffc107" }}>
+                        ⚠️ No Evidence Found:
+                      </strong>{" "}
                       <span style={{ color: "#e2e8f0" }}>
-                        No matching runbooks or historical incidents found in knowledge base. 
-                        Resolution will be generated without historical context. Quality may be limited.
+                        No matching runbooks or historical incidents found in
+                        knowledge base. Resolution will be generated without
+                        historical context. Quality may be limited.
                       </span>
                     </div>
                   )}
@@ -545,17 +663,17 @@ function App() {
                     className="button secondary"
                     onClick={handleApprove}
                     disabled={
-                      !incidentId || 
-                      !needsApproval || 
+                      !incidentId ||
+                      !needsApproval ||
                       policyStatus === "loading" ||
                       (!policyDetails.hasEvidence && !acknowledgeNoEvidence)
                     }
                   >
-                    {policyStatus === "loading" 
-                      ? "Approving..." 
+                    {policyStatus === "loading"
+                      ? "Approving..."
                       : !policyDetails.hasEvidence
-                      ? "Approve & Generate (No Evidence)"
-                      : "Approve & Generate Resolution"}
+                        ? "Approve & Generate (No Evidence)"
+                        : "Approve & Generate Resolution"}
                   </button>
                 </div>
                 <div>
@@ -564,12 +682,14 @@ function App() {
                     className="button"
                     onClick={handleResolution}
                     disabled={
-                      !incidentId || 
+                      !incidentId ||
                       resolutionStatus === "loading" ||
                       (needsApproval && !canAutoProceed)
                     }
                   >
-                    {resolutionStatus === "loading" ? "Requesting..." : "Generate Resolution"}
+                    {resolutionStatus === "loading"
+                      ? "Requesting..."
+                      : "Generate Resolution"}
                   </button>
                 </div>
               </div>
@@ -577,13 +697,23 @@ function App() {
               {/* Checkbox for acknowledging no evidence */}
               {!policyDetails.hasEvidence && needsApproval && (
                 <div style={{ marginTop: "12px" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85em" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontSize: "0.85em",
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={acknowledgeNoEvidence}
-                      onChange={(e) => setAcknowledgeNoEvidence(e.target.checked)}
+                      onChange={(e) =>
+                        setAcknowledgeNoEvidence(e.target.checked)
+                      }
                     />
-                    I understand resolution will be generated without historical context
+                    I understand resolution will be generated without historical
+                    context
                   </label>
                 </div>
               )}
@@ -599,11 +729,17 @@ function App() {
           )}
         </div>
 
-        <div className={`side-panel ${hasResults ? "active" : ""} ${sideOpen ? "open" : "closed"}`}>
+        <div
+          className={`side-panel ${hasResults ? "active" : ""} ${sideOpen ? "open" : "closed"}`}
+        >
           <div className="side-panel-header">
             <div className="side-panel-title">Results</div>
             {hasResults ? (
-              <button className="icon-button" type="button" onClick={() => setSideOpen((v) => !v)}>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setSideOpen((v) => !v)}
+              >
                 {sideOpen ? "Hide" : "Show"}
               </button>
             ) : null}
@@ -667,31 +803,41 @@ function App() {
                 {resultTab === "triage" && triage ? (
                   <>
                     <div className="section-title">Triage Output</div>
-                    <div className="json-box fill">{JSON.stringify(triage, null, 2)}</div>
+                    <div className="json-box fill">
+                      {JSON.stringify(triage, null, 2)}
+                    </div>
                   </>
                 ) : null}
                 {resultTab === "policy" && policy ? (
                   <>
                     <div className="section-title">Policy Decision</div>
-                    <div className="json-box fill">{JSON.stringify(policy, null, 2)}</div>
+                    <div className="json-box fill">
+                      {JSON.stringify(policy, null, 2)}
+                    </div>
                   </>
                 ) : null}
                 {resultTab === "retrieval" && retrieval ? (
                   <>
                     <div className="section-title">Retrieval Evidence</div>
-                    <div className="json-box fill">{JSON.stringify(retrieval, null, 2)}</div>
+                    <div className="json-box fill">
+                      {JSON.stringify(retrieval, null, 2)}
+                    </div>
                   </>
                 ) : null}
                 {resultTab === "error" && resolutionError ? (
                   <>
                     <div className="section-title">Resolution Error</div>
-                    <div className="json-box fill">{JSON.stringify(resolutionError, null, 2)}</div>
+                    <div className="json-box fill">
+                      {JSON.stringify(resolutionError, null, 2)}
+                    </div>
                   </>
                 ) : null}
                 {resultTab === "resolution" && resolution ? (
                   <>
                     <div className="section-title">Resolution</div>
-                    <div className="json-box fill">{JSON.stringify(resolution, null, 2)}</div>
+                    <div className="json-box fill">
+                      {JSON.stringify(resolution, null, 2)}
+                    </div>
                   </>
                 ) : null}
               </div>
@@ -701,7 +847,11 @@ function App() {
       </div>
 
       {hasResults && !sideOpen ? (
-        <button className="floating-open-button" type="button" onClick={() => setSideOpen(true)}>
+        <button
+          className="floating-open-button"
+          type="button"
+          onClick={() => setSideOpen(true)}
+        >
           Open Results
         </button>
       ) : null}

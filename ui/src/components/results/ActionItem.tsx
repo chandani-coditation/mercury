@@ -14,7 +14,7 @@ export const ActionItem = ({ action, index }: ActionItemProps) => {
     <div
       className={cn(
         "flex items-start gap-3 p-4 rounded-lg border border-border/50 bg-secondary/30 transition-all duration-200 hover:bg-secondary/50",
-        checked && "opacity-60"
+        checked && "opacity-60",
       )}
       style={{ animationDelay: `${index * 50}ms` }}
     >
@@ -28,7 +28,7 @@ export const ActionItem = ({ action, index }: ActionItemProps) => {
         htmlFor={`action-${index}`}
         className={cn(
           "text-sm leading-relaxed cursor-pointer transition-all",
-          checked ? "line-through text-muted-foreground" : "text-foreground"
+          checked ? "line-through text-muted-foreground" : "text-foreground",
         )}
       >
         {action}

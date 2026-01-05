@@ -51,12 +51,12 @@ export function postResolution(incidentId, payload = null) {
     method: "POST",
     timeoutMs: 70000,
   };
-  
+
   // Only add body if payload is provided
   if (payload) {
     options.body = JSON.stringify(payload);
   }
-  
+
   return request(`${API_BASE}/resolution?incident_id=${incidentId}`, options);
 }
 

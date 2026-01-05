@@ -16,7 +16,7 @@
 
     /* ServiceNow Header Navy */
     --header: 216 28% 25%;
-    
+
     /* ServiceNow Link Blue */
     --primary: 210 100% 42%;
     --primary-foreground: 0 0% 100%;
@@ -57,7 +57,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
   }
 }
 
@@ -134,7 +136,8 @@
   }
 
   @keyframes pulse-slow {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 0.3;
     }
     50% {
@@ -163,4 +166,3 @@
     @apply bg-muted-foreground/50;
   }
 }
-

@@ -27,7 +27,9 @@ export const ResultsPanel = ({
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <h2 className="text-xl font-semibold text-foreground">Analysis Results</h2>
+          <h2 className="text-xl font-semibold text-foreground">
+            Analysis Results
+          </h2>
         </div>
         {onHide && (
           <button
@@ -46,7 +48,7 @@ export const ResultsPanel = ({
           <TabsTrigger
             value="triage"
             className={cn(
-              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg"
+              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
             )}
           >
             <Zap className="w-4 h-4" />
@@ -55,7 +57,7 @@ export const ResultsPanel = ({
           <TabsTrigger
             value="policy"
             className={cn(
-              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg"
+              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
             )}
           >
             <Shield className="w-4 h-4" />
@@ -64,7 +66,7 @@ export const ResultsPanel = ({
           <TabsTrigger
             value="retrieval"
             className={cn(
-              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg"
+              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
             )}
           >
             <Database className="w-4 h-4" />

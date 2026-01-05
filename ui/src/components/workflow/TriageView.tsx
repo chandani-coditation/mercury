@@ -10,7 +10,13 @@ interface TriageViewProps {
   onBack: () => void;
 }
 
-export const TriageView = ({ triageData, policyData, retrievalData, onNext, onBack }: TriageViewProps) => {
+export const TriageView = ({
+  triageData,
+  policyData,
+  retrievalData,
+  onNext,
+  onBack,
+}: TriageViewProps) => {
   return (
     <div className="space-y-6">
       {/* Results Panel with 3 Tabs */}
@@ -41,4 +47,3 @@ export const TriageView = ({ triageData, policyData, retrievalData, onNext, onBa
     </div>
   );
 };
-

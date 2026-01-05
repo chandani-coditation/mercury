@@ -38,7 +38,7 @@ export interface ReportData {
 
 export const generateHTMLReport = (data: ReportData): string => {
   const timestamp = new Date().toLocaleString();
-  
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -413,7 +413,7 @@ export const generateHTMLReport = (data: ReportData): string => {
                 <div class="card">
                     <div class="card-title">Affected Services</div>
                     <div class="card-content">
-                        ${data.triage_analysis.affected_services.map(s => `<span class="tag">${s}</span>`).join('')}
+                        ${data.triage_analysis.affected_services.map((s) => `<span class="tag">${s}</span>`).join("")}
                     </div>
                 </div>
             </div>
@@ -434,11 +434,11 @@ export const generateHTMLReport = (data: ReportData): string => {
                 
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value">${data.policy_decision.requires_approval ? '✓' : '✗'}</div>
+                        <div class="stat-value">${data.policy_decision.requires_approval ? "✓" : "✗"}</div>
                         <div class="stat-label">Requires Approval</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">${data.policy_decision.can_auto_apply ? '✓' : '✗'}</div>
+                        <div class="stat-value">${data.policy_decision.can_auto_apply ? "✓" : "✗"}</div>
                         <div class="stat-label">Can Auto-Apply</div>
                     </div>
                 </div>
@@ -470,7 +470,7 @@ export const generateHTMLReport = (data: ReportData): string => {
                 <div class="card">
                     <div class="card-title">Sources</div>
                     <div class="card-content">
-                        ${data.evidence.sources.map(s => `<span class="tag">${s}</span>`).join('')}
+                        ${data.evidence.sources.map((s) => `<span class="tag">${s}</span>`).join("")}
                     </div>
                 </div>
             </div>
@@ -482,34 +482,54 @@ export const generateHTMLReport = (data: ReportData): string => {
                     <h2 class="section-title">Resolution Steps</h2>
                 </div>
                 
-                ${data.resolution.reasoning ? `
+                ${
+                  data.resolution.reasoning
+                    ? `
                 <div class="info-box">
                     <strong>AI Reasoning:</strong><br>
                     ${data.resolution.reasoning}
                 </div>
-                ` : ''}
+                `
+                    : ""
+                }
                 
-                ${data.resolution.risk_level || data.resolution.estimated_time ? `
+                ${
+                  data.resolution.risk_level || data.resolution.estimated_time
+                    ? `
                 <div class="stats-grid">
-                    ${data.resolution.risk_level ? `
+                    ${
+                      data.resolution.risk_level
+                        ? `
                     <div class="stat-card">
                         <div class="stat-value">${data.resolution.risk_level.toUpperCase()}</div>
                         <div class="stat-label">Risk Level</div>
                     </div>
-                    ` : ''}
-                    ${data.resolution.estimated_time ? `
+                    `
+                        : ""
+                    }
+                    ${
+                      data.resolution.estimated_time
+                        ? `
                     <div class="stat-card">
                         <div class="stat-value">${data.resolution.estimated_time} min</div>
                         <div class="stat-label">Est. Duration</div>
                     </div>
-                    ` : ''}
+                    `
+                        : ""
+                    }
                 </div>
-                ` : ''}
+                `
+                    : ""
+                }
                 
                 <ol class="resolution-steps">
-                    ${data.resolution.steps.map(step => `
+                    ${data.resolution.steps
+                      .map(
+                        (step) => `
                         <li class="resolution-step">${step}</li>
-                    `).join('')}
+                    `,
+                      )
+                      .join("")}
                 </ol>
                 
                 <div class="success-box">
@@ -557,7 +577,9 @@ export const downloadHTMLReport = (data: ReportData) => {
 };
 
 export const downloadJSONReport = (data: ReportData) => {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -567,4 +589,3 @@ export const downloadJSONReport = (data: ReportData) => {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
-

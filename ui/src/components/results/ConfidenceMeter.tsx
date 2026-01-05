@@ -5,9 +5,12 @@ interface ConfidenceMeterProps {
   className?: string;
 }
 
-export const ConfidenceMeter = ({ confidence, className }: ConfidenceMeterProps) => {
+export const ConfidenceMeter = ({
+  confidence,
+  className,
+}: ConfidenceMeterProps) => {
   const percentage = Math.round(confidence * 100);
-  
+
   const getColorClass = () => {
     if (percentage >= 80) return "bg-success";
     if (percentage >= 60) return "bg-warning";
@@ -24,7 +27,10 @@ export const ConfidenceMeter = ({ confidence, className }: ConfidenceMeterProps)
       </div>
       <div className="h-2 bg-secondary rounded-full overflow-hidden">
         <div
-          className={cn("h-full rounded-full transition-all duration-500 ease-out", getColorClass())}
+          className={cn(
+            "h-full rounded-full transition-all duration-500 ease-out",
+            getColorClass(),
+          )}
           style={{ width: `${percentage}%` }}
         />
       </div>

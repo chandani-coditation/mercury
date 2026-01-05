@@ -33,7 +33,7 @@ export const SeverityBadge = ({ severity, className }: SeverityBadgeProps) => {
       className={cn(
         "inline-flex items-center gap-2 px-3 py-1.5 rounded-full border font-medium text-sm",
         config.className,
-        className
+        className,
       )}
     >
       <Icon className="w-4 h-4" />

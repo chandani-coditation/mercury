@@ -1,4 +1,12 @@
-import { ArrowRight, ArrowLeft, Shield, Check, X, AlertCircle, AlertTriangle } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowLeft,
+  Shield,
+  Check,
+  X,
+  AlertCircle,
+  AlertTriangle,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,13 +42,21 @@ const getBandColor = (band: string) => {
   }
 };
 
-export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, error }: PolicyViewProps) => {
+export const PolicyView = ({
+  data,
+  retrievalData,
+  onApprove,
+  onBack,
+  isLoading,
+  error,
+}: PolicyViewProps) => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const decision = data.policy_decision;
   const policyBand = data.policy_band;
 
   // Only require confirmation for PROPOSE and BLOCK, not for AUTO
-  const requiresConfirmation = policyBand === "PROPOSE" || policyBand === "BLOCK";
+  const requiresConfirmation =
+    policyBand === "PROPOSE" || policyBand === "BLOCK";
 
   const handleApproveClick = () => {
     if (requiresConfirmation) {
@@ -61,7 +77,9 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
       {/* Analysis Results Header */}
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-        <h2 className="text-xl font-semibold text-foreground">Analysis Results</h2>
+        <h2 className="text-xl font-semibold text-foreground">
+          Analysis Results
+        </h2>
       </div>
 
       {/* Policy Content */}
@@ -77,7 +95,7 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
           <div
             className={cn(
               "inline-flex items-center px-6 py-3 rounded-lg border text-xl font-bold font-mono",
-              getBandColor(policyBand)
+              getBandColor(policyBand),
             )}
           >
             {policyBand}
@@ -109,7 +127,9 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
         <div className="glass-card p-4 space-y-2">
           <div className="flex items-center gap-2">
             <div className="w-1 h-4 bg-primary rounded-full" />
-            <h4 className="font-semibold text-sm text-foreground">Policy Reason</h4>
+            <h4 className="font-semibold text-sm text-foreground">
+              Policy Reason
+            </h4>
           </div>
           <p className="text-sm text-muted-foreground pl-3">
             {decision.policy_reason}
@@ -121,18 +141,22 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
       {requiresConfirmation && (
         <Card className="p-6 bg-warning/10 border-warning/30">
           <div className="space-y-3">
-            <h3 className="font-semibold text-foreground">Policy Decision Required</h3>
+            <h3 className="font-semibold text-foreground">
+              Policy Decision Required
+            </h3>
             <p className="text-sm text-muted-foreground">
               Review the policy band and approve to proceed with resolution
             </p>
           </div>
         </Card>
       )}
-      
+
       {!requiresConfirmation && (
         <Card className="p-6 bg-success/10 border-success/30">
           <div className="space-y-3">
-            <h3 className="font-semibold text-foreground">Auto-Approved Policy</h3>
+            <h3 className="font-semibold text-foreground">
+              Auto-Approved Policy
+            </h3>
             <p className="text-sm text-muted-foreground">
               This policy band allows automatic progression to resolution
             </p>
@@ -147,7 +171,9 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
             <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
               <div className="font-semibold text-destructive">Error</div>
-              <div className="text-sm text-destructive/90 mt-1 whitespace-pre-wrap">{error}</div>
+              <div className="text-sm text-destructive/90 mt-1 whitespace-pre-wrap">
+                {error}
+              </div>
             </div>
           </div>
         </Card>
@@ -197,10 +223,11 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
               Confirm Policy Approval
             </DialogTitle>
             <DialogDescription>
-              You are about to approve this policy and proceed with resolution generation.
+              You are about to approve this policy and proceed with resolution
+              generation.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg">
               <div className="flex items-start gap-3">
@@ -221,9 +248,12 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-semibold text-destructive mb-1">Warning</div>
+                    <div className="font-semibold text-destructive mb-1">
+                      Warning
+                    </div>
                     <div className="text-sm text-destructive/90">
-                      This policy is marked as BLOCK. Proceeding requires careful review.
+                      This policy is marked as BLOCK. Proceeding requires
+                      careful review.
                     </div>
                   </div>
                 </div>
@@ -233,21 +263,33 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between py-2 px-3 bg-secondary/30 rounded">
                 <span className="text-muted-foreground">Requires Approval</span>
-                <span className={decision.requires_approval ? "text-warning font-semibold" : "text-muted-foreground"}>
+                <span
+                  className={
+                    decision.requires_approval
+                      ? "text-warning font-semibold"
+                      : "text-muted-foreground"
+                  }
+                >
                   {decision.requires_approval ? "Yes" : "No"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 px-3 bg-secondary/30 rounded">
                 <span className="text-muted-foreground">Can Auto-Apply</span>
-                <span className={decision.can_auto_apply ? "text-success font-semibold" : "text-muted-foreground"}>
+                <span
+                  className={
+                    decision.can_auto_apply
+                      ? "text-success font-semibold"
+                      : "text-muted-foreground"
+                  }
+                >
                   {decision.can_auto_apply ? "Yes" : "No"}
                 </span>
               </div>
             </div>
 
             <p className="text-sm text-muted-foreground">
-              By approving, you confirm that you have reviewed the policy decision and agree to proceed with 
-              AI-generated resolution steps.
+              By approving, you confirm that you have reviewed the policy
+              decision and agree to proceed with AI-generated resolution steps.
             </p>
           </div>
 
@@ -284,7 +326,15 @@ export const PolicyView = ({ data, retrievalData, onApprove, onBack, isLoading, 
 };
 
 // Decision Indicator Component
-const DecisionIndicator = ({ label, value, highlight = false }: { label: string; value: boolean; highlight?: boolean }) => {
+const DecisionIndicator = ({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: boolean;
+  highlight?: boolean;
+}) => {
   return (
     <div
       className={cn(
@@ -292,15 +342,15 @@ const DecisionIndicator = ({ label, value, highlight = false }: { label: string;
         value && highlight
           ? "bg-success/10 border-success/30"
           : value
-          ? "bg-secondary/30 border-border/50"
-          : "bg-secondary/20 border-border/30"
+            ? "bg-secondary/30 border-border/50"
+            : "bg-secondary/20 border-border/30",
       )}
     >
       <span className="text-sm text-foreground">{label}</span>
       <div
         className={cn(
           "w-6 h-6 rounded-full flex items-center justify-center",
-          value ? "bg-success" : "bg-muted"
+          value ? "bg-success" : "bg-muted",
         )}
       >
         {value ? (
@@ -312,4 +362,3 @@ const DecisionIndicator = ({ label, value, highlight = false }: { label: string;
     </div>
   );
 };
-

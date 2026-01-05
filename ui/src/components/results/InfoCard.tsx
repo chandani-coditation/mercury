@@ -9,13 +9,19 @@ interface InfoCardProps {
   variant?: "default" | "highlighted";
 }
 
-export const InfoCard = ({ icon: Icon, title, children, className, variant = "default" }: InfoCardProps) => {
+export const InfoCard = ({
+  icon: Icon,
+  title,
+  children,
+  className,
+  variant = "default",
+}: InfoCardProps) => {
   return (
     <div
       className={cn(
         "glass-card p-5 space-y-3 animate-slide-up",
         variant === "highlighted" && "glow-border",
-        className
+        className,
       )}
     >
       <div className="flex items-center gap-2">
@@ -24,9 +30,7 @@ export const InfoCard = ({ icon: Icon, title, children, className, variant = "de
         </div>
         <h4 className="font-semibold text-foreground">{title}</h4>
       </div>
-      <div className="text-sm text-foreground leading-relaxed">
-        {children}
-      </div>
+      <div className="text-sm text-foreground leading-relaxed">{children}</div>
     </div>
   );
 };

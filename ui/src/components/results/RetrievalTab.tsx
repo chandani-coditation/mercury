@@ -27,7 +27,7 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
   const chunksUsed = data?.chunks_used || 0;
   const chunkSources = data?.chunk_sources || [];
   const chunks = data?.chunks || [];
-  
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Stats Header - Highlighted for Demo */}
@@ -44,7 +44,7 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
             </p>
           </div>
         </div>
-        
+
         <div className="glass-card px-5 py-4 flex items-center gap-3 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
           <div className="absolute -inset-0.5 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
           <div className="p-2 rounded-lg bg-primary/10 relative z-10">
@@ -54,7 +54,11 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
             <p className="text-xs text-muted-foreground">Unique Sources</p>
             <p className="text-2xl font-bold font-mono text-foreground">
               {(() => {
-                const sourceTypes = new Set(chunks.map((c: any) => c.provenance?.source_type || 'unknown').filter(Boolean));
+                const sourceTypes = new Set(
+                  chunks
+                    .map((c: any) => c.provenance?.source_type || "unknown")
+                    .filter(Boolean),
+                );
                 return sourceTypes.size || 0;
               })()}
             </p>
@@ -98,8 +102,8 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
           <FileSearch className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
           <p className="text-muted-foreground">No evidence chunks available</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {chunksUsed > 0 
-              ? "Chunk details were not returned by the API" 
+            {chunksUsed > 0
+              ? "Chunk details were not returned by the API"
               : "No matching knowledge base entries found"}
           </p>
         </div>

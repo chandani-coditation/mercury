@@ -13,7 +13,14 @@ interface TicketFormProps {
   error?: string;
 }
 
-const allowedCategories = ["database", "network", "application", "infrastructure", "security", "other"];
+const allowedCategories = [
+  "database",
+  "network",
+  "application",
+  "infrastructure",
+  "security",
+  "other",
+];
 
 const emptyLabels = {
   service: "Database",
@@ -40,12 +47,14 @@ const makeInitialAlert = () => ({
 
 export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
   const [alert, setAlert] = useState(makeInitialAlert());
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
   const validateField = (field: string, value: string) => {
     const errors: Record<string, string> = {};
-    
+
     switch (field) {
       case "alert_id":
         if (!value.trim()) {
@@ -63,14 +72,16 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
         if (!value.trim()) {
           errors[field] = "Title is required";
         } else if (value.length < 10) {
-          errors[field] = "Title should be at least 10 characters for better analysis";
+          errors[field] =
+            "Title should be at least 10 characters for better analysis";
         }
         break;
       case "description":
         if (!value.trim()) {
           errors[field] = "Description is required";
         } else if (value.length < 20) {
-          errors[field] = "Description should be at least 20 characters for accurate triage";
+          errors[field] =
+            "Description should be at least 20 characters for accurate triage";
         }
         break;
       case "service":
@@ -84,16 +95,16 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
         }
         break;
     }
-    
+
     return errors;
   };
 
   const handleAlertChange = (field: string, value: string) => {
     setAlert((prev) => ({ ...prev, [field]: value }));
-    setTouchedFields(prev => new Set([...prev, field]));
-    
+    setTouchedFields((prev) => new Set([...prev, field]));
+
     const errors = validateField(field, value);
-    setValidationErrors(prev => {
+    setValidationErrors((prev) => {
       const updated = { ...prev };
       if (Object.keys(errors).length > 0) {
         Object.assign(updated, errors);
@@ -112,10 +123,10 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
       }
       return { ...prev, labels: nextLabels };
     });
-    
-    setTouchedFields(prev => new Set([...prev, field]));
+
+    setTouchedFields((prev) => new Set([...prev, field]));
     const errors = validateField(field, value);
-    setValidationErrors(prev => {
+    setValidationErrors((prev) => {
       const updated = { ...prev };
       if (Object.keys(errors).length > 0) {
         Object.assign(updated, errors);
@@ -128,7 +139,7 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate all fields
     const allErrors: Record<string, string> = {};
     Object.entries({
@@ -142,14 +153,14 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
       const errors = validateField(field, value);
       Object.assign(allErrors, errors);
     });
-    
+
     if (Object.keys(allErrors).length > 0) {
       setValidationErrors(allErrors);
       // Mark all fields as touched
       setTouchedFields(new Set(Object.keys(allErrors)));
       return;
     }
-    
+
     onSubmit(alert);
   };
 
@@ -172,27 +183,35 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
           <div className="text-center space-y-4">
             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
             <div className="space-y-2">
-              <p className="text-lg font-semibold text-foreground">Analyzing Alert...</p>
-              <p className="text-sm text-muted-foreground">AI is processing your ticket. Please wait.</p>
+              <p className="text-lg font-semibold text-foreground">
+                Analyzing Alert...
+              </p>
+              <p className="text-sm text-muted-foreground">
+                AI is processing your ticket. Please wait.
+              </p>
             </div>
           </div>
         </div>
       )}
-      
+
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 rounded-lg bg-primary/10">
           <AlertCircle className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1">
           <h2 className="text-xl font-semibold text-foreground">New Ticket</h2>
-          <p className="text-sm text-muted-foreground">Submit an alert for AI triage analysis</p>
+          <p className="text-sm text-muted-foreground">
+            Submit an alert for AI triage analysis
+          </p>
         </div>
-        {Object.keys(validationErrors).length === 0 && touchedFields.size > 0 && !isLoading && (
-          <div className="flex items-center gap-2 text-success text-sm">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>All fields valid</span>
-          </div>
-        )}
+        {Object.keys(validationErrors).length === 0 &&
+          touchedFields.size > 0 &&
+          !isLoading && (
+            <div className="flex items-center gap-2 text-success text-sm">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>All fields valid</span>
+            </div>
+          )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -206,7 +225,11 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             required
             disabled={isLoading}
             status={getFieldStatus("alert_id")}
-            error={touchedFields.has("alert_id") ? validationErrors.alert_id : undefined}
+            error={
+              touchedFields.has("alert_id")
+                ? validationErrors.alert_id
+                : undefined
+            }
             tooltip="Unique identifier for this alert (e.g., sample-match-1)"
           />
           <FormField
@@ -217,7 +240,9 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             required
             disabled={isLoading}
             status={getFieldStatus("source")}
-            error={touchedFields.has("source") ? validationErrors.source : undefined}
+            error={
+              touchedFields.has("source") ? validationErrors.source : undefined
+            }
             tooltip="Alert source system (e.g., prometheus, datadog, splunk)"
           />
         </div>
@@ -233,7 +258,11 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             required
             disabled={isLoading}
             status={getFieldStatus("service")}
-            error={touchedFields.has("service") ? validationErrors.service : undefined}
+            error={
+              touchedFields.has("service")
+                ? validationErrors.service
+                : undefined
+            }
             tooltip="Service category (e.g., Database, Network, Application)"
           />
           <FormField
@@ -245,7 +274,11 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             required
             disabled={isLoading}
             status={getFieldStatus("component")}
-            error={touchedFields.has("component") ? validationErrors.component : undefined}
+            error={
+              touchedFields.has("component")
+                ? validationErrors.component
+                : undefined
+            }
             tooltip="Specific component within the service"
           />
         </div>
@@ -292,7 +325,9 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
           required
           disabled={isLoading}
           status={getFieldStatus("title")}
-          error={touchedFields.has("title") ? validationErrors.title : undefined}
+          error={
+            touchedFields.has("title") ? validationErrors.title : undefined
+          }
           tooltip="Brief, descriptive title for the alert"
         />
 
@@ -311,8 +346,12 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             rows={5}
             className={cn(
               "bg-secondary/50 border-border/50 resize-none transition-all",
-              touchedFields.has("description") && validationErrors.description && "border-destructive focus-visible:ring-destructive",
-              touchedFields.has("description") && !validationErrors.description && "border-success focus-visible:ring-success"
+              touchedFields.has("description") &&
+                validationErrors.description &&
+                "border-destructive focus-visible:ring-destructive",
+              touchedFields.has("description") &&
+                !validationErrors.description &&
+                "border-success focus-visible:ring-success",
             )}
             placeholder="Provide detailed information about the alert, including metrics, thresholds, and impact..."
           />
@@ -324,7 +363,8 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
           )}
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Info className="w-3 h-3" />
-            {alert.description.length} characters - Recommended: 50+ for best results
+            {alert.description.length} characters - Recommended: 50+ for best
+            results
           </p>
         </div>
 
@@ -401,11 +441,24 @@ interface FormFieldProps {
   tooltip?: string;
 }
 
-const FormField = ({ label, id, value, onChange, placeholder, required, disabled, status, error, tooltip }: FormFieldProps) => {
+const FormField = ({
+  label,
+  id,
+  value,
+  onChange,
+  placeholder,
+  required,
+  disabled,
+  status,
+  error,
+  tooltip,
+}: FormFieldProps) => {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Label htmlFor={id}>{label} {required && "*"}</Label>
+        <Label htmlFor={id}>
+          {label} {required && "*"}
+        </Label>
         {tooltip && <TooltipIcon text={tooltip} />}
       </div>
       <div className="relative">
@@ -418,9 +471,10 @@ const FormField = ({ label, id, value, onChange, placeholder, required, disabled
           disabled={disabled}
           className={cn(
             "bg-secondary/50 border-border/50 transition-all",
-            status === "error" && "border-destructive focus-visible:ring-destructive",
+            status === "error" &&
+              "border-destructive focus-visible:ring-destructive",
             status === "success" && "border-success focus-visible:ring-success",
-            disabled && "opacity-60 cursor-not-allowed"
+            disabled && "opacity-60 cursor-not-allowed",
           )}
         />
         {status === "success" && !disabled && (
@@ -448,4 +502,3 @@ const TooltipIcon = ({ text }: { text: string }) => {
     </div>
   );
 };
-

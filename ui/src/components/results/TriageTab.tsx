@@ -1,4 +1,14 @@
-import { FileText, Lightbulb, Route, Server, ListChecks, AlertCircle, Target, TrendingUp, Info } from "lucide-react";
+import {
+  FileText,
+  Lightbulb,
+  Route,
+  Server,
+  ListChecks,
+  AlertCircle,
+  Target,
+  TrendingUp,
+  Info,
+} from "lucide-react";
 import { SeverityBadge } from "./SeverityBadge";
 import { ConfidenceMeter } from "./ConfidenceMeter";
 import { InfoCard } from "./InfoCard";
@@ -51,7 +61,11 @@ export const TriageTab = ({ data }: TriageTabProps) => {
           </InfoCard>
           <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>This is the AI's analysis of your alert. It summarizes what the problem is, when it started, and what impact it might have on your systems.</span>
+            <span>
+              This is the AI's analysis of your alert. It summarizes what the
+              problem is, when it started, and what impact it might have on your
+              systems.
+            </span>
           </p>
         </div>
       )}
@@ -64,7 +78,11 @@ export const TriageTab = ({ data }: TriageTabProps) => {
           </InfoCard>
           <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>Based on the alert details and knowledge base, the AI has identified the most probable root cause. This helps you understand why the problem occurred and where to focus your investigation.</span>
+            <span>
+              Based on the alert details and knowledge base, the AI has
+              identified the most probable root cause. This helps you understand
+              why the problem occurred and where to focus your investigation.
+            </span>
           </p>
         </div>
       )}
@@ -75,22 +93,32 @@ export const TriageTab = ({ data }: TriageTabProps) => {
           {data.impact && (
             <div className="space-y-2">
               <InfoCard icon={TrendingUp} title="Impact">
-                <span className="text-sm font-semibold text-primary">{data.impact}</span>
+                <span className="text-sm font-semibold text-primary">
+                  {data.impact}
+                </span>
               </InfoCard>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
                 <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <span>The extent of the impact on business operations. Higher impact means more users or critical systems are affected.</span>
+                <span>
+                  The extent of the impact on business operations. Higher impact
+                  means more users or critical systems are affected.
+                </span>
               </p>
             </div>
           )}
           {data.urgency && (
             <div className="space-y-2">
               <InfoCard icon={TrendingUp} title="Urgency">
-                <span className="text-sm font-semibold text-primary">{data.urgency}</span>
+                <span className="text-sm font-semibold text-primary">
+                  {data.urgency}
+                </span>
               </InfoCard>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
                 <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <span>How quickly the issue needs to be resolved. Higher urgency means immediate action is required.</span>
+                <span>
+                  How quickly the issue needs to be resolved. Higher urgency
+                  means immediate action is required.
+                </span>
               </p>
             </div>
           )}
@@ -100,15 +128,26 @@ export const TriageTab = ({ data }: TriageTabProps) => {
       {/* Routing - Highlighted for Demo */}
       {data.routing && (
         <div className="space-y-2">
-          <InfoCard icon={Route} title="Routing Assignment" variant="highlighted">
+          <InfoCard
+            icon={Route}
+            title="Routing Assignment"
+            variant="highlighted"
+          >
             <div className="relative">
-              <span className="font-mono text-primary font-semibold text-lg">{data.routing}</span>
+              <span className="font-mono text-primary font-semibold text-lg">
+                {data.routing}
+              </span>
               <div className="absolute -inset-1 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
             </div>
           </InfoCard>
           <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>This is the team or person who should handle this incident. The AI automatically routes tickets based on the type of issue, affected services, and your organization's routing rules. This ensures the right experts get the ticket.</span>
+            <span>
+              This is the team or person who should handle this incident. The AI
+              automatically routes tickets based on the type of issue, affected
+              services, and your organization's routing rules. This ensures the
+              right experts get the ticket.
+            </span>
           </p>
         </div>
       )}
@@ -129,7 +168,12 @@ export const TriageTab = ({ data }: TriageTabProps) => {
           </div>
           <p className="text-xs text-muted-foreground flex items-start gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>These are the services, databases, or systems that are impacted by this alert. Knowing which services are affected helps you understand the scope of the issue and who might need to be notified.</span>
+            <span>
+              These are the services, databases, or systems that are impacted by
+              this alert. Knowing which services are affected helps you
+              understand the scope of the issue and who might need to be
+              notified.
+            </span>
           </p>
         </div>
       )}
@@ -141,7 +185,9 @@ export const TriageTab = ({ data }: TriageTabProps) => {
             <div className="p-2 rounded-lg bg-primary/10">
               <ListChecks className="w-4 h-4 text-primary" />
             </div>
-            <h4 className="font-semibold text-foreground">Recommended Actions</h4>
+            <h4 className="font-semibold text-foreground">
+              Recommended Actions
+            </h4>
           </div>
           <div className="space-y-2">
             {data.recommended_actions.map((action, index) => (
@@ -150,7 +196,6 @@ export const TriageTab = ({ data }: TriageTabProps) => {
           </div>
         </div>
       )}
-
 
       {/* Confidence Meter - Highlighted for Demo */}
       <div className="space-y-2">
@@ -162,7 +207,13 @@ export const TriageTab = ({ data }: TriageTabProps) => {
         </div>
         <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
           <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-          <span>This shows how confident the AI is in its analysis. Higher confidence (80%+) means the AI found strong matches in the knowledge base and is very sure about its assessment. Lower confidence means you should review the analysis more carefully, as the AI may need more information or the issue might be unusual.</span>
+          <span>
+            This shows how confident the AI is in its analysis. Higher
+            confidence (80%+) means the AI found strong matches in the knowledge
+            base and is very sure about its assessment. Lower confidence means
+            you should review the analysis more carefully, as the AI may need
+            more information or the issue might be unusual.
+          </span>
         </p>
       </div>
     </div>
