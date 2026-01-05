@@ -17,7 +17,7 @@ const allowedCategories = ["database", "network", "application", "infrastructure
 
 const emptyLabels = {
   service: "Database",
-  component: "Alerts",
+  component: "Database",
   cmdb_ci: "Database-SQL",
   category: "database",
 };
