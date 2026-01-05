@@ -67,7 +67,6 @@ def predict_routing_from_evidence(incident_signatures: List[Dict[str, Any]]) -> 
     for sig in incident_signatures:
         metadata = sig.get("metadata", {})
         assignment_group = metadata.get("assignment_group")
-        logger.debug(f"Checking signature {sig.get('incident_signature_id', 'unknown')}: assignment_group={assignment_group}, metadata keys={list(metadata.keys())}")
         if assignment_group and str(assignment_group).strip():
             assignment_groups.append(str(assignment_group).strip())
     
@@ -101,7 +100,6 @@ def predict_impact_urgency_from_evidence(incident_signatures: List[Dict[str, Any
         Tuple of (impact, urgency) or None if none found
     """
     if not incident_signatures:
-        logger.debug("No incident signatures provided for impact/urgency prediction")
         return None
     
     impact_urgency_pairs = []
@@ -109,7 +107,6 @@ def predict_impact_urgency_from_evidence(incident_signatures: List[Dict[str, Any
         metadata = sig.get("metadata", {})
         impact = metadata.get("impact")
         urgency = metadata.get("urgency")
-        logger.debug(f"Checking signature {sig.get('incident_signature_id', 'unknown')}: impact={impact}, urgency={urgency}")
         if impact and urgency:
             impact_urgency_pairs.append((str(impact).strip(), str(urgency).strip()))
     
@@ -285,7 +282,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     elif "ts" not in alert:
         alert["ts"] = datetime.utcnow().isoformat()
     
-    logger.debug(f"Alert keys: {list(alert.keys())}, affected_services: {alert.get('affected_services')}")
 
     # Retrieve evidence (incident signatures and runbook metadata only)
     # Build query text with better keyword extraction
@@ -379,11 +375,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     if incident_signatures:
         first_sig = incident_signatures[0]
         metadata = first_sig.get("metadata", {})
-        logger.debug(
-            f"First signature metadata keys: {list(metadata.keys())}, "
-            f"assignment_group={metadata.get('assignment_group')}, "
-            f"impact={metadata.get('impact')}, urgency={metadata.get('urgency')}"
-        )
 
     # Check if we have evidence
     evidence_warning = None
@@ -422,10 +413,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     if has_evidence:
         logger.info("Calling LLM for triage with evidence...")
         triage_output = call_llm_for_triage(alert, triage_evidence)
-        logger.debug(
-            f"LLM triage completed: failure_type={triage_output.get('incident_signature', {}).get('failure_type')}, "
-            f"confidence={triage_output.get('confidence')}"
-        )
 
         # Validate triage output with guardrails
         is_valid, validation_errors = validate_triage_output(triage_output)
@@ -444,7 +431,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Populate matched_evidence from actual retrieved signatures
         matched_evidence = triage_output.get("matched_evidence", {})
         
-        # Extract incident_signature_ids from actual evidence (if not already populated)
+        # Extract incident_signature_ids from evidence
         if not matched_evidence.get("incident_signatures") and incident_signatures:
             sig_ids = []
             for sig in incident_signatures:
@@ -605,7 +592,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 "limit": retrieval_limit,
             },
         )
-        # Also include summary for backward compatibility
         formatted_evidence["incident_signatures"] = [
             {
                 "chunk_id": sig.get("chunk_id"),
@@ -742,7 +728,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
         # Extract affected_services from alert
         affected_services = alert.get("affected_services")
-        logger.debug(f"Extracting affected_services from alert: {affected_services}, type: {type(affected_services)}")
         if affected_services is not None:
             if isinstance(affected_services, str):
                 affected_services = [affected_services]
@@ -755,7 +740,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Also check labels if not already set
         if "affected_services" not in triage_output and isinstance(alert.get("labels"), dict):
             labels = alert.get("labels", {})
-            logger.debug(f"Checking labels for affected_services: {labels.get('affected_services')}")
             if "affected_services" in labels:
                 aff_svc = labels.get("affected_services")
                 if isinstance(aff_svc, str):

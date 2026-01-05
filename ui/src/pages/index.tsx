@@ -223,18 +223,8 @@ const Index = () => {
       };
       
       await putFeedback(incidentId, feedbackPayload);
-      console.log("✅ Approval submitted successfully");
       
-      // Step 2: Generate resolution
-      console.log("Step 2: Generating resolution...");
-      
-      // No body needed - incident_id is in the query string
       const data = await postResolution(incidentId);
-      
-      // Extract resolution from the response
-      // New structure: { resolution: { steps: [{ step_number, title, action, expected_outcome, risk_level }], ... }, ... }
-      // Old structure: { resolution: { recommendations: [...], overall_confidence, risk_level, reasoning }, ... }
-      // Legacy structure: { resolution: { steps: [...], ... }, ... }
       const resolution = data.resolution || data;
       const stepsArray = resolution.steps || []; // New format: array of objects
       const recommendations = resolution.recommendations || []; // Old format

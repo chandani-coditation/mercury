@@ -28,9 +28,9 @@ async def resolution_agent_state(
         alert: Optional alert payload (not supported for state mode yet)
         use_state_bus: Whether to emit state snapshots
     """
-
     if not incident_id:
         raise ValueError("State-based resolution requires an incident_id")
+    return await _resolution_agent_state_internal(incident_id, alert, use_state_bus)
 
 
 async def _resolution_agent_state_internal(
@@ -97,7 +97,19 @@ async def _resolution_agent_state_internal(
         f"{alert_dict.get('description', '')} resolution steps runbook"
     )
     labels = alert_dict.get("labels") or {}
+    service_val = labels.get("service") if isinstance(labels, dict) else None
+    component_val = labels.get("component") if isinstance(labels, dict) else None
 
+    # Retrieve context
+    from retrieval.hybrid_search import hybrid_search
+    context_chunks = hybrid_search(
+        query_text=query_text,
+        service=service_val,
+        component=component_val,
+        limit=retrieval_limit,
+        vector_weight=vector_weight,
+        fulltext_weight=fulltext_weight,
+    )
     context_chunks = apply_retrieval_preferences(context_chunks, resolution_cfg)
     state.context_chunks = context_chunks
     state.context_chunks_count = len(context_chunks)

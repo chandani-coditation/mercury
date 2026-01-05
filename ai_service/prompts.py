@@ -123,7 +123,7 @@ Remember: You are ONLY classifying. The Resolution Agent will handle recommendat
 # Default system prompt for triage (can be overridden via config/llm.json)
 TRIAGE_SYSTEM_PROMPT_DEFAULT = "You are an expert NOC analyst. Always respond with valid JSON only."
 
-# Resolution Agent Prompts (Legacy - for resolution_copilot.py)
+# Resolution Agent Prompts
 RESOLUTION_USER_PROMPT_TEMPLATE = """You are an expert NOC engineer. Based on the alert triage, provide a detailed resolution plan.
 
 Alert Information:

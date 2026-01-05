@@ -32,28 +32,14 @@ async def resolution(
     """
     Generate resolution for an incident.
 
-    This endpoint uses the Resolution Copilot Agent to:
-    1. Get incident (or create from alert)
-    2. Retrieve runbook-heavy context
-    3. Apply policy gate
-    4. Call LLM for resolution
-    5. Validate with guardrails
-    6. Store resolution
-    7. Return resolution output
+    Args:
+        incident_id: Optional incident ID to fetch existing incident
+        alert: Optional Alert object (used if incident_id not provided)
+        use_state: Use state-based HITL workflow
+        use_langgraph: Use LangGraph framework
 
-    If incident_id is provided, fetch the incident and use its alert/triage.
-    Otherwise, use the provided alert and perform triage first.
-
-    **Query Parameters:**
-    - incident_id: Optional incident ID to fetch existing incident
-
-    **Request Body:**
-    - alert: Optional Alert object (used if incident_id not provided)
-
-    **Response:**
-    - incident_id: Incident identifier
-    - resolution: Resolution steps with titles, actions, expected outcomes
-    - evidence: Retrieved context information
+    Returns:
+        Dictionary with incident_id, resolution steps, and evidence
     """
     # Determine if LangGraph should be used
     use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH

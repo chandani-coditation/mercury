@@ -74,10 +74,6 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     incident_signature_ids = triage.matched_evidence.incident_signatures or []
     incident_signature = triage.incident_signature
     
-    logger.debug(
-        f"Resolution agent inputs: runbook_ids={runbook_ids}, "
-        f"incident_signature_ids={incident_signature_ids}"
-    )
     
     # 1. Retrieve runbook steps
     if not runbook_ids:
@@ -86,7 +82,6 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(triage_output, dict):
             evidence = triage_output.get("evidence") or {}
             runbook_metadata = evidence.get("runbook_metadata", [])
-            logger.debug(f"Evidence runbook_metadata: {runbook_metadata}")
             if runbook_metadata:
                 runbook_ids = [rb.get("runbook_id") for rb in runbook_metadata if rb.get("runbook_id")]
                 logger.info(f"Extracted runbook_ids from evidence: {runbook_ids}")
@@ -229,7 +224,6 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
                     # Boost this step significantly
                     current_score = step.get("combined_score", 0.0)
                     step["combined_score"] = min(1.0, current_score + 0.3)
-                    logger.debug(f"Boosted relevance for corrective step: {step.get('step_id')}")
         
         # Re-order after boosting
         ordered_steps = sorted(ordered_steps, key=lambda s: s.get("combined_score", 0.0), reverse=True)
@@ -530,7 +524,6 @@ def _call_llm_for_ranking(
         result_text = response.choices[0].message.content
         result = json.loads(result_text)
         
-        logger.debug("LLM ranking response parsed successfully")
         return result
         
     except Exception as e:

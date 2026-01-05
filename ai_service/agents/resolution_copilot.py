@@ -232,20 +232,20 @@ def _resolution_copilot_agent_internal(
         f"limit={retrieval_limit}, vector_weight={vector_weight}, fulltext_weight={fulltext_weight}"
     )
 
-    # Retrieve context
+    service_val = labels.get("service") if isinstance(labels, dict) else None
+    component_val = labels.get("component") if isinstance(labels, dict) else None
+
     context_chunks = hybrid_search(
         query_text=query_text,
-        service=labels.get("service") if isinstance(labels, dict) else None,
-        component=labels.get("component") if isinstance(labels, dict) else None,
+        service=service_val,
+        component=component_val,
         limit=retrieval_limit,
         vector_weight=vector_weight,
         fulltext_weight=fulltext_weight,
     )
 
-    # Apply retrieval preferences (prefer_types, max_per_type)
     context_chunks = apply_retrieval_preferences(context_chunks, retrieval_config)
 
-    # Optionally retrieve logs from InfluxDB if configured
     try:
         from retrieval.influxdb_client import get_influxdb_client
 
@@ -255,9 +255,8 @@ def _resolution_copilot_agent_internal(
                 query_text=query_text,
                 service=service_val,
                 component=component_val,
-                limit=5,  # Small limit for logs
+                limit=5,
             )
-            # Convert logs to chunk-like format for consistency
             for log_content in logs:
                 if log_content:
                     context_chunks.append(

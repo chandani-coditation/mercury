@@ -198,10 +198,6 @@ def rank_steps(
     # Sort by combined score (descending)
     ranked_steps = sorted(scored_steps, key=lambda x: x["combined_score"], reverse=True)
     
-    top_scores = [f"{s['combined_score']:.3f}" for s in ranked_steps[:3]]
-    logger.debug(
-        f"Ranked {len(ranked_steps)} steps. Top 3 scores: {top_scores}"
-    )
     
     return ranked_steps
 
@@ -292,6 +288,5 @@ def assemble_recommendations(
         
         recommendations.append(recommendation)
     
-    logger.debug(f"Assembled {len(recommendations)} recommendations")
     return recommendations
 
