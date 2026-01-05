@@ -25,18 +25,6 @@ def resolution_copilot_agent(
     """
     Resolution Copilot Agent - Generates resolution steps for an incident.
 
-    If incident_id is provided, fetch the incident and use its alert/triage.
-    Otherwise, use the provided alert and perform triage first.
-
-    Flow:
-    1. Get incident (or create from alert)
-    2. Retrieve runbook-heavy context
-    3. Apply policy gate
-    4. Call LLM for resolution
-    5. Validate with guardrails
-    6. Store resolution
-    7. Return resolution output
-
     Args:
         incident_id: Optional incident ID to fetch existing incident
         alert: Optional alert dictionary (used if incident_id not provided)

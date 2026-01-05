@@ -41,8 +41,7 @@ log_dir = os.getenv("LOG_DIR", None)
 setup_logging(log_level=log_level, log_file=log_file, log_dir=log_dir, service_name="ingestion")
 logger = get_logger(__name__)
 
-# Increase max request body size to 50MB for large logs
-# Default Starlette limit is 1MB which is too small for multi-thousand-line logs
+# FastAPI app with increased body size limit for large logs
 app = FastAPI(
     title="NOC Ingestion Service",
     version="1.0.0",
@@ -50,11 +49,6 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
-
-# Note: Starlette/FastAPI has a default 1MB request body size limit.
-# For large logs, this can be increased by setting the environment variable
-# or by using a custom ASGI wrapper. The limit is enforced at the ASGI level.
-# If you encounter "Request body too large" errors, increase the limit.
 
 # CORS middleware
 app.add_middleware(
@@ -136,11 +130,7 @@ def ingest_alert(alert: IngestAlert):
 
 @app.post("/ingest/incident")
 def ingest_incident(incident: IngestIncident):
-    """
-    Ingest a historical incident as an incident signature.
-    
-    Per architecture: Incidents are converted to signatures (patterns, not raw text).
-    """
+    """Ingest a historical incident as an incident signature."""
     logger.info(f"Ingesting incident: title={incident.title[:50]}...")
 
     try:
@@ -167,12 +157,7 @@ def ingest_incident(incident: IngestIncident):
 
 @app.post("/ingest/runbook")
 def ingest_runbook(runbook: IngestRunbook):
-    """
-    Ingest a runbook with atomic steps.
-    
-    Per architecture: Runbook metadata goes in documents table,
-    and each step is stored as an atomic chunk.
-    """
+    """Ingest a runbook with atomic steps."""
     logger.info(f"Ingesting runbook: title={runbook.title[:50]}...")
 
     try:
@@ -280,9 +265,4 @@ if __name__ == "__main__":
 
     host = os.getenv("INGESTION_SERVICE_HOST", "0.0.0.0")
     port = int(os.getenv("INGESTION_SERVICE_PORT", "8000"))
-
-    # Note: To increase request body size limit beyond 1MB default,
-    # run uvicorn with: --limit-max-requests 1000
-    # The actual body size limit is controlled by Starlette's Request class
-    # For production, consider using nginx or a reverse proxy to handle large payloads
     uvicorn.run(app, host=host, port=port)

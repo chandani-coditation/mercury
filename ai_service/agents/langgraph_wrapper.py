@@ -1,18 +1,4 @@
-"""LangGraph wrapper for agent orchestration.
-
-This module provides LangGraph-based agent workflows that replace the
-custom state-based implementation. The graphs handle the full workflow
-including retrieval, LLM calls, validation, and policy evaluation.
-
-Usage:
-    from ai_service.agents.langgraph_wrapper import create_triage_graph, create_resolution_graph
-
-    # Create graph
-    triage_graph = create_triage_graph()
-
-    # Run with state
-    result = triage_graph.invoke({"alert": alert_data, "context_chunks": []})
-"""
+"""LangGraph wrapper for agent orchestration."""
 
 from typing import Dict, Any, TypedDict, Annotated, Optional
 from langgraph.graph import StateGraph, END
