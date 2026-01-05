@@ -328,9 +328,8 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
             # High triage confidence means good evidence match, so resolution should reflect that
             overall_confidence = max(overall_confidence, triage_confidence * 0.75)
         
-        # Boost if we have remediation steps matched to root problem (check if any steps were matched)
-        # Note: matched_remediation_steps is from earlier in the function, but we can check if steps exist
-        if len(final_steps) >= 3:  # If we have multiple steps, likely matched remediation
+        # Boost confidence if multiple steps were generated (indicates good match)
+        if len(final_steps) >= 3:
             overall_confidence = min(0.85, overall_confidence + 0.1)
     
     risk_levels = [s.get("risk_level", "medium") for s in final_steps]

@@ -35,14 +35,19 @@ interface EvidenceChunkProps {
 export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
   const [expanded, setExpanded] = useState(false);
   const scores = chunk.scores || {};
-  const hasScores = scores.vector_score || scores.fulltext_score || scores.rrf_score;
+  // Has scores if at least one score is not null/undefined
+  const hasScores = (scores.vector_score !== undefined && scores.vector_score !== null) ||
+                    (scores.fulltext_score !== undefined && scores.fulltext_score !== null) ||
+                    (scores.rrf_score !== undefined && scores.rrf_score !== null);
   const metadata = chunk.metadata || {};
 
   // Calculate overall relevance percentage (using RRF score as primary, or vector as fallback)
-  const relevanceScore = scores.rrf_score 
-    ? Math.round(scores.rrf_score * 100 * 10) // RRF is typically 0.0x, scale it up
-    : scores.vector_score 
-    ? Math.round(scores.vector_score * 100) 
+  // RRF score is typically 0.0x (e.g., 0.0118), so we multiply by 1000 to get percentage-like value
+  // Vector score is 0-1 range, so multiply by 100 to get percentage
+  const relevanceScore = scores.rrf_score !== undefined && scores.rrf_score !== null
+    ? Math.round(scores.rrf_score * 1000) // RRF is typically 0.0x (e.g., 0.0118 -> 11.8)
+    : scores.vector_score !== undefined && scores.vector_score !== null
+    ? Math.round(scores.vector_score * 100) // Vector is 0-1 (e.g., 0.489 -> 48.9)
     : null;
 
   const getRelevanceColor = (score: number) => {

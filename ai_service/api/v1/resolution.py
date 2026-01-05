@@ -88,8 +88,6 @@ async def resolution(
                 use_state_bus=True,
             )
         else:
-            # Use new architecture-compliant resolution_agent
-            # It requires triage_output, so fetch incident first
             if incident_id:
                 repository = IncidentRepository()
                 try:
@@ -100,31 +98,26 @@ async def resolution(
                             status_code=400,
                             detail=f"Incident {incident_id} has no triage output. Please triage the alert first."
                         )
-                    # Call new resolution_agent with triage_output
                     resolution_result = resolution_agent(triage_output)
                     
-                    # Get runbook steps count from resolution result metadata (actual steps retrieved)
                     metadata = resolution_result.get("_metadata", {})
                     original_runbook_steps_count = metadata.get("runbook_steps_retrieved", 0)
                     
-                    # Remove internal metadata from response
                     if "_metadata" in resolution_result:
                         del resolution_result["_metadata"]
                     
-                    # Format response to match expected structure
                     result = {
                         "incident_id": incident_id,
                         "resolution": resolution_result,
                         "evidence": {
                             "retrieval_method": "resolution_retrieval",
-                            "runbook_steps": original_runbook_steps_count,  # Actual runbook steps retrieved from DB
-                            "steps_retrieved": len(resolution_result.get("steps", [])),  # Final UI steps count
+                            "runbook_steps": original_runbook_steps_count,
+                            "steps_retrieved": len(resolution_result.get("steps", [])),
                         }
                     }
                 except IncidentNotFoundError:
                     raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
             else:
-                # No incident_id - use old copilot agent (backward compatibility)
                 result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
 
         logger.info(
@@ -146,7 +139,6 @@ async def resolution(
             },
         )
     except ValueError as e:
-        # Handle validation errors (e.g., guardrail validation failures)
         error_msg = str(e)
         logger.warning(f"Resolution validation error: {error_msg}")
         raise HTTPException(status_code=400, detail=error_msg)

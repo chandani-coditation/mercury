@@ -81,14 +81,9 @@ const Index = () => {
     setAlertData(alert);
     setError("");
     
-    console.log("=== Submitting Triage ===");
-    console.log("Alert data:", JSON.stringify(alert, null, 2));
-    console.log("API endpoint:", "http://localhost:8001/api/v1/triage");
     
     try {
       const data = await postTriage(alert);
-      console.log("✅ Triage SUCCESS!");
-      console.log("Response:", JSON.stringify(data, null, 2));
       
       setIncidentId(data.incident_id);
       
@@ -217,12 +212,9 @@ const Index = () => {
     setIsLoading(true);
     setError("");
     
-    console.log("=== Approving Policy ===");
-    console.log("Incident ID:", incidentId);
     
     try {
       // Step 1: Submit approval feedback
-      console.log("Step 1: Submitting approval feedback...");
       const feedbackPayload = {
         feedback_type: "triage",
         user_edited: triageData,
@@ -238,25 +230,29 @@ const Index = () => {
       
       // No body needed - incident_id is in the query string
       const data = await postResolution(incidentId);
-      console.log("✅ Resolution generated successfully");
-      console.log("Resolution response:", JSON.stringify(data, null, 2));
       
       // Extract resolution from the response
-      // New structure: { resolution: { recommendations: [...], overall_confidence, risk_level, reasoning }, ... }
+      // New structure: { resolution: { steps: [{ step_number, title, action, expected_outcome, risk_level }], ... }, ... }
+      // Old structure: { resolution: { recommendations: [...], overall_confidence, risk_level, reasoning }, ... }
       // Legacy structure: { resolution: { steps: [...], ... }, ... }
       const resolution = data.resolution || data;
-      const recommendations = resolution.recommendations || [];
-      const steps = recommendations.length > 0 
-        ? recommendations.map((rec: any) => rec.action || rec.step || "")
-        : (resolution.resolution_steps || resolution.steps || []);
+      const stepsArray = resolution.steps || []; // New format: array of objects
+      const recommendations = resolution.recommendations || []; // Old format
+      
+      // For legacy compatibility, create string array from steps if needed
+      const stepsAsStrings = stepsArray.length > 0 && typeof stepsArray[0] === 'object'
+        ? stepsArray.map((step: any) => step.action || step.title || "")
+        : (recommendations.length > 0 
+          ? recommendations.map((rec: any) => rec.action || rec.step || "")
+          : (resolution.resolution_steps || []));
       
       // Store all resolution data including rollback_plan if present
       // Preserve the original structure to handle both string and object rollback_plan
       setResolutionData({
         ...resolution, // Spread first to get all fields
-        recommendations: recommendations, // New structure
-        resolution_steps: steps, // Ensure steps is always set for compatibility
-        steps: steps, // Also set as 'steps' for compatibility
+        steps: stepsArray, // New format: array of step objects
+        recommendations: recommendations, // Old format
+        resolution_steps: stepsAsStrings, // Legacy format: array of strings
         // Keep rollback_plan as-is (can be string or object)
         risk_level: resolution.risk_level || data.risk_level || null,
         overall_confidence: resolution.overall_confidence || resolution.confidence || null,
@@ -335,14 +331,9 @@ const Index = () => {
 
     setIsLoading(true);
     setError("");
-    console.log("=== Loading Existing Incident ===");
-    console.log("Searching for:", searchIncidentId);
 
     try {
       const incident = await getIncident(searchIncidentId);
-      console.log("✅ Incident loaded:", incident);
-      console.log("Found by ID:", incident.incident_id || incident.id);
-      console.log("Alert ID:", incident.alert_id);
 
       // Extract data from incident
       setIncidentId(incident.incident_id || incident.id);
@@ -445,9 +436,6 @@ const Index = () => {
       // When loading an existing incident, ALWAYS go to complete summary page
       // This shows all available data in one place, regardless of resolution status
       // The CompleteSummary component handles missing data gracefully
-      console.log("✅ Loading existing incident - going directly to Complete Summary");
-      console.log("Resolution exists:", !!incident.resolution_output);
-      console.log("Policy band:", incident.policy_band);
       setCurrentStep("complete");
 
       setShowSearch(false);
@@ -462,8 +450,6 @@ const Index = () => {
   const handleMarkComplete = () => {
     // Simply navigate to complete page - no API call needed
     // The resolution is already stored in the database from when it was generated
-    console.log("=== Marking Resolution Complete ===");
-    console.log("Navigating to complete summary page");
     setCurrentStep("complete");
   };
 

@@ -285,7 +285,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     elif "ts" not in alert:
         alert["ts"] = datetime.utcnow().isoformat()
     
-    # Debug: Log alert structure to verify affected_services is present
     logger.debug(f"Alert keys: {list(alert.keys())}, affected_services: {alert.get('affected_services')}")
 
     # Retrieve evidence (incident signatures and runbook metadata only)
@@ -377,7 +376,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         f"{len(runbook_metadata)} runbook metadata"
     )
     
-    # Debug: Log metadata structure of first signature to verify fields are present
     if incident_signatures:
         first_sig = incident_signatures[0]
         metadata = first_sig.get("metadata", {})
@@ -443,8 +441,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             logger.error(f"Triage hallucination detected: {hallucination_errors}")
             raise ValueError(f"Triage output contains hallucinated content: {', '.join(hallucination_errors)}")
         
-        # FIX: Ensure matched_evidence.incident_signatures is populated from actual evidence
-        # The LLM might not extract IDs correctly, so we populate from actual retrieved signatures
+        # Populate matched_evidence from actual retrieved signatures
         matched_evidence = triage_output.get("matched_evidence", {})
         
         # Extract incident_signature_ids from actual evidence (if not already populated)
@@ -459,7 +456,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 matched_evidence["incident_signatures"] = sig_ids
                 logger.info(f"Populated matched_evidence.incident_signatures from evidence: {len(sig_ids)} signatures")
         
-        # Extract runbook_ids from runbook_metadata (always populate if available)
+        # Extract runbook_ids from runbook_metadata
         if runbook_metadata:
             runbook_ids = [rb.get("tags", {}).get("runbook_id") for rb in runbook_metadata if rb.get("tags", {}).get("runbook_id")]
             if runbook_ids:
@@ -469,7 +466,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Update triage_output with matched_evidence
         triage_output["matched_evidence"] = matched_evidence
         
-        # FIX: Ensure confidence is not 0 when signatures are found
+        # Calculate confidence based on number of matches
         if triage_output.get("confidence", 0) == 0 and incident_signatures:
             # Calculate confidence based on number of matches and scores
             num_matches = len(incident_signatures)
@@ -631,6 +628,39 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             for rb in runbook_metadata
         ]
         
+        # Add runbook metadata as chunks for UI display (with scores from relevance_score)
+        # Runbook metadata uses simple full-text search, not hybrid search
+        for rb in runbook_metadata:
+            relevance_score = rb.get("relevance_score", 0.0)
+            # Convert relevance_score (from ts_rank, typically 0-1) to fulltext_score
+            fulltext_score = float(relevance_score) if relevance_score else 0.0
+            
+            runbook_chunk = {
+                "chunk_id": rb.get("document_id"),  # Use document_id as chunk_id for runbook metadata
+                "document_id": rb.get("document_id"),
+                "doc_title": rb.get("title", "Runbook"),
+                "content": f"Runbook: {rb.get('title', 'Unknown')}\nService: {rb.get('service', 'N/A')}\nComponent: {rb.get('component', 'N/A')}",
+                "provenance": {
+                    "source_type": "runbook",
+                    "source_id": rb.get("document_id"),
+                    "service": rb.get("service"),
+                    "component": rb.get("component"),
+                },
+                "metadata": {
+                    "doc_type": "runbook",
+                    "runbook_id": rb.get("tags", {}).get("runbook_id"),
+                    "title": rb.get("title"),
+                    "service": rb.get("service"),
+                    "component": rb.get("component"),
+                },
+                "scores": {
+                    "vector_score": None,  # Runbook metadata doesn't have vector scores in triage retrieval
+                    "fulltext_score": fulltext_score,
+                    "rrf_score": None,  # No RRF score - runbook metadata doesn't go through hybrid search
+                },
+            }
+            formatted_evidence["chunks"].append(runbook_chunk)
+        
         # Add runbook steps to evidence chunks for UI display
         if runbook_metadata:
             try:
@@ -640,6 +670,11 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                     runbook_steps = retrieve_runbook_steps(runbook_ids_for_steps)
                     # Add runbook steps as chunks for UI display
                     for step in runbook_steps[:5]:  # Limit to top 5 steps
+                        # Get similarity_score from step if available (from semantic search)
+                        # similarity_score is cosine similarity: 1 - (embedding <=> query_embedding), range 0-1
+                        similarity_score = step.get("similarity_score")
+                        vector_score = float(similarity_score) if similarity_score is not None else None
+                        
                         step_chunk = {
                             "chunk_id": step.get("chunk_id"),
                             "document_id": step.get("document_id"),
@@ -661,9 +696,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                                 "expected_outcome": step.get("expected_outcome"),
                             },
                             "scores": {
-                                "vector_score": None,
-                                "fulltext_score": None,
-                                "rrf_score": None,
+                                "vector_score": vector_score,  # Cosine similarity from semantic search
+                                "fulltext_score": None,  # Runbook steps don't have fulltext score from triage retrieval
+                                "rrf_score": None,  # No RRF score - runbook steps don't go through hybrid search
                             },
                         }
                         formatted_evidence["chunks"].append(step_chunk)

@@ -21,18 +21,25 @@ interface ResolutionViewProps {
 export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewProps) => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   
-  // Debug logging
-  console.log("ResolutionView - Received data:", data);
   
   const resolution = data.resolution || data;
   
-  // New structure: recommendations array
+  // New structure: recommendations array (old format)
   const recommendations = resolution.recommendations || [];
   
-  // Legacy structure: steps array (for backward compatibility)
-  const steps = recommendations.length > 0 
+  // New structure: steps array with objects (new format)
+  // Format: [{ step_number, title, action, expected_outcome, risk_level }, ...]
+  const stepsArray = resolution.steps || [];
+  
+  // Legacy structure: steps as strings (for backward compatibility)
+  const stepsAsStrings = recommendations.length > 0 
     ? recommendations.map((rec: any) => rec.action || rec.step || "")
-    : (resolution.resolution_steps || resolution.steps || data.resolution_steps || []);
+    : (resolution.resolution_steps || data.resolution_steps || []);
+  
+  // Determine which format we have
+  const hasStepsArray = stepsArray.length > 0 && typeof stepsArray[0] === 'object';
+  const hasRecommendations = recommendations.length > 0;
+  const hasLegacySteps = stepsAsStrings.length > 0 && !hasStepsArray;
   
   const riskLevel = resolution.risk_level || data.risk_level || "unknown";
   const estimatedTime = resolution.estimated_time_minutes || resolution.estimated_duration;
@@ -41,15 +48,6 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
   const rollbackPlan = resolution.rollback_plan;
   const commands = resolution.commands_by_step || {};
   
-  console.log("ResolutionView - Extracted:", {
-    stepsCount: steps.length,
-    steps: steps,
-    riskLevel,
-    estimatedTime,
-    confidence,
-    hasRollbackPlan: !!rollbackPlan,
-    rollbackPlanType: typeof rollbackPlan
-  });
   
   // Handle rollback_plan - it can be a string or an object
   const rollbackPlanSteps = typeof rollbackPlan === 'object' && rollbackPlan !== null 
@@ -147,7 +145,70 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
             Resolution Recommendations
           </h3>
           <div className="space-y-3">
-            {recommendations && recommendations.length > 0 ? (
+            {hasStepsArray ? (
+              // New format: steps array with objects
+              stepsArray.map((step: any, index: number) => {
+              const stepNumber = step.step_number || index + 1;
+              const stepTitle = step.title || "";
+              const stepAction = step.action || "";
+              const stepExpectedOutcome = step.expected_outcome || "";
+              const stepRiskLevel = step.risk_level || "medium";
+              const stepCommands = commands[stepNumber - 1] || commands[(stepNumber - 1).toString()] || [];
+              const hasCommands = stepCommands && stepCommands.length > 0;
+              
+              return (
+                <div key={stepNumber} className="bg-background/50 border border-border/30 rounded-lg p-4 hover:border-primary/30 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
+                      {stepNumber}
+                    </span>
+                    <div className="flex-1 space-y-2">
+                      {stepTitle && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">{stepTitle}</h4>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-xs font-semibold text-muted-foreground">Action: </span>
+                        <p className="text-sm text-foreground leading-relaxed">{stepAction}</p>
+                      </div>
+                      {stepExpectedOutcome && (
+                        <div>
+                          <span className="text-xs font-semibold text-muted-foreground">Expected Outcome: </span>
+                          <span className="text-sm text-foreground">{stepExpectedOutcome}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          stepRiskLevel === "low" ? "bg-success/20 text-success" :
+                          stepRiskLevel === "medium" ? "bg-warning/20 text-warning" :
+                          "bg-destructive/20 text-destructive"
+                        }`}>
+                          {stepRiskLevel.toUpperCase()} RISK
+                        </span>
+                      </div>
+                      
+                      {hasCommands && (
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Terminal className="w-3 h-3" />
+                            <span>Commands:</span>
+                          </div>
+                          {stepCommands.map((cmd: string, cmdIdx: number) => (
+                            <pre key={cmdIdx} className="text-xs bg-black/20 border border-border/30 rounded p-2 overflow-x-auto">
+                              <code className="text-primary">{cmd}</code>
+                            </pre>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+            ) : hasRecommendations ? (
+              // Old recommendations format
               recommendations.map((rec: any, index: number) => {
               const stepAction = rec.action || "";
               const stepCondition = rec.condition || "";
@@ -225,9 +286,9 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
                 </div>
               );
             })
-            ) : steps && steps.length > 0 ? (
-              // Fallback to legacy steps format
-              steps.map((step: string, index: number) => {
+            ) : hasLegacySteps ? (
+              // Legacy format: steps as strings
+              stepsAsStrings.map((step: string, index: number) => {
               const stepCommands = commands[index] || commands[index.toString()] || [];
               const hasCommands = stepCommands && stepCommands.length > 0;
               
@@ -398,7 +459,7 @@ export const ResolutionView = ({ data, onBack, onMarkComplete }: ResolutionViewP
                     Ready to Mark Complete
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    You have reviewed {steps.length} resolution step{steps.length !== 1 ? 's' : ''}.
+                    You have reviewed {hasStepsArray ? stepsArray.length : hasRecommendations ? recommendations.length : stepsAsStrings.length} resolution step{(hasStepsArray ? stepsArray.length : hasRecommendations ? recommendations.length : stepsAsStrings.length) !== 1 ? 's' : ''}.
                   </div>
                 </div>
               </div>
