@@ -37,17 +37,28 @@ if __name__ == "__main__":
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "db", "migrations"
     )
 
-    # Run all migrations in order
-    migrations = sorted([f for f in os.listdir(migration_dir) if f.endswith(".sql")])
+    # Check for combined migration file first
+    combined_migration = os.path.join(migration_dir, "000_combined_migration.sql")
+    
+    if os.path.exists(combined_migration):
+        print("Found combined migration file - using it instead of individual migrations")
+        run_migration(combined_migration)
+        print("\n Combined migration completed")
+    else:
+        # Run all migrations in order (excluding combined if it exists)
+        migrations = sorted([
+            f for f in os.listdir(migration_dir) 
+            if f.endswith(".sql") and f != "000_combined_migration.sql"
+        ])
 
-    if not migrations:
-        print("No migrations found")
-        sys.exit(0)
+        if not migrations:
+            print("No migrations found")
+            sys.exit(0)
 
-    print(f"Found {len(migrations)} migration(s)")
+        print(f"Found {len(migrations)} migration(s)")
 
-    for migration in migrations:
-        migration_path = os.path.join(migration_dir, migration)
-        run_migration(migration_path)
+        for migration in migrations:
+            migration_path = os.path.join(migration_dir, migration)
+            run_migration(migration_path)
 
-    print("\n All migrations completed")
+        print("\n All migrations completed")

@@ -111,7 +111,7 @@ def _resolution_copilot_agent_internal(
                         "No historical data found in knowledge base. "
                         "Resolution generated without context. "
                         "Please ingest historical data (alerts, incidents, runbooks, logs) for better results. "
-                        "Use: python scripts/data/generate_fake_data.py --all --count 20"
+                        "Use: python scripts/data/ingest_data.py --dir <data_directory>"
                     )
                     logger.warning(evidence_warning)
                 else:
