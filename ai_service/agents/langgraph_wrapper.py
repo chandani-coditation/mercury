@@ -371,6 +371,7 @@ def create_resolution_graph():
         """Node: Validate resolution output with guardrails."""
         resolution_output = state["resolution_output"]
         context_chunks = state.get("context_chunks", [])
+        policy_decision = state.get("policy_decision", {})
 
         logger.debug("LangGraph: Validating resolution output")
 
