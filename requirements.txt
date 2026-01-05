@@ -23,4 +23,3 @@ jsonschema>=4.17.0
 # flake8==6.1.0
 # mypy==1.7.1
 
-

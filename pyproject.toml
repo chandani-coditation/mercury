@@ -1,3 +1,54 @@
+[project]
+name = "mercury-noc-ai"
+version = "1.0.0"
+description = "AI-powered Network Operations Center for automated alert triage and resolution"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Randstad NOC Team"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "psycopg[binary]==3.1.18",
+    "psycopg_pool==3.2.0",
+    "pydantic==2.5.0",
+    "pydantic-settings==2.1.0",
+    "tiktoken==0.5.2",
+    "openai>=1.6.1",
+    "python-dotenv==1.0.0",
+    "requests==2.31.0",
+    "python-docx==1.1.0",
+    "langgraph>=0.0.20",
+    "pgvector==0.2.4",
+    "pyyaml==6.0.1",
+    "jsonschema>=4.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.3",
+    "pytest-asyncio==0.21.1",
+    "pytest-cov==4.1.0",
+    "black==23.12.1",
+    "flake8==6.1.0",
+    "mypy==1.7.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.black]
 line-length = 100
 target-version = ['py39']
