@@ -134,7 +134,7 @@ def map_csv_row_to_incident(
 
     # Extract close_notes
     close_notes = row.get("close_notes", "")
-    
+
     # Build metadata - IMPORTANT: assignment_group, impact, urgency, and close_notes must be in metadata
     # so that create_incident_signature() can extract them for the incident_signatures table
     metadata = {
@@ -184,7 +184,9 @@ def ingest_incident(
         result = response.json()
         signature_id = result.get("signature_id") or result.get("chunk_id")  # Support both formats
         incident_signature_id = result.get("incident_signature_id")
-        logger.info(f"Incident signature ingested: signature_id={signature_id}, incident_signature_id={incident_signature_id}")
+        logger.info(
+            f"Incident signature ingested: signature_id={signature_id}, incident_signature_id={incident_signature_id}"
+        )
         return True, signature_id
     except Exception as e:
         logger.error(f"Failed to ingest incident {incident.incident_id}: {str(e)}")
@@ -363,9 +365,7 @@ def main():
             """
             )
             sig_result = cur.fetchone()
-            sig_count = (
-                sig_result["sig_count"] if isinstance(sig_result, dict) else sig_result[0]
-            )
+            sig_count = sig_result["sig_count"] if isinstance(sig_result, dict) else sig_result[0]
 
             # Count incident signatures with embeddings
             cur.execute(
@@ -413,7 +413,9 @@ def main():
                 print(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings!")
                 logger.info(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings!")
             elif embed_count < sig_count:
-                print(f"\n    WARNING: {sig_count - embed_count} signatures are missing embeddings!")
+                print(
+                    f"\n    WARNING: {sig_count - embed_count} signatures are missing embeddings!"
+                )
                 logger.warning(
                     f"\n    WARNING: {sig_count - embed_count} signatures are missing embeddings!"
                 )

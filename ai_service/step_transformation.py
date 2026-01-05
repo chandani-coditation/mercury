@@ -28,109 +28,203 @@ STEP_TYPE_ORDER = {
 def classify_step_type(step: Dict) -> str:
     """
     Classify a runbook step by analyzing its action text.
-    
+
     Args:
         step: Step dictionary with 'action' field
-        
+
     Returns:
-        Step type: 'investigation', 'mitigation', 'resolution', 'verification', 
+        Step type: 'investigation', 'mitigation', 'resolution', 'verification',
                    'documentation', 'context', or 'unknown'
     """
     action = (step.get("action") or "").lower()
     condition = (step.get("condition") or "").lower()
     combined = f"{action} {condition}".lower()
-    
+
     # Documentation/Context steps (should be filtered out) - AGGRESSIVE FILTERING
     # Check for documentation/impact assessment patterns FIRST (before other classifications)
     action_lower = action.lower()
     condition_lower = condition.lower()
-    
+
     # Hard filter: If action is primarily about documenting/recording/impact assessment
     doc_phrases = [
-        "document actions", "record actions", "document all actions",
-        "documentation", "for future reference", "for audits", 
-        "for accountability", "documentation will", "documentation is",
-        "impact assessment", "assess impact", "evaluate impact",
-        "conduct impact", "impact evaluation", "follow-up tasks",
-        "follow up tasks", "follow-up", "follow up"
+        "document actions",
+        "record actions",
+        "document all actions",
+        "documentation",
+        "for future reference",
+        "for audits",
+        "for accountability",
+        "documentation will",
+        "documentation is",
+        "impact assessment",
+        "assess impact",
+        "evaluate impact",
+        "conduct impact",
+        "impact evaluation",
+        "follow-up tasks",
+        "follow up tasks",
+        "follow-up",
+        "follow up",
     ]
-    
+
     # Check if action contains documentation/impact phrases
     if any(phrase in action_lower for phrase in doc_phrases):
         return "documentation"
-    
+
     # Check if action starts with document/record/log/note and is ONLY about that
     if action_lower.startswith(("document", "record", "log", "note", "track")):
         # Only allow if it also has a corrective action (not just documenting)
-        corrective_words = ["check", "verify", "analyze", "review", "identify", "fix", "resolve", "reduce", "clean", "remove", "clear", "gather", "collect", "examine"]
+        corrective_words = [
+            "check",
+            "verify",
+            "analyze",
+            "review",
+            "identify",
+            "fix",
+            "resolve",
+            "reduce",
+            "clean",
+            "remove",
+            "clear",
+            "gather",
+            "collect",
+            "examine",
+        ]
         if not any(word in action_lower for word in corrective_words):
             return "documentation"
-    
+
     # Also check if action contains "record all actions" or "document all actions" - these are always documentation
     if "record all actions" in action_lower or "document all actions" in action_lower:
         return "documentation"
-    
+
     # Check if action is about recording/documenting actions taken (past tense indicates documentation)
-    if any(phrase in action_lower for phrase in [
-        "actions taken", "actions that were", "actions which were",
-        "record all actions", "document all actions", "log all actions"
-    ]):
+    if any(
+        phrase in action_lower
+        for phrase in [
+            "actions taken",
+            "actions that were",
+            "actions which were",
+            "record all actions",
+            "document all actions",
+            "log all actions",
+        ]
+    ):
         return "documentation"
-    
+
     # Check for "assess impact" or "impact assessment" patterns
-    if "assess impact" in action_lower or "impact assessment" in action_lower or "evaluate impact" in action_lower:
+    if (
+        "assess impact" in action_lower
+        or "impact assessment" in action_lower
+        or "evaluate impact" in action_lower
+    ):
         return "documentation"
-    
+
     # Check for "follow-up" patterns that are just administrative
     if "follow-up" in action_lower or "follow up" in action_lower:
         if "identify" in action_lower or "assess" in action_lower:
             return "documentation"
-    
+
     # Investigation steps
     investigation_keywords = [
-        "check", "verify", "review", "examine", "analyze", "identify",
-        "inspect", "assess", "evaluate", "gather evidence", "collect data",
-        "monitor", "observe", "trace", "diagnose"
+        "check",
+        "verify",
+        "review",
+        "examine",
+        "analyze",
+        "identify",
+        "inspect",
+        "assess",
+        "evaluate",
+        "gather evidence",
+        "collect data",
+        "monitor",
+        "observe",
+        "trace",
+        "diagnose",
     ]
     if any(keyword in combined for keyword in investigation_keywords):
         return "investigation"
-    
+
     # Mitigation steps (quick relief) - PRIORITIZE THESE
     mitigation_keywords = [
-        "reduce", "decrease", "lower", "minimize", "alleviate", "ease",
-        "temporary", "quick fix", "stop", "pause", "suspend", "disable",
-        "clean up", "free up", "release", "terminate", "kill",
-        "clear", "remove", "delete", "archive", "clean", "purge",
-        "backup", "truncate", "shrink", "compress", "expand"
+        "reduce",
+        "decrease",
+        "lower",
+        "minimize",
+        "alleviate",
+        "ease",
+        "temporary",
+        "quick fix",
+        "stop",
+        "pause",
+        "suspend",
+        "disable",
+        "clean up",
+        "free up",
+        "release",
+        "terminate",
+        "kill",
+        "clear",
+        "remove",
+        "delete",
+        "archive",
+        "clean",
+        "purge",
+        "backup",
+        "truncate",
+        "shrink",
+        "compress",
+        "expand",
     ]
     if any(keyword in combined for keyword in mitigation_keywords):
         return "mitigation"
-    
+
     # Resolution steps (root fix) - PRIORITIZE THESE
     resolution_keywords = [
-        "fix", "resolve", "repair", "correct", "restore", "recover",
-        "reconfigure", "restart", "reboot", "reinstall", "update",
-        "upgrade", "patch", "apply", "implement", "deploy",
-        "re-run", "rerun", "execute", "run", "perform"
+        "fix",
+        "resolve",
+        "repair",
+        "correct",
+        "restore",
+        "recover",
+        "reconfigure",
+        "restart",
+        "reboot",
+        "reinstall",
+        "update",
+        "upgrade",
+        "patch",
+        "apply",
+        "implement",
+        "deploy",
+        "re-run",
+        "rerun",
+        "execute",
+        "run",
+        "perform",
     ]
     if any(keyword in combined for keyword in resolution_keywords):
         return "resolution"
-    
+
     # Verification steps
     verification_keywords = [
-        "confirm", "validate", "test", "ensure", "verify success",
-        "check status", "monitor stability", "observe results"
+        "confirm",
+        "validate",
+        "test",
+        "ensure",
+        "verify success",
+        "check status",
+        "monitor stability",
+        "observe results",
     ]
     if any(keyword in combined for keyword in verification_keywords):
         return "verification"
-    
+
     # Rollback steps
-    rollback_keywords = [
-        "rollback", "revert", "undo", "restore previous", "roll back"
-    ]
+    rollback_keywords = ["rollback", "revert", "undo", "restore previous", "roll back"]
     if any(keyword in combined for keyword in rollback_keywords):
         return "rollback"
-    
+
     # Default: classify as investigation if unclear
     return "investigation"
 
@@ -138,10 +232,10 @@ def classify_step_type(step: Dict) -> str:
 def filter_steps(steps: List[Dict]) -> List[Dict]:
     """
     Filter out documentation and context steps.
-    
+
     Args:
         steps: List of step dictionaries
-        
+
     Returns:
         Filtered list with documentation/context steps removed
     """
@@ -153,7 +247,7 @@ def filter_steps(steps: List[Dict]) -> List[Dict]:
             filtered.append(step)
         else:
             logger.debug(f"Filtered out {step_type} step: {step.get('step_id')}")
-    
+
     logger.info(f"Filtered {len(steps)} steps to {len(filtered)} actionable steps")
     return filtered
 
@@ -161,12 +255,12 @@ def filter_steps(steps: List[Dict]) -> List[Dict]:
 def order_steps_by_type(steps: List[Dict]) -> List[Dict]:
     """
     Order steps by logical flow: investigation → mitigation → resolution → verification.
-    
+
     Within each type, order by relevance score if available.
-    
+
     Args:
         steps: List of step dictionaries with '_inferred_step_type'
-        
+
     Returns:
         Ordered list of steps
     """
@@ -177,28 +271,28 @@ def order_steps_by_type(steps: List[Dict]) -> List[Dict]:
         if step_type not in by_type:
             by_type[step_type] = []
         by_type[step_type].append(step)
-    
+
     # Sort each group by relevance (if available) or confidence
     for step_type, group in by_type.items():
         group.sort(
             key=lambda s: (
                 s.get("similarity_score", 0),
                 s.get("combined_score", 0),
-                s.get("confidence", 0)
+                s.get("confidence", 0),
             ),
-            reverse=True
+            reverse=True,
         )
-    
+
     # Order by type priority
     ordered = []
     for step_type in ["investigation", "mitigation", "resolution", "verification", "rollback"]:
         if step_type in by_type:
             ordered.extend(by_type[step_type])
-    
+
     # Add any unknown types at the end
     if "unknown" in by_type:
         ordered.extend(by_type["unknown"])
-    
+
     logger.info(f"Ordered {len(ordered)} steps by type")
     return ordered
 
@@ -206,36 +300,43 @@ def order_steps_by_type(steps: List[Dict]) -> List[Dict]:
 def generate_step_title(action: str, step_type: str) -> str:
     """
     Generate a short, UI-friendly title from action text.
-    
+
     Args:
         action: Action text
         step_type: Inferred step type
-        
+
     Returns:
         Short title (3-6 words)
     """
     if not action:
         return "Execute step"
-    
+
     # Remove common prefixes
     action_clean = action.strip()
     prefixes = [
-        "when", "if", "step", "action:", "condition:", 
-        "record", "document", "check", "verify"
+        "when",
+        "if",
+        "step",
+        "action:",
+        "condition:",
+        "record",
+        "document",
+        "check",
+        "verify",
     ]
     for prefix in prefixes:
         if action_clean.lower().startswith(prefix):
-            action_clean = action_clean[len(prefix):].strip()
+            action_clean = action_clean[len(prefix) :].strip()
             if action_clean.startswith(":"):
                 action_clean = action_clean[1:].strip()
-    
+
     # Extract key phrases
     # Look for imperative verbs at the start
     imperative_patterns = [
         r"^(check|verify|review|examine|analyze|identify|fix|resolve|repair|restore|reduce|decrease|clean|monitor|confirm|validate)\s+([^.]{0,60})",
         r"^([A-Z][^.]{0,60})",  # Capitalized sentence start
     ]
-    
+
     for pattern in imperative_patterns:
         match = re.match(pattern, action_clean, re.IGNORECASE)
         if match:
@@ -248,7 +349,7 @@ def generate_step_title(action: str, step_type: str) -> str:
             if len(title) > 60:
                 title = title[:57] + "..."
             return title
-    
+
     # Fallback: use first 50 characters
     title = action_clean[:50].strip()
     if len(action_clean) > 50:
@@ -259,65 +360,78 @@ def generate_step_title(action: str, step_type: str) -> str:
 def clean_action_for_ui(action: str) -> str:
     """
     Clean action text to be UI-ready: remove SQL, commands, make it plain English.
-    
+
     Args:
         action: Raw action text
-        
+
     Returns:
         Cleaned, plain English action
     """
     if not action:
         return action
-    
+
     # Remove SQL queries
-    lines = action.split('\n')
+    lines = action.split("\n")
     cleaned_lines = []
     for line in lines:
         line_stripped = line.strip()
         # Skip SQL statements
-        if re.match(r'^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|EXEC|EXECUTE|USE|DECLARE)\s+', line_stripped, re.IGNORECASE):
+        if re.match(
+            r"^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|EXEC|EXECUTE|USE|DECLARE)\s+",
+            line_stripped,
+            re.IGNORECASE,
+        ):
             continue
         # Skip command-line commands
-        if re.match(r'^\s*[$#]|^\s*(sudo|systemctl|kubectl|docker|psql|mysql)', line_stripped, re.IGNORECASE):
+        if re.match(
+            r"^\s*[$#]|^\s*(sudo|systemctl|kubectl|docker|psql|mysql)", line_stripped, re.IGNORECASE
+        ):
             continue
         # Skip code blocks
-        if line_stripped.startswith('```') or line_stripped.endswith('```'):
+        if line_stripped.startswith("```") or line_stripped.endswith("```"):
             continue
         cleaned_lines.append(line)
-    
-    cleaned = '\n'.join(cleaned_lines).strip()
-    
+
+    cleaned = "\n".join(cleaned_lines).strip()
+
     # Remove inline SQL patterns
-    cleaned = re.sub(r'\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|EXEC|EXECUTE|USE|DECLARE)\s+[^.]*\.', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'```[\s\S]*?```', '', cleaned)  # Remove code blocks
-    cleaned = re.sub(r'\$[^\s]+', '', cleaned)  # Remove command-line patterns
-    
+    cleaned = re.sub(
+        r"\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|EXEC|EXECUTE|USE|DECLARE)\s+[^.]*\.",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"```[\s\S]*?```", "", cleaned)  # Remove code blocks
+    cleaned = re.sub(r"\$[^\s]+", "", cleaned)  # Remove command-line patterns
+
     # Remove generic prefixes
-    cleaned = re.sub(r'^(step\s+\d+\s*:?\s*|action:\s*|condition:\s*)', '', cleaned, flags=re.IGNORECASE)
-    
+    cleaned = re.sub(
+        r"^(step\s+\d+\s*:?\s*|action:\s*|condition:\s*)", "", cleaned, flags=re.IGNORECASE
+    )
+
     return cleaned.strip()
 
 
 def transform_step_for_ui(step: Dict, step_number: int) -> Dict:
     """
     Transform a runbook step into UI-ready format.
-    
+
     Args:
         step: Step dictionary with action, condition, etc.
         step_number: Step number in the ordered sequence
-        
+
     Returns:
         Transformed step with step_number, title, action, expected_outcome, risk_level
     """
     action = step.get("action", "")
     step_type = step.get("_inferred_step_type", "investigation")
-    
+
     # Clean action
     cleaned_action = clean_action_for_ui(action)
-    
+
     # Generate title
     title = generate_step_title(cleaned_action, step_type)
-    
+
     # Get expected outcome
     expected_outcome = step.get("expected_outcome")
     if not expected_outcome:
@@ -332,19 +446,21 @@ def transform_step_for_ui(step: Dict, step_number: int) -> Dict:
             expected_outcome = "System stability confirmed"
         else:
             expected_outcome = "Step completed successfully"
-    
+
     # Get risk level
     risk_level = step.get("risk_level", "medium")
     if not risk_level or risk_level.lower() not in ["low", "medium", "high"]:
         # Infer from action
         action_lower = cleaned_action.lower()
-        if any(word in action_lower for word in ["kill", "delete", "drop", "remove", "stop", "restart"]):
+        if any(
+            word in action_lower for word in ["kill", "delete", "drop", "remove", "stop", "restart"]
+        ):
             risk_level = "high"
         elif any(word in action_lower for word in ["update", "modify", "change", "alter"]):
             risk_level = "medium"
         else:
             risk_level = "low"
-    
+
     return {
         "step_number": step_number,
         "title": title,
@@ -357,23 +473,23 @@ def transform_step_for_ui(step: Dict, step_number: int) -> Dict:
             "step_id": step.get("step_id"),
             "chunk_id": step.get("chunk_id"),
             "document_id": step.get("document_id"),
-        }
+        },
     }
 
 
 def calculate_estimated_time(steps: List[Dict]) -> int:
     """
     Calculate estimated time in minutes based on step types and count.
-    
+
     Args:
         steps: List of transformed steps
-        
+
     Returns:
         Estimated time in minutes
     """
     if not steps:
         return 0
-    
+
     # Base time per step type (minutes)
     time_per_type = {
         "investigation": 5,
@@ -382,7 +498,7 @@ def calculate_estimated_time(steps: List[Dict]) -> int:
         "verification": 5,
         "rollback": 10,
     }
-    
+
     total_time = 0
     for step in steps:
         step_type = step.get("_inferred_step_type", "investigation")
@@ -395,6 +511,5 @@ def calculate_estimated_time(steps: List[Dict]) -> int:
         elif risk_level == "low":
             base_time = int(base_time * 0.8)
         total_time += base_time
-    
-    return total_time
 
+    return total_time

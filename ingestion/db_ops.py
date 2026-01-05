@@ -5,13 +5,21 @@ import json
 from datetime import datetime
 from typing import List, Optional
 from db.connection import get_db_connection
-from ingestion.embeddings import embed_text, embed_texts_batch, count_tokens, EMBEDDING_MODEL_LIMITS, DEFAULT_MODEL
+from ingestion.embeddings import (
+    embed_text,
+    embed_texts_batch,
+    count_tokens,
+    EMBEDDING_MODEL_LIMITS,
+    DEFAULT_MODEL,
+)
 from ingestion.chunker import chunk_text, add_chunk_header
 from ingestion.models import RunbookStep, IncidentSignature
+
 
 # Lazy import to avoid circular dependency
 def get_logger(name):
     from ai_service.core import get_logger as _get_logger
+
     return _get_logger(name)
 
 
@@ -229,7 +237,7 @@ def insert_document_and_chunks(
 def _create_runbook_step_embedding_text(step: RunbookStep) -> str:
     """
     Create embedding text for a runbook step.
-    
+
     Per architecture: Embeddings represent conditions, failure patterns, and resolution references.
     This text should capture:
     - Condition (when this step applies)
@@ -238,39 +246,39 @@ def _create_runbook_step_embedding_text(step: RunbookStep) -> str:
     - Failure patterns this addresses
     """
     parts = []
-    
+
     # Condition (when this applies) - critical for matching
     if step.condition:
         parts.append(f"Condition: {step.condition}")
-    
+
     # Action (what to do) - core resolution reference
     parts.append(f"Action: {step.action}")
-    
+
     # Expected outcome - helps with validation
     if step.expected_outcome:
         parts.append(f"Expected Outcome: {step.expected_outcome}")
-    
+
     # Risk level - important for decision making
     if step.risk_level:
         parts.append(f"Risk Level: {step.risk_level}")
-    
+
     # Rollback - important for safety
     if step.rollback:
         parts.append(f"Rollback: {step.rollback}")
-    
+
     # Service/component context
     if step.service:
         parts.append(f"Service: {step.service}")
     if step.component:
         parts.append(f"Component: {step.component}")
-    
+
     return "\n".join(parts)
 
 
 def _create_incident_signature_embedding_text(signature: IncidentSignature) -> str:
     """
     Create embedding text for an incident signature.
-    
+
     Per architecture: Embeddings represent conditions, failure patterns, and resolution references.
     This text should capture:
     - Failure type (condition)
@@ -279,23 +287,23 @@ def _create_incident_signature_embedding_text(signature: IncidentSignature) -> s
     - Resolution references
     """
     parts = []
-    
+
     # Failure type - condition for matching
     parts.append(f"Failure Type: {signature.failure_type}")
-    
+
     # Error class - failure pattern
     parts.append(f"Error Class: {signature.error_class}")
-    
+
     # Symptoms - failure patterns
     if signature.symptoms:
         symptoms_text = ", ".join(signature.symptoms)
         parts.append(f"Symptoms: {symptoms_text}")
-    
+
     # Resolution references - links to runbook steps
     if signature.resolution_refs:
         refs_text = ", ".join(signature.resolution_refs)
         parts.append(f"Resolution References: {refs_text}")
-    
+
     # Service/component context
     if signature.service:
         parts.append(f"Service: {signature.service}")
@@ -303,21 +311,21 @@ def _create_incident_signature_embedding_text(signature: IncidentSignature) -> s
         parts.append(f"Component: {signature.component}")
     if signature.affected_service:
         parts.append(f"Affected Service: {signature.affected_service}")
-    
+
     # Assignment group - important for routing
     if signature.assignment_group:
         parts.append(f"Assignment Group: {signature.assignment_group}")
-    
+
     # Impact and urgency - typical severity patterns from historical incidents
     if signature.impact:
         parts.append(f"Impact: {signature.impact}")
     if signature.urgency:
         parts.append(f"Urgency: {signature.urgency}")
-    
+
     # Close notes - resolution information for resolution agent
     if signature.close_notes:
         parts.append(f"Resolution Notes: {signature.close_notes}")
-    
+
     return "\n".join(parts)
 
 
@@ -333,12 +341,12 @@ def insert_runbook_with_steps(
 ) -> str:
     """
     Insert runbook metadata and atomic steps into database.
-    
+
     Per architecture:
     - Runbook metadata goes in documents table
     - Each step is stored as an atomic chunk (not chunked further)
     - Each step is embedded independently
-    
+
     Args:
         doc_type: Document type (should be "runbook")
         service: Service name
@@ -348,7 +356,7 @@ def insert_runbook_with_steps(
         tags: Document tags
         last_reviewed_at: Last review timestamp
         steps: List of atomic runbook steps
-        
+
     Returns:
         Document ID (UUID as string)
     """
@@ -356,10 +364,10 @@ def insert_runbook_with_steps(
         raise ValueError("Title is required and cannot be empty")
     if not doc_type or not doc_type.strip():
         raise ValueError("Document type is required and cannot be empty")
-    
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Insert runbook metadata document
         doc_id = uuid.uuid4()
@@ -379,21 +387,24 @@ def insert_runbook_with_steps(
                 last_reviewed_at,
             ),
         )
-        
+
         if not steps:
             # No steps extracted - create a fallback step from content
             try:
                 from ai_service.core import get_logger
+
                 logger = get_logger(__name__)
-                logger.warning(f"No steps extracted for runbook {title}. Creating fallback step from content.")
+                logger.warning(
+                    f"No steps extracted for runbook {title}. Creating fallback step from content."
+                )
             except:
                 pass
-            
+
             # Create a single fallback step from the full content
             if content and content.strip():
                 fallback_step = RunbookStep(
                     step_id=f"{tags.get('runbook_id', 'RB-UNKNOWN')}-S1",
-                    runbook_id=tags.get('runbook_id', 'RB-UNKNOWN'),
+                    runbook_id=tags.get("runbook_id", "RB-UNKNOWN"),
                     condition="Runbook applies",
                     action=content.strip()[:2000],  # Limit to 2000 chars
                     expected_outcome=None,
@@ -405,7 +416,7 @@ def insert_runbook_with_steps(
                 steps = [fallback_step]
             else:
                 # Even if no content, create a minimal step
-                runbook_id = tags.get('runbook_id', f"RB-{uuid.uuid4().hex[:8].upper()}")
+                runbook_id = tags.get("runbook_id", f"RB-{uuid.uuid4().hex[:8].upper()}")
                 fallback_step = RunbookStep(
                     step_id=f"{runbook_id}-S1",
                     runbook_id=runbook_id,
@@ -418,65 +429,70 @@ def insert_runbook_with_steps(
                     component=component,
                 )
                 steps = [fallback_step]
-        
+
         # Log step extraction
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
             logger.info(f"Inserting {len(steps)} steps for runbook {title} (doc_id={doc_id})")
         except:
             pass
-        
+
         # Prepare step texts for embedding
         step_texts = []
-        
+
         for step in steps:
             # Create embedding text for this step
             step_text = _create_runbook_step_embedding_text(step)
             step_texts.append(step_text)
-        
+
         # Generate embeddings for all steps in batch
         embedding_model = DEFAULT_MODEL
         batch_size = min(50, len(step_texts))
-        embeddings = embed_texts_batch(
-            step_texts, model=embedding_model, batch_size=batch_size
-        )
-        
+        embeddings = embed_texts_batch(step_texts, model=embedding_model, batch_size=batch_size)
+
         if not embeddings or len(embeddings) != len(step_texts):
             raise ValueError(
                 f"Embedding generation failed: expected {len(step_texts)} embeddings, "
                 f"got {len(embeddings) if embeddings else 0}"
             )
-        
+
         # Insert each step into runbook_steps table
         inserted_count = 0
-        
+
         # Log the steps we're about to insert
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
-            logger.info(f"About to insert {len(steps)} steps into runbook_steps table for runbook {title}")
+            logger.info(
+                f"About to insert {len(steps)} steps into runbook_steps table for runbook {title}"
+            )
             for i, step in enumerate(steps):
-                logger.debug(f"Step {i+1}: step_id={step.step_id}, condition='{step.condition[:50]}...', action='{step.action[:50]}...'")
+                logger.debug(
+                    f"Step {i+1}: step_id={step.step_id}, condition='{step.condition[:50]}...', action='{step.action[:50]}...'"
+                )
         except:
             pass
-        
+
         for step, embedding in zip(steps, embeddings):
             embedding_str = "[" + ",".join(map(str, embedding)) + "]"
-            
+
             # Use step's service/component or fall back to runbook-level values
             step_service = step.service or service
             step_component = step.component or component
-            
+
             try:
                 # Log the step being inserted for debugging
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
                     logger.debug(f"Inserting step {step.step_id} for runbook {title}")
                 except:
                     pass
-                
+
                 cur.execute(
                     """
                     INSERT INTO runbook_steps (
@@ -515,7 +531,7 @@ def insert_runbook_with_steps(
                     ),
                 )
                 inserted_count += 1
-                
+
                 # NOTE: Chunk creation for runbook steps is NO LONGER NEEDED for triage
                 # Triage retrieval only needs runbook metadata (from documents table)
                 # Runbook steps are retrieved by Resolution Agent, which may use chunks
@@ -534,7 +550,7 @@ def insert_runbook_with_steps(
                         "component": step_component,
                         "runbook_title": title,
                     }
-                    
+
                     # Insert chunk with step data
                     chunk_id = uuid.uuid4()
                     cur.execute(
@@ -560,61 +576,75 @@ def insert_runbook_with_steps(
                 except Exception as chunk_error:
                     # Log error - chunk creation is critical for retrieval
                     logger = get_logger(__name__)
-                    logger.error(f"Failed to create chunk for runbook step {step.step_id}: {chunk_error}")
+                    logger.error(
+                        f"Failed to create chunk for runbook step {step.step_id}: {chunk_error}"
+                    )
                     # Re-raise to ensure we know about the failure
-                    raise RuntimeError(f"Chunk creation failed for runbook step {step.step_id}: {chunk_error}") from chunk_error
-                
+                    raise RuntimeError(
+                        f"Chunk creation failed for runbook step {step.step_id}: {chunk_error}"
+                    ) from chunk_error
+
                 # Log successful insertion
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
                     logger.debug(f"Successfully inserted step {step.step_id}")
                 except:
                     pass
-                    
+
             except Exception as step_error:
                 # Log error with full details and step data
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
                     logger.error(
                         f"Error inserting step {step.step_id} into runbook_steps table: {str(step_error)}. "
                         f"Step data: runbook_id={step.runbook_id}, condition='{step.condition[:100]}', "
                         f"action='{step.action[:100]}', service={step_service}, component={step_component}",
-                        exc_info=True
+                        exc_info=True,
                     )
                 except:
                     pass
                 # Don't re-raise - continue with other steps and use fallback
                 continue
-        
+
         # Log insertion results
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
             if inserted_count == len(steps):
-                logger.info(f"Successfully inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}")
+                logger.info(
+                    f"Successfully inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}"
+                )
             else:
-                logger.error(f"Only inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}")
+                logger.error(
+                    f"Only inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}"
+                )
         except:
             pass
-        
+
         if inserted_count == 0:
             # If no steps were inserted into runbook_steps, fall back to chunks table
             try:
                 from ai_service.core import get_logger
+
                 logger = get_logger(__name__)
-                logger.warning(f"Failed to insert any steps into runbook_steps table for runbook {title}. Using fallback chunks insertion.")
+                logger.warning(
+                    f"Failed to insert any steps into runbook_steps table for runbook {title}. Using fallback chunks insertion."
+                )
             except:
                 pass
-            
+
             # Create a single chunk from the first step as fallback
             if steps:
                 step = steps[0]
                 step_text = _create_runbook_step_embedding_text(step)
                 embedding = embeddings[0] if embeddings else embed_text(step_text)
                 embedding_str = "[" + ",".join(map(str, embedding)) + "]"
-                
+
                 metadata_dict = {
                     "doc_type": "runbook_step",
                     "step_id": step.step_id,
@@ -625,7 +655,7 @@ def insert_runbook_with_steps(
                     "component": step.component or component,
                     "title": title,
                 }
-                
+
                 cur.execute(
                     """
                     INSERT INTO chunks (document_id, chunk_index, content, metadata, embedding, tsv)
@@ -640,37 +670,43 @@ def insert_runbook_with_steps(
                         step_text,
                     ),
                 )
-                
+
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
                     logger.info(f"Inserted fallback chunk for runbook {title}")
                 except:
                     pass
-        
+
         # Log before commit
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
-            logger.info(f"About to commit transaction for runbook {title} with {inserted_count} steps inserted")
+            logger.info(
+                f"About to commit transaction for runbook {title} with {inserted_count} steps inserted"
+            )
         except:
             pass
-        
+
         conn.commit()
-        
+
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
             logger.info(f"Successfully committed runbook {title} with {inserted_count} steps")
         except:
             pass
-        
+
         return str(doc_id)
-    
+
     except Exception as e:
         conn.rollback()
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
             logger.error(f"Transaction rolled back for runbook {title}: {str(e)}", exc_info=True)
         except:
@@ -688,37 +724,37 @@ def insert_incident_signature(
 ) -> str:
     """
     Insert incident signature into incident_signatures table.
-    
+
     Per architecture:
     - Incident signatures are stored in dedicated incident_signatures table
     - Each signature represents a failure pattern, not raw incident text
     - Embeddings represent conditions, failure patterns, and resolution references
-    
+
     Args:
         signature: IncidentSignature object
         source_incident_id: Optional source incident ID for tracking
         source_document_id: Optional source document ID for tracking
-        
+
     Returns:
         Signature ID (UUID as string)
     """
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Create embedding text for signature
         signature_text = _create_incident_signature_embedding_text(signature)
-        
+
         # Generate embedding
         embedding_model = DEFAULT_MODEL
         embedding = embed_text(signature_text, model=embedding_model)
         embedding_str = "[" + ",".join(map(str, embedding)) + "]"
-        
+
         # Prepare arrays for PostgreSQL
         symptoms_array = signature.symptoms if signature.symptoms else []
         resolution_refs_array = signature.resolution_refs if signature.resolution_refs else []
         source_incident_ids_array = [source_incident_id] if source_incident_id else []
-        
+
         # Insert signature into incident_signatures table
         signature_id = uuid.uuid4()
         cur.execute(
@@ -768,15 +804,15 @@ def insert_incident_signature(
                 datetime.now(),  # last_seen_at
             ),
         )
-        
+
         conn.commit()
-        
+
         # NOTE: Chunk creation is NO LONGER NEEDED
         # Triage retrieval now queries incident_signatures table directly
         # (embeddings and tsvector are already in incident_signatures table)
-        
+
         return str(signature_id)
-    
+
     except Exception as e:
         conn.rollback()
         raise e

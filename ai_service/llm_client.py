@@ -122,7 +122,7 @@ def _call_llm_with_retry(client, request_params, agent_type: str, model: str):
 def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -> dict:
     """
     Call LLM to triage an alert.
-    
+
     Per architecture: Triage agent receives incident signatures and runbook metadata only.
 
     Args:
@@ -148,7 +148,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
 
     incident_signatures = triage_evidence.get("incident_signatures", [])
     runbook_metadata = triage_evidence.get("runbook_metadata", [])
-    
+
     logger.debug(
         f"Calling LLM for triage: model={model}, temperature={temperature}, "
         f"signatures={len(incident_signatures)}, runbooks={len(runbook_metadata)}"
@@ -156,7 +156,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
 
     # Build context text from incident signatures and runbook metadata
     context_parts = []
-    
+
     # Add incident signatures
     if incident_signatures:
         context_parts.append("=== INCIDENT SIGNATURES ===")
@@ -167,7 +167,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
             error_class = metadata.get("error_class", "UNKNOWN")
             symptoms = metadata.get("symptoms", [])
             affected_service = metadata.get("affected_service", "")
-            
+
             context_parts.append(
                 f"Incident Signature ID: {sig_id}\n"
                 f"Failure Type: {failure_type}\n"
@@ -176,7 +176,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
                 f"Affected Service: {affected_service}\n"
                 f"Content: {sig.get('content', '')[:500]}"
             )
-    
+
     # Add runbook metadata (NOT steps)
     if runbook_metadata:
         context_parts.append("\n=== RUNBOOK METADATA ===")
@@ -184,7 +184,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
             tags = rb.get("tags", {})
             runbook_id = tags.get("runbook_id", "UNKNOWN")
             failure_types = tags.get("failure_types", [])
-            
+
             context_parts.append(
                 f"Runbook ID: {runbook_id}\n"
                 f"Title: {rb.get('title', 'Unknown')}\n"
@@ -193,8 +193,10 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
                 f"Failure Types: {', '.join(failure_types) if failure_types else 'None'}\n"
                 f"Last Reviewed: {rb.get('last_reviewed_at', 'Unknown')}"
             )
-    
-    context_text = "\n\n---\n\n".join(context_parts) if context_parts else "No matching evidence found."
+
+    context_text = (
+        "\n\n---\n\n".join(context_parts) if context_parts else "No matching evidence found."
+    )
 
     # Build user prompt from template
     prompt = TRIAGE_USER_PROMPT_TEMPLATE.format(

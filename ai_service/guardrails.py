@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
     """
     Validate triage output against architecture schema.
-    
+
     Per architecture, triage output must have:
     - incident_signature: {failure_type, error_class}
     - matched_evidence: {incident_signatures: [], runbook_refs: []}
@@ -52,7 +52,7 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
                 errors.append("incident_signature.failure_type is required")
             elif not isinstance(incident_sig["failure_type"], str):
                 errors.append("incident_signature.failure_type must be a string")
-            
+
             if "error_class" not in incident_sig:
                 errors.append("incident_signature.error_class is required")
             elif not isinstance(incident_sig["error_class"], str):
@@ -74,7 +74,7 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
                 for i, sig_id in enumerate(incident_sigs):
                     if not isinstance(sig_id, str):
                         errors.append(f"matched_evidence.incident_signatures[{i}] must be a string")
-            
+
             # Validate runbook_refs array
             runbook_refs = matched_evidence.get("runbook_refs", [])
             if not isinstance(runbook_refs, list):
@@ -88,7 +88,9 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
 
     # Validate severity
     severity = triage_output.get("severity", "").lower()
-    allowed_severities = [s.lower() for s in config.get("severity_values", ["critical", "high", "medium", "low"])]
+    allowed_severities = [
+        s.lower() for s in config.get("severity_values", ["critical", "high", "medium", "low"])
+    ]
     if severity not in allowed_severities:
         errors.append(f"Invalid severity '{severity}'. Must be one of: {allowed_severities}")
 
@@ -115,7 +117,7 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
         logger.warning(f"Triage validation failed with {len(errors)} errors: {errors}")
     else:
         logger.debug("Triage validation passed")
-    
+
     return len(errors) == 0, errors
 
 
@@ -526,51 +528,56 @@ def check_destructive_operations(steps: List[str]) -> List[str]:
 
 
 def validate_triage_no_hallucination(
-    triage_output: Dict,
-    retrieved_evidence: Optional[Dict] = None
+    triage_output: Dict, retrieved_evidence: Optional[Dict] = None
 ) -> Tuple[bool, List[str]]:
     """
     Validate triage output does NOT contain hallucinated content.
-    
+
     Per architecture: Triage agent MUST NOT:
     - Generate resolution steps
     - Rank or suggest actions
     - Invent root causes
     - Read runbook steps
-    
+
     Args:
         triage_output: Triage output dictionary
         retrieved_evidence: Optional evidence dictionary to validate against
-        
+
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
     errors = []
-    
+
     # Check for forbidden fields that indicate hallucination
     forbidden_fields = [
-        "resolution_steps", "steps", "recommended_actions", "actions",
-        "fixes", "solutions", "commands", "rollback_plan"
+        "resolution_steps",
+        "steps",
+        "recommended_actions",
+        "actions",
+        "fixes",
+        "solutions",
+        "commands",
+        "rollback_plan",
     ]
-    
+
     for field in forbidden_fields:
         if field in triage_output:
             errors.append(
                 f"HALLUCINATION DETECTED: Triage output contains '{field}' field. "
                 f"Per architecture, triage agent MUST NOT generate resolution steps."
             )
-    
+
     # Check incident_signature for invented classifications
     incident_sig = triage_output.get("incident_signature", {})
     if incident_sig:
         failure_type = incident_sig.get("failure_type", "")
         error_class = incident_sig.get("error_class", "")
-        
+
         # Check if classification matches retrieved evidence
         if retrieved_evidence:
             incident_signatures = retrieved_evidence.get("incident_signatures", [])
             runbook_metadata = retrieved_evidence.get("runbook_metadata", [])
-            
+
             # If no evidence retrieved, but triage claims high confidence, flag it
             if not incident_signatures and not runbook_metadata:
                 confidence = triage_output.get("confidence", 0.0)
@@ -579,32 +586,32 @@ def validate_triage_no_hallucination(
                         f"HALLUCINATION RISK: High confidence ({confidence}) with no retrieved evidence. "
                         f"Triage agent may be inventing classifications."
                     )
-    
+
     # Check matched_evidence references exist
     matched_evidence = triage_output.get("matched_evidence", {})
     incident_sig_ids = matched_evidence.get("incident_signatures", [])
     runbook_refs = matched_evidence.get("runbook_refs", [])
-    
+
     if retrieved_evidence:
         retrieved_sig_ids = set()
         for sig in retrieved_evidence.get("incident_signatures", []):
             # Try multiple ways to get incident_signature_id
             sig_id = None
-            
+
             # Method 1: Check if it's already at top level (formatted evidence)
             if "incident_signature_id" in sig:
                 sig_id = sig.get("incident_signature_id")
-            
+
             # Method 2: Check in metadata (raw evidence from triage_retrieval)
             if not sig_id:
                 metadata = sig.get("metadata", {})
                 if isinstance(metadata, dict):
                     sig_id = metadata.get("incident_signature_id")
-            
+
             # Method 3: Check if metadata is not a dict, try top level
             if not sig_id:
                 sig_id = sig.get("incident_signature_id")
-            
+
             if sig_id:
                 retrieved_sig_ids.add(str(sig_id))
         # Extract runbook_ids from multiple possible locations
@@ -620,7 +627,7 @@ def validate_triage_no_hallucination(
                     rb_id = tags.get("runbook_id")
             if rb_id:
                 retrieved_runbook_ids.add(str(rb_id))  # Ensure string for comparison
-        
+
         # Check for references to non-retrieved evidence
         for sig_id in incident_sig_ids:
             if sig_id not in retrieved_sig_ids:
@@ -628,71 +635,67 @@ def validate_triage_no_hallucination(
                     f"WRONG RETRIEVAL: incident_signature_id '{sig_id}' referenced but not retrieved. "
                     f"Triage agent may be hallucinating references."
                 )
-        
+
         for runbook_id in runbook_refs:
             if runbook_id not in retrieved_runbook_ids:
                 errors.append(
                     f"WRONG RETRIEVAL: runbook_id '{runbook_id}' referenced but not retrieved. "
                     f"Triage agent may be hallucinating references."
                 )
-    
+
     if errors:
         logger.warning(f"Triage hallucination validation failed: {errors}")
     else:
         logger.debug("Triage hallucination validation passed")
-    
+
     return len(errors) == 0, errors
 
 
 def validate_resolution_no_hallucination(
     resolution_output: Dict,
     retrieved_runbook_steps: List[Dict],
-    retrieved_historical_resolutions: List[Dict]
+    retrieved_historical_resolutions: List[Dict],
 ) -> Tuple[bool, List[str]]:
     """
     Validate resolution output does NOT contain hallucinated steps.
-    
+
     Per architecture: Resolution agent MUST NOT:
     - Invent new steps not from runbooks
     - Use generic advice
     - Ignore provenance
-    
+
     Args:
         resolution_output: Resolution output dictionary
         retrieved_runbook_steps: List of retrieved runbook step chunks
         retrieved_historical_resolutions: List of retrieved historical resolutions
-        
+
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
     errors = []
-    
+
     recommendations = resolution_output.get("recommendations", [])
-    
+
     if not recommendations:
         # Empty recommendations are valid (no steps found)
         return True, []
-    
+
     # Build set of valid step_ids from retrieved runbook steps
     valid_step_ids: Set[str] = {
-        step.get("step_id")
-        for step in retrieved_runbook_steps
-        if step.get("step_id")
+        step.get("step_id") for step in retrieved_runbook_steps if step.get("step_id")
     }
-    
+
     # Build set of valid chunk_ids from retrieved runbook steps
     valid_chunk_ids: Set[str] = {
-        str(step.get("chunk_id"))
-        for step in retrieved_runbook_steps
-        if step.get("chunk_id")
+        str(step.get("chunk_id")) for step in retrieved_runbook_steps if step.get("chunk_id")
     }
-    
+
     # Check each recommendation has valid provenance
     for i, rec in enumerate(recommendations):
         step_id = rec.get("step_id")
         provenance = rec.get("provenance", {})
         chunk_id = provenance.get("chunk_id") if isinstance(provenance, dict) else None
-        
+
         # Check step_id exists in retrieved steps
         if step_id:
             if step_id not in valid_step_ids:
@@ -705,7 +708,7 @@ def validate_resolution_no_hallucination(
                 f"INVALID PROVENANCE: Recommendation {i+1} missing step_id. "
                 f"All recommendations must have step_id from retrieved runbook steps."
             )
-        
+
         # Check chunk_id exists in retrieved steps
         if chunk_id:
             if chunk_id not in valid_chunk_ids:
@@ -718,12 +721,13 @@ def validate_resolution_no_hallucination(
                 f"INVALID PROVENANCE: Recommendation {i+1} missing chunk_id in provenance. "
                 f"All recommendations must have chunk_id from retrieved runbook steps."
             )
-        
+
         # Check runbook_id matches retrieved steps
         runbook_id = provenance.get("runbook_id") if isinstance(provenance, dict) else None
         if runbook_id:
             matching_steps = [
-                step for step in retrieved_runbook_steps
+                step
+                for step in retrieved_runbook_steps
                 if step.get("runbook_id") == runbook_id and step.get("step_id") == step_id
             ]
             if not matching_steps:
@@ -731,41 +735,39 @@ def validate_resolution_no_hallucination(
                     f"WRONG RETRIEVAL: Recommendation {i+1} references runbook_id '{runbook_id}' "
                     f"with step_id '{step_id}' that was NOT retrieved."
                 )
-    
+
     if errors:
         logger.warning(f"Resolution hallucination validation failed: {errors}")
     else:
         logger.debug("Resolution hallucination validation passed")
-    
+
     return len(errors) == 0, errors
 
 
-def validate_no_step_duplication(
-    recommendations: List[Dict]
-) -> Tuple[bool, List[str]]:
+def validate_no_step_duplication(recommendations: List[Dict]) -> Tuple[bool, List[str]]:
     """
     Validate recommendations do NOT contain duplicate steps.
-    
+
     Checks for:
     - Duplicate step_ids
     - Duplicate content/actions (same action text)
-    
+
     Args:
         recommendations: List of recommendation dictionaries
-        
+
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
     errors = []
     warnings = []
-    
+
     seen_step_ids: Set[str] = set()
     seen_actions: Set[str] = set()
-    
+
     for i, rec in enumerate(recommendations):
         step_id = rec.get("step_id")
         action = rec.get("action", "").strip().lower()
-        
+
         # Check for duplicate step_ids
         if step_id:
             if step_id in seen_step_ids:
@@ -775,12 +777,12 @@ def validate_no_step_duplication(
                 )
             else:
                 seen_step_ids.add(step_id)
-        
+
         # Check for duplicate actions (content similarity)
         if action:
             # Normalize action for comparison (remove extra whitespace)
             normalized_action = " ".join(action.split())
-            
+
             if normalized_action in seen_actions:
                 warnings.append(
                     f"STEP DUPLICATION WARNING: Recommendation {i+1} has duplicate action text. "
@@ -788,38 +790,36 @@ def validate_no_step_duplication(
                 )
             else:
                 seen_actions.add(normalized_action)
-    
+
     if errors:
         logger.warning(f"Step duplication validation failed: {errors}")
     elif warnings:
         logger.warning(f"Step duplication warnings: {warnings}")
     else:
         logger.debug("Step duplication validation passed")
-    
+
     return len(errors) == 0, errors + warnings
 
 
-def validate_triage_retrieval_boundaries(
-    retrieved_evidence: Dict
-) -> Tuple[bool, List[str]]:
+def validate_triage_retrieval_boundaries(retrieved_evidence: Dict) -> Tuple[bool, List[str]]:
     """
     Validate triage retrieval respects architecture boundaries.
-    
+
     Per architecture: Triage agent may ONLY retrieve:
     - Incident signatures (chunks with incident_signature_id)
     - Runbook metadata (documents, NOT runbook steps)
-    
+
     Args:
         retrieved_evidence: Dictionary with 'incident_signatures' and 'runbook_metadata'
-        
+
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
     errors = []
-    
+
     incident_signatures = retrieved_evidence.get("incident_signatures", [])
     runbook_metadata = retrieved_evidence.get("runbook_metadata", [])
-    
+
     # Check incident signatures have incident_signature_id
     for i, sig in enumerate(incident_signatures):
         # Metadata might be a dict or already extracted
@@ -829,14 +829,14 @@ def validate_triage_retrieval_boundaries(
         else:
             # If metadata is not a dict, check if incident_signature_id is at top level
             sig_id = sig.get("incident_signature_id")
-        
+
         if not sig_id:
             errors.append(
                 f"WRONG RETRIEVAL: Incident signature {i+1} missing 'incident_signature_id' in metadata. "
                 f"Triage retrieval should only return chunks with incident_signature_id. "
                 f"Available keys: {list(sig.keys())}"
             )
-    
+
     # Check runbook metadata does NOT contain step chunks
     for i, rb in enumerate(runbook_metadata):
         # Runbook metadata should be document-level, not chunk-level
@@ -845,19 +845,19 @@ def validate_triage_retrieval_boundaries(
                 f"WRONG RETRIEVAL: Runbook metadata {i+1} contains chunk/step fields. "
                 f"Triage agent should only retrieve runbook metadata (documents), NOT runbook steps."
             )
-        
+
         # Check doc_type is runbook (allow None if not set, as it may be in tags)
         doc_type = rb.get("doc_type")
         if doc_type and doc_type != "runbook":
             errors.append(
                 f"WRONG RETRIEVAL: Runbook metadata {i+1} has doc_type '{doc_type}', expected 'runbook'."
             )
-    
+
     if errors:
         logger.warning(f"Triage retrieval boundary validation failed: {errors}")
     else:
         logger.debug("Triage retrieval boundary validation passed")
-    
+
     return len(errors) == 0, errors
 
 
@@ -865,40 +865,38 @@ def validate_resolution_retrieval_boundaries(
     retrieved_runbook_steps: List[Dict],
     retrieved_historical_resolutions: List[Dict],
     expected_runbook_ids: List[str],
-    expected_incident_signature_ids: List[str]
+    expected_incident_signature_ids: List[str],
 ) -> Tuple[bool, List[str]]:
     """
     Validate resolution retrieval respects architecture boundaries.
-    
+
     Per architecture: Resolution agent may ONLY retrieve:
     - Runbook steps (by runbook_id from triage output)
     - Historical resolutions (by incident_signature_id from triage output)
-    
+
     Args:
         retrieved_runbook_steps: List of retrieved runbook step chunks
         retrieved_historical_resolutions: List of retrieved historical resolutions
         expected_runbook_ids: List of runbook_ids from triage output
         expected_incident_signature_ids: List of incident_signature_ids from triage output
-        
+
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
     errors = []
-    
+
     # Check runbook steps belong to expected runbook_ids
     retrieved_runbook_ids: Set[str] = {
-        step.get("runbook_id")
-        for step in retrieved_runbook_steps
-        if step.get("runbook_id")
+        step.get("runbook_id") for step in retrieved_runbook_steps if step.get("runbook_id")
     }
-    
+
     for runbook_id in retrieved_runbook_ids:
         if runbook_id not in expected_runbook_ids:
             errors.append(
                 f"WRONG RETRIEVAL: Retrieved runbook step with runbook_id '{runbook_id}' "
                 f"that was NOT in triage output. Expected runbook_ids: {expected_runbook_ids}"
             )
-    
+
     # Check all runbook steps have step_id (they should be atomic steps, not metadata)
     for i, step in enumerate(retrieved_runbook_steps):
         if not step.get("step_id"):
@@ -906,14 +904,14 @@ def validate_resolution_retrieval_boundaries(
                 f"WRONG RETRIEVAL: Runbook step {i+1} missing 'step_id'. "
                 f"Resolution agent should retrieve atomic runbook steps, not metadata."
             )
-    
+
     # Check historical resolutions match expected incident signatures
     # (This is a soft check - historical resolutions may reference multiple signatures)
     for i, hist_res in enumerate(retrieved_historical_resolutions):
         triage_output = hist_res.get("triage_output", {})
         matched_evidence = triage_output.get("matched_evidence", {})
         hist_sig_ids = matched_evidence.get("incident_signatures", [])
-        
+
         # Check if any of the historical resolution's signatures match expected ones
         if expected_incident_signature_ids:
             if not any(sig_id in expected_incident_signature_ids for sig_id in hist_sig_ids):
@@ -922,49 +920,46 @@ def validate_resolution_retrieval_boundaries(
                     f"Historical resolution {i+1} does not directly match expected signatures, "
                     f"but may be related."
                 )
-    
+
     if errors:
         logger.warning(f"Resolution retrieval boundary validation failed: {errors}")
     else:
         logger.debug("Resolution retrieval boundary validation passed")
-    
+
     return len(errors) == 0, errors
 
 
 def validate_llm_ranking_no_hallucination(
-    llm_recommendations: List[Dict],
-    algorithmic_recommendations: List[Dict]
+    llm_recommendations: List[Dict], algorithmic_recommendations: List[Dict]
 ) -> Tuple[bool, List[str]]:
     """
     Validate LLM ranking does NOT add new steps (hallucination).
-    
+
     Per architecture: LLM can reorder but cannot add new steps.
     All LLM recommendations must have step_ids from algorithmic recommendations.
-    
+
     Args:
         llm_recommendations: Recommendations from LLM ranking
         algorithmic_recommendations: Recommendations from algorithmic ranking
-        
+
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
     errors = []
-    
+
     if not llm_recommendations:
         # Empty LLM recommendations are valid (fallback to algorithmic)
         return True, []
-    
+
     # Build set of valid step_ids from algorithmic recommendations
     valid_step_ids: Set[str] = {
-        rec.get("step_id")
-        for rec in algorithmic_recommendations
-        if rec.get("step_id")
+        rec.get("step_id") for rec in algorithmic_recommendations if rec.get("step_id")
     }
-    
+
     # Check each LLM recommendation has valid step_id
     for i, llm_rec in enumerate(llm_recommendations):
         step_id = llm_rec.get("step_id")
-        
+
         if not step_id:
             errors.append(
                 f"LLM HALLUCINATION: LLM recommendation {i+1} missing step_id. "
@@ -976,10 +971,10 @@ def validate_llm_ranking_no_hallucination(
                 f"that was NOT in algorithmic recommendations. "
                 f"LLM can reorder but cannot add new steps."
             )
-    
+
     if errors:
         logger.warning(f"LLM ranking hallucination validation failed: {errors}")
     else:
         logger.debug("LLM ranking hallucination validation passed")
-    
+
     return len(errors) == 0, errors

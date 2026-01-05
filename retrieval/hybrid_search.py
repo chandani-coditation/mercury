@@ -371,11 +371,11 @@ def triage_retrieval(
 ) -> Dict[str, List[Dict]]:
     """
     Specialized retrieval for triage agent.
-    
+
     Per architecture: Triage agent may ONLY retrieve:
     - Incident signatures (chunks with incident_signature_id in metadata)
     - Runbook metadata (documents with doc_type='runbook', NOT runbook steps)
-    
+
     Args:
         query_text: Search query
         service: Optional service filter
@@ -383,7 +383,7 @@ def triage_retrieval(
         limit: Number of results per type
         vector_weight: Weight for vector search (0-1)
         fulltext_weight: Weight for full-text search (0-1)
-    
+
     Returns:
         Dictionary with:
         - 'incident_signatures': List of incident signature chunks
@@ -393,42 +393,46 @@ def triage_retrieval(
         f"Starting triage retrieval: query='{query_text[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
-    
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Generate query embedding
         query_embedding = embed_text(query_text)
         query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
-        
+
         # Normalize service and component
         service_val = service if service and str(service).strip() else None
         component_val = component if component and str(component).strip() else None
-        
+
         # Build filter conditions for incident_signatures table
         # Use more flexible matching - service/component are hints, not strict filters
         filters = []
         filter_params = []
-        
+
         if service_val:
             # More flexible: match service or affected_service, case-insensitive
             # Also allow partial matches (e.g., "Database" matches "Database-SQL")
-            filters.append("""
+            filters.append(
+                """
                 (COALESCE(LOWER(s.service), '') LIKE LOWER(%s::text)
                  OR COALESCE(LOWER(s.affected_service), '') LIKE LOWER(%s::text)
                  OR COALESCE(LOWER(s.service), '') LIKE LOWER(%s::text)
                  OR COALESCE(LOWER(s.affected_service), '') LIKE LOWER(%s::text))
-            """)
+            """
+            )
             # Add multiple variations for better matching
             service_lower = service_val.lower()
-            filter_params.extend([
-                f"%{service_lower}%",  # service contains
-                f"%{service_lower}%",  # affected_service contains
-                f"{service_lower}%",   # service starts with
-                f"{service_lower}%"    # affected_service starts with
-            ])
-        
+            filter_params.extend(
+                [
+                    f"%{service_lower}%",  # service contains
+                    f"%{service_lower}%",  # affected_service contains
+                    f"{service_lower}%",  # service starts with
+                    f"{service_lower}%",  # affected_service starts with
+                ]
+            )
+
         # Component filter: Make it completely optional
         # Strategy: If signature has no component (NULL/empty), it matches ANY alert component
         # This is critical for storage signatures which have component=NULL
@@ -437,24 +441,26 @@ def triage_retrieval(
         # - Alerts with component='Storage' to match signatures with component=NULL (most important)
         # - Alerts with component='Storage' to match signatures with component='Storage' or 'Disk' etc.
         # - Service match is still required (handled by service filter above)
-        # 
+        #
         # Logic: Only filter by component if signature HAS a component value
         # If signature component is NULL/empty, don't filter by component at all
         # This is more permissive than the previous OR logic
         if component_val:
             # Only filter if signature has a component - if NULL, don't filter
-            filters.append("""
+            filters.append(
+                """
                 (COALESCE(s.component, '') = '' 
                  OR COALESCE(LOWER(s.component), '') LIKE LOWER(%s::text))
-            """)
+            """
+            )
             component_lower = component_val.lower()
             filter_params.append(f"%{component_lower}%")
-        
+
         filter_clause = " AND " + " AND ".join(filters) if filters else ""
-        
+
         # Retrieve incident signatures directly from incident_signatures table
         # (No need for chunks table - embeddings and tsvector are already in incident_signatures)
-        # Parameter order: 
+        # Parameter order:
         # Vector: $1 (score), $2 (rank), $3 (ORDER BY), $4 (limit), [filters for vector]
         # Fulltext: $5 (score), $6 (rank), $7 (WHERE), $8 (ORDER BY), $9 (limit), [filters for fulltext]
         # Final: $last (final limit)
@@ -567,7 +573,7 @@ def triage_retrieval(
         ORDER BY rrf_score DESC
         LIMIT %s
         """
-        
+
         # Build params for incident signatures
         # Query parameter order (filter_clause is inserted AFTER WHERE and BEFORE ORDER BY):
         # Vector CTE: $1=score, $2=rank, $3...$N=filter_params, $N+1=ORDER BY, $N+2=limit
@@ -577,23 +583,27 @@ def triage_retrieval(
         # Vector CTE
         sig_params.append(query_embedding_str)  # 1: vector_score
         sig_params.append(query_embedding_str)  # 2: vector_rank
-        sig_params.extend(filter_params)  # 3...N: filter params (service + component) - inserted AFTER WHERE
+        sig_params.extend(
+            filter_params
+        )  # 3...N: filter params (service + component) - inserted AFTER WHERE
         sig_params.append(query_embedding_str)  # N+1: vector ORDER BY
         sig_params.append(limit)  # N+2: vector limit
         # Fulltext CTE
         sig_params.append(str(query_text))  # N+3: fulltext_score
         sig_params.append(str(query_text))  # N+4: fulltext_rank
         sig_params.append(str(query_text))  # N+5: fulltext WHERE
-        sig_params.extend(filter_params)  # N+6...M: filter params (service + component) - inserted AFTER WHERE
+        sig_params.extend(
+            filter_params
+        )  # N+6...M: filter params (service + component) - inserted AFTER WHERE
         sig_params.append(str(query_text))  # M+1: fulltext ORDER BY
         sig_params.append(limit)  # M+2: fulltext limit
         # Final
         sig_params.append(limit)  # M+3: final limit
-        
+
         # Execute incident signatures query
         cur.execute(incident_sig_query, sig_params)
         incident_sig_rows = cur.fetchall()
-        
+
         # Collect all source_incident_ids to fetch descriptions
         all_source_incident_ids = []
         for row in incident_sig_rows:
@@ -604,7 +614,7 @@ def triage_retrieval(
             source_ids = metadata.get("source_incident_ids", [])
             if source_ids:
                 all_source_incident_ids.extend(source_ids)
-        
+
         # Fetch original incident descriptions
         incident_descriptions = {}
         if all_source_incident_ids:
@@ -613,13 +623,13 @@ def triage_retrieval(
                 incident_descriptions = get_incident_descriptions(unique_incident_ids)
             except Exception as e:
                 logger.warning(f"Failed to fetch incident descriptions: {e}")
-        
+
         incident_signatures = []
         for row in incident_sig_rows:
             if isinstance(row, dict):
                 metadata = row["metadata"] if isinstance(row["metadata"], dict) else {}
                 source_ids = metadata.get("source_incident_ids", [])
-                
+
                 # Enhance content with original incident descriptions
                 enhanced_content = row["content"]
                 if source_ids and incident_descriptions:
@@ -628,31 +638,41 @@ def triage_retrieval(
                         if inc_id in incident_descriptions:
                             desc = incident_descriptions[inc_id]
                             if desc.get("title"):
-                                desc_parts.append(f"Original Incident {inc_id} - Title: {desc['title']}")
+                                desc_parts.append(
+                                    f"Original Incident {inc_id} - Title: {desc['title']}"
+                                )
                             if desc.get("description"):
                                 # Truncate description to 200 chars
-                                desc_text = desc["description"][:200] + ("..." if len(desc["description"]) > 200 else "")
-                                desc_parts.append(f"Original Incident {inc_id} - Description: {desc_text}")
+                                desc_text = desc["description"][:200] + (
+                                    "..." if len(desc["description"]) > 200 else ""
+                                )
+                                desc_parts.append(
+                                    f"Original Incident {inc_id} - Description: {desc_text}"
+                                )
                     if desc_parts:
                         enhanced_content = row["content"] + "\n\n" + "\n".join(desc_parts)
-                
-                incident_signatures.append({
-                    "chunk_id": str(row["id"]),
-                    "document_id": str(row["document_id"]),
-                    "chunk_index": row["chunk_index"],
-                    "content": enhanced_content,
-                    "metadata": metadata,
-                    "doc_title": row["doc_title"],
-                    "doc_type": row["doc_type"],
-                    "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
-                    "fulltext_score": float(row["fulltext_score"]) if row["fulltext_score"] else 0.0,
-                    "rrf_score": float(row["rrf_score"]) if row["rrf_score"] else 0.0,
-                })
+
+                incident_signatures.append(
+                    {
+                        "chunk_id": str(row["id"]),
+                        "document_id": str(row["document_id"]),
+                        "chunk_index": row["chunk_index"],
+                        "content": enhanced_content,
+                        "metadata": metadata,
+                        "doc_title": row["doc_title"],
+                        "doc_type": row["doc_type"],
+                        "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
+                        "fulltext_score": (
+                            float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
+                        ),
+                        "rrf_score": float(row["rrf_score"]) if row["rrf_score"] else 0.0,
+                    }
+                )
             else:
                 # Handle tuple result
                 metadata = row[4] if isinstance(row[4], dict) else {}
                 source_ids = metadata.get("source_incident_ids", [])
-                
+
                 # Enhance content with original incident descriptions
                 enhanced_content = row[3]
                 if source_ids and incident_descriptions:
@@ -661,47 +681,55 @@ def triage_retrieval(
                         if inc_id in incident_descriptions:
                             desc = incident_descriptions[inc_id]
                             if desc.get("title"):
-                                desc_parts.append(f"Original Incident {inc_id} - Title: {desc['title']}")
+                                desc_parts.append(
+                                    f"Original Incident {inc_id} - Title: {desc['title']}"
+                                )
                             if desc.get("description"):
                                 # Truncate description to 200 chars
-                                desc_text = desc["description"][:200] + ("..." if len(desc["description"]) > 200 else "")
-                                desc_parts.append(f"Original Incident {inc_id} - Description: {desc_text}")
+                                desc_text = desc["description"][:200] + (
+                                    "..." if len(desc["description"]) > 200 else ""
+                                )
+                                desc_parts.append(
+                                    f"Original Incident {inc_id} - Description: {desc_text}"
+                                )
                     if desc_parts:
                         enhanced_content = row[3] + "\n\n" + "\n".join(desc_parts)
-                
-                incident_signatures.append({
-                    "chunk_id": str(row[0]),
-                    "document_id": str(row[1]),
-                    "chunk_index": row[2],
-                    "content": enhanced_content,
-                    "metadata": metadata,
-                    "doc_title": row[5],
-                    "doc_type": row[6],
-                    "vector_score": float(row[7]) if row[7] else 0.0,
-                    "fulltext_score": float(row[8]) if row[8] else 0.0,
-                    "rrf_score": float(row[9]) if row[9] else 0.0,
-                })
-        
+
+                incident_signatures.append(
+                    {
+                        "chunk_id": str(row[0]),
+                        "document_id": str(row[1]),
+                        "chunk_index": row[2],
+                        "content": enhanced_content,
+                        "metadata": metadata,
+                        "doc_title": row[5],
+                        "doc_type": row[6],
+                        "vector_score": float(row[7]) if row[7] else 0.0,
+                        "fulltext_score": float(row[8]) if row[8] else 0.0,
+                        "rrf_score": float(row[9]) if row[9] else 0.0,
+                    }
+                )
+
         # Retrieve runbook metadata (documents only, NOT steps)
         # Runbook metadata is in documents table, not chunks
         runbook_filters = []
         runbook_params = [query_text]  # For full-text search
-        
+
         # Service filter: match if service contains the value (flexible matching)
         if service_val:
             runbook_filters.append("COALESCE(LOWER(d.service), '') LIKE LOWER(%s::text)")
             runbook_params.append(f"%{service_val}%")
-        
+
         # Component filter: For triage, we prioritize service match over component match
         # Component is optional - if provided, we'll boost relevance but not exclude
         # This allows "Database" service alerts to match "Database Alerts" runbooks
         # even if component is "Database" vs "Alerts"
         # For now, skip component filter for runbook metadata - service + fulltext is sufficient
         # Component matching can be handled by relevance scoring
-        
+
         runbook_filter_clause = " AND " + " AND ".join(runbook_filters) if runbook_filters else ""
         runbook_params.append(limit)  # For LIMIT
-        
+
         runbook_meta_query = f"""
         SELECT 
             d.id as document_id,
@@ -720,47 +748,55 @@ def triage_retrieval(
         ORDER BY relevance_score DESC, d.last_reviewed_at DESC NULLS LAST
         LIMIT %s
         """
-        
+
         cur.execute(runbook_meta_query, runbook_params)
         runbook_rows = cur.fetchall()
-        
+
         runbook_metadata = []
         for row in runbook_rows:
             if isinstance(row, dict):
                 tags = row["tags"] if isinstance(row["tags"], dict) else {}
-                runbook_metadata.append({
-                    "document_id": str(row["document_id"]),
-                    "doc_type": row["doc_type"],
-                    "service": row["service"],
-                    "component": row["component"],
-                    "title": row["title"],
-                    "tags": tags,
-                    "last_reviewed_at": row["last_reviewed_at"].isoformat() if row["last_reviewed_at"] else None,
-                    "relevance_score": float(row["relevance_score"]) if row["relevance_score"] else 0.0,
-                })
+                runbook_metadata.append(
+                    {
+                        "document_id": str(row["document_id"]),
+                        "doc_type": row["doc_type"],
+                        "service": row["service"],
+                        "component": row["component"],
+                        "title": row["title"],
+                        "tags": tags,
+                        "last_reviewed_at": (
+                            row["last_reviewed_at"].isoformat() if row["last_reviewed_at"] else None
+                        ),
+                        "relevance_score": (
+                            float(row["relevance_score"]) if row["relevance_score"] else 0.0
+                        ),
+                    }
+                )
             else:
                 tags = row[5] if isinstance(row[5], dict) else {}
-                runbook_metadata.append({
-                    "document_id": str(row[0]),
-                    "doc_type": row[1],
-                    "service": row[2],
-                    "component": row[3],
-                    "title": row[4],
-                    "tags": tags,
-                    "last_reviewed_at": row[6].isoformat() if row[6] else None,
-                    "relevance_score": float(row[7]) if row[7] else 0.0,
-                })
-        
+                runbook_metadata.append(
+                    {
+                        "document_id": str(row[0]),
+                        "doc_type": row[1],
+                        "service": row[2],
+                        "component": row[3],
+                        "title": row[4],
+                        "tags": tags,
+                        "last_reviewed_at": row[6].isoformat() if row[6] else None,
+                        "relevance_score": float(row[7]) if row[7] else 0.0,
+                    }
+                )
+
         logger.debug(
             f"Triage retrieval completed: {len(incident_signatures)} signatures, "
             f"{len(runbook_metadata)} runbook metadata"
         )
-        
+
         return {
             "incident_signatures": incident_signatures,
             "runbook_metadata": runbook_metadata,
         }
-    
+
     finally:
         cur.close()
         conn.close()

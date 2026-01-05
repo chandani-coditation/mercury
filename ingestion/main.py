@@ -135,20 +135,22 @@ def ingest_incident(incident: IngestIncident):
 
     try:
         from ingestion.db_ops import insert_incident_signature
-        
+
         doc, signature = normalize_incident(incident)
         signature_id = insert_incident_signature(
             signature,
             source_incident_id=incident.incident_id,
-            source_document_id=None  # We don't create a document for signatures
+            source_document_id=None,  # We don't create a document for signatures
         )
-        logger.info(f"Incident signature ingested successfully: signature_id={signature_id}, signature_id={signature.incident_signature_id}")
+        logger.info(
+            f"Incident signature ingested successfully: signature_id={signature_id}, signature_id={signature.incident_signature_id}"
+        )
 
         return {
             "status": "ok",
             "signature_id": signature_id,
             "incident_signature_id": signature.incident_signature_id,
-            "message": "Incident signature ingested successfully"
+            "message": "Incident signature ingested successfully",
         }
     except Exception as e:
         logger.error(f"Incident ingestion error: {str(e)}", exc_info=True)
@@ -162,13 +164,15 @@ def ingest_runbook(runbook: IngestRunbook):
 
     try:
         from ingestion.db_ops import insert_runbook_with_steps
-        
+
         doc, steps = normalize_runbook(runbook)
         logger.info(f"Extracted {len(steps)} steps from runbook: {runbook.title}")
-        
+
         if len(steps) == 0:
-            logger.warning(f"No steps extracted from runbook: {runbook.title}. Content length: {len(runbook.content)}")
-        
+            logger.warning(
+                f"No steps extracted from runbook: {runbook.title}. Content length: {len(runbook.content)}"
+            )
+
         doc_id = insert_runbook_with_steps(
             doc_type=doc.doc_type,
             service=doc.service,
@@ -185,7 +189,7 @@ def ingest_runbook(runbook: IngestRunbook):
             "status": "ok",
             "document_id": doc_id,
             "steps_count": len(steps),
-            "message": "Runbook ingested successfully"
+            "message": "Runbook ingested successfully",
         }
     except Exception as e:
         logger.error(f"Runbook ingestion error: {str(e)}", exc_info=True)

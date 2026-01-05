@@ -109,9 +109,11 @@ def get_policy_from_config(triage_output: Dict) -> Dict:
             actions = band_config.get("actions", {})
             # Create a more descriptive policy reason
             severity_display = severity.capitalize() if severity else "Unknown"
-            confidence_display = f"{confidence:.1%}" if isinstance(confidence, (int, float)) else str(confidence)
+            confidence_display = (
+                f"{confidence:.1%}" if isinstance(confidence, (int, float)) else str(confidence)
+            )
             policy_reason = f"Matched {band_name} band based on severity={severity_display} and confidence={confidence_display}"
-            
+
             policy_decision = {
                 "policy_band": band_name,
                 "original_policy_band": band_name,  # Track original system-determined policy band

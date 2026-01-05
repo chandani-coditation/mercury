@@ -44,7 +44,7 @@ def run_command(cmd: list[str], description: str) -> bool:
     print(f"{description}")
     print(f"{'='*70}")
     logger.info(f"Running: {' '.join(cmd)}")
-    
+
     try:
         result = subprocess.run(
             cmd,
@@ -75,18 +75,18 @@ def cleanup_database() -> bool:
 def ingest_runbooks(runbooks_dir: Path, ingestion_url: str) -> bool:
     """Ingest runbooks from directory."""
     script_path = project_root / "scripts" / "data" / "ingest_runbooks.py"
-    
+
     if not runbooks_dir.exists():
         print(f"\n✗ Runbooks directory not found: {runbooks_dir}")
         logger.error(f"Runbooks directory not found: {runbooks_dir}")
         return False
-    
+
     docx_files = list(runbooks_dir.glob("*.docx"))
     if not docx_files:
         print(f"\n⚠ No DOCX files found in {runbooks_dir}")
         logger.warning(f"No DOCX files found in {runbooks_dir}")
         return False
-    
+
     cmd = [
         sys.executable,
         str(script_path),
@@ -101,12 +101,12 @@ def ingest_runbooks(runbooks_dir: Path, ingestion_url: str) -> bool:
 def ingest_tickets(tickets_dir: Path, ingestion_url: str) -> bool:
     """Ingest tickets from specified CSV files."""
     script_path = project_root / "scripts" / "data" / "ingest_servicenow_tickets.py"
-    
+
     if not tickets_dir.exists():
         print(f"\n✗ Tickets directory not found: {tickets_dir}")
         logger.error(f"Tickets directory not found: {tickets_dir}")
         return False
-    
+
     success = True
     for csv_file in TICKET_FILES:
         file_path = tickets_dir / csv_file
@@ -114,7 +114,7 @@ def ingest_tickets(tickets_dir: Path, ingestion_url: str) -> bool:
             print(f"\n⚠ CSV file not found: {file_path}")
             logger.warning(f"CSV file not found: {file_path}")
             continue
-        
+
         cmd = [
             sys.executable,
             str(script_path),
@@ -125,7 +125,7 @@ def ingest_tickets(tickets_dir: Path, ingestion_url: str) -> bool:
         ]
         if not run_command(cmd, f"Ingesting tickets from {csv_file}"):
             success = False
-    
+
     return success
 
 
@@ -237,4 +237,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

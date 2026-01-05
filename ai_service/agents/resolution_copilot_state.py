@@ -102,6 +102,7 @@ async def _resolution_agent_state_internal(
 
     # Retrieve context
     from retrieval.hybrid_search import hybrid_search
+
     context_chunks = hybrid_search(
         query_text=query_text,
         service=service_val,

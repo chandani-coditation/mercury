@@ -82,16 +82,16 @@ async def resolution(
                     if not triage_output:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"Incident {incident_id} has no triage output. Please triage the alert first."
+                            detail=f"Incident {incident_id} has no triage output. Please triage the alert first.",
                         )
                     resolution_result = resolution_agent(triage_output)
-                    
+
                     metadata = resolution_result.get("_metadata", {})
                     original_runbook_steps_count = metadata.get("runbook_steps_retrieved", 0)
-                    
+
                     if "_metadata" in resolution_result:
                         del resolution_result["_metadata"]
-                    
+
                     result = {
                         "incident_id": incident_id,
                         "resolution": resolution_result,
@@ -99,7 +99,7 @@ async def resolution(
                             "retrieval_method": "resolution_retrieval",
                             "runbook_steps": original_runbook_steps_count,
                             "steps_retrieved": len(resolution_result.get("steps", [])),
-                        }
+                        },
                     }
                 except IncidentNotFoundError:
                     raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")

@@ -19,34 +19,42 @@ class Alert(BaseModel):
 
 class IncidentSignature(BaseModel):
     """Incident signature classification."""
-    
+
     failure_type: str  # e.g., "SQL_AGENT_JOB_FAILURE"
     error_class: str  # e.g., "SERVICE_ACCOUNT_DISABLED"
 
 
 class MatchedEvidence(BaseModel):
     """Matched evidence references."""
-    
+
     incident_signatures: List[str]  # List of incident_signature_id values
     runbook_refs: List[str]  # List of runbook_id values
 
 
 class TriageOutput(BaseModel):
     """Triage output structure per architecture.
-    
+
     Per architecture: Triage agent classifies incidents only.
     Does NOT generate resolution steps, rank actions, or invent causes.
     """
-    
+
     incident_signature: IncidentSignature
     matched_evidence: MatchedEvidence
     severity: str  # critical, high, medium, low (derived from impact/urgency)
     confidence: float  # 0.0 to 1.0
     policy: str  # AUTO, PROPOSE, REVIEW (determined by policy gate, but included in output)
-    routing: Optional[str] = None  # Team queue assignment (e.g., "SE DBA SQL") - derived from assignment_group
-    impact: Optional[str] = None  # Original impact value from historical evidence (e.g., "2 - Medium", "1 - High")
-    urgency: Optional[str] = None  # Original urgency value from historical evidence (e.g., "2 - Medium", "1 - High")
-    likely_cause: Optional[str] = None  # Most likely root cause based on alert description and matched incident signatures (max 300 chars)
+    routing: Optional[str] = (
+        None  # Team queue assignment (e.g., "SE DBA SQL") - derived from assignment_group
+    )
+    impact: Optional[str] = (
+        None  # Original impact value from historical evidence (e.g., "2 - Medium", "1 - High")
+    )
+    urgency: Optional[str] = (
+        None  # Original urgency value from historical evidence (e.g., "2 - Medium", "1 - High")
+    )
+    likely_cause: Optional[str] = (
+        None  # Most likely root cause based on alert description and matched incident signatures (max 300 chars)
+    )
 
 
 class RollbackPlan(BaseModel):

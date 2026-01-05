@@ -100,12 +100,12 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
             is_header = False
             # Check if this looks like a remediation step first (has colon separating problem: solution)
             is_remediation_step = (
-                current_section == "remediation" 
-                and ":" in text 
+                current_section == "remediation"
+                and ":" in text
                 and len(text.split(":")) == 2
                 and len(text.split(":")[1].strip()) > 10  # Has meaningful action text
             )
-            
+
             if not is_remediation_step:
                 # Only check for header if it's not a remediation step
                 for run in para.runs:
@@ -160,9 +160,12 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                 ):
                     current_section = "rollback_triggers"
                 elif (
-                    "validate" in text_lower and "recovery" in text_lower
-                    or "documentation" in text_lower and "requirement" in text_lower
-                    or "threshold" in text_lower and "tuning" in text_lower
+                    "validate" in text_lower
+                    and "recovery" in text_lower
+                    or "documentation" in text_lower
+                    and "requirement" in text_lower
+                    or "threshold" in text_lower
+                    and "tuning" in text_lower
                 ):
                     # Clear remediation section when we hit these sections
                     current_section = None
@@ -225,7 +228,7 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
     # Prioritize remediation steps over generic steps
     # If remediation steps exist, use them; otherwise use generic steps
     final_steps = remediation_steps if remediation_steps else steps
-    
+
     # Build structured rollback procedures
     rollback_procedures = None
     if rollback_steps:

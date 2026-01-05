@@ -58,13 +58,13 @@ async def triage(
         else:
             alert_dict["ts"] = datetime.utcnow().isoformat()
         # Ensure affected_services is preserved if present
-        if hasattr(alert, 'affected_services') and alert.affected_services is not None:
+        if hasattr(alert, "affected_services") and alert.affected_services is not None:
             alert_dict["affected_services"] = alert.affected_services
         # Also preserve from raw dict if Alert model didn't capture it
-        if "affected_services" not in alert_dict and hasattr(alert, '__dict__'):
+        if "affected_services" not in alert_dict and hasattr(alert, "__dict__"):
             # Check if it was in the original request
             logger.debug(f"Alert model dump keys: {list(alert_dict.keys())}")
-            if hasattr(alert, 'affected_services'):
+            if hasattr(alert, "affected_services"):
                 logger.debug(f"Alert.affected_services attribute: {alert.affected_services}")
 
         # Call triager agent (LangGraph, state-based, or synchronous)

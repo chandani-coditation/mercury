@@ -82,7 +82,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                 # Get allowed fields from guardrails config and TriageOutput model
                 guardrail_config = get_guardrail_config().get("triage", {})
                 required_fields = guardrail_config.get("required_fields", [])
-                
+
                 # Define allowed fields for triage output
                 # Core required fields from TriageOutput model
                 allowed_fields = {
@@ -95,41 +95,55 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
                     "impact",  # Optional from model
                     "urgency",  # Optional from model
                 }
-                
+
                 # Add fields from guardrails config (these are valid triage fields)
                 if required_fields:
                     for field in required_fields:
                         allowed_fields.add(field)
-                    logger.debug(f"Added {len(required_fields)} fields from guardrails config: {required_fields}")
+                    logger.debug(
+                        f"Added {len(required_fields)} fields from guardrails config: {required_fields}"
+                    )
                 else:
-                    logger.warning("No required_fields found in guardrails config - using only core fields")
-                
+                    logger.warning(
+                        "No required_fields found in guardrails config - using only core fields"
+                    )
+
                 # Also allow fields that might be in the original output (for backward compatibility)
                 original_keys = set(system_output.keys())
                 allowed_fields.update(original_keys)
-                
-                logger.debug(f"Total allowed fields: {len(allowed_fields)} - {sorted(allowed_fields)}")
+
+                logger.debug(
+                    f"Total allowed fields: {len(allowed_fields)} - {sorted(allowed_fields)}"
+                )
                 logger.debug(f"Original system_output keys: {sorted(original_keys)}")
                 logger.debug(f"User edited keys: {sorted(set(feedback.user_edited.keys()))}")
-                
+
                 # Forbidden fields that indicate hallucination (resolution-related)
                 forbidden_fields = {
-                    "resolution_steps", "steps", "fixes", "solutions", 
-                    "commands", "rollback_plan", "estimated_time_minutes",
-                    "risk_level", "requires_approval", "reasoning", "rationale",
-                    "provenance"
+                    "resolution_steps",
+                    "steps",
+                    "fixes",
+                    "solutions",
+                    "commands",
+                    "rollback_plan",
+                    "estimated_time_minutes",
+                    "risk_level",
+                    "requires_approval",
+                    "reasoning",
+                    "rationale",
+                    "provenance",
                 }
-                
+
                 # Check user_edited fields
                 user_keys = set(feedback.user_edited.keys())
-                
+
                 # Check for forbidden fields
                 forbidden_found = user_keys.intersection(forbidden_fields)
                 if forbidden_found:
                     error_msg = f"Cannot add resolution-related fields to triage output. Forbidden fields: {', '.join(forbidden_found)}"
                     logger.error(f"User tried to add forbidden fields: {error_msg}")
                     raise ValidationError(error_msg)
-                
+
                 # Check for fields not in allowed set
                 extra_keys = user_keys - allowed_fields
                 if extra_keys:
@@ -210,7 +224,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
             policy_decision["original_policy_band"] = original_policy_band
             policy_decision["user_approved"] = True
             policy_decision["approved_at"] = datetime.utcnow().isoformat()
-            
+
             if feedback.policy_band == "AUTO":
                 policy_decision["can_auto_apply"] = True
                 policy_decision["requires_approval"] = False

@@ -108,47 +108,51 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
     )
 
 
-def extract_runbook_steps(
-    runbook: IngestRunbook, runbook_id: str
-) -> List[RunbookStep]:
+def extract_runbook_steps(runbook: IngestRunbook, runbook_id: str) -> List[RunbookStep]:
     """
     Extract atomic runbook steps from runbook content.
-    
+
     Per architecture: Each step is stored independently with:
     - step_id, runbook_id, condition, action, expected_outcome, rollback, risk_level
-    
+
     Returns:
         List of RunbookStep objects
     """
     steps = []
-    
+
     # Generate runbook_id if not provided
     if not runbook_id:
         # Try to extract from tags or generate one
-        runbook_id = runbook.tags.get("runbook_id") if runbook.tags else f"RB-{uuid.uuid4().hex[:8].upper()}"
-    
+        runbook_id = (
+            runbook.tags.get("runbook_id") if runbook.tags else f"RB-{uuid.uuid4().hex[:8].upper()}"
+        )
+
     # Log extraction attempt
     try:
         from ai_service.core import get_logger
+
         logger = get_logger(__name__)
         has_steps = runbook.steps is not None
         steps_count = len(runbook.steps) if isinstance(runbook.steps, list) else 0
         content_len = len(runbook.content) if runbook.content else 0
-        logger.info(f"Extracting steps from runbook {runbook.title}. Has steps list: {has_steps}, Steps count: {steps_count}, Content length: {content_len}")
+        logger.info(
+            f"Extracting steps from runbook {runbook.title}. Has steps list: {has_steps}, Steps count: {steps_count}, Content length: {content_len}"
+        )
     except:
         pass
-    
+
     # If structured steps are provided, use them
     if runbook.steps and isinstance(runbook.steps, list) and len(runbook.steps) > 0:
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
             logger.debug(f"Using {len(runbook.steps)} structured steps from runbook.steps")
         except:
             pass
         for idx, step_text in enumerate(runbook.steps, 1):
             step_id = f"{runbook_id}-S{idx}"
-            
+
             # Try to parse structured step format
             # Look for patterns like "Condition: ... Action: ..." or similar
             condition = None
@@ -156,14 +160,14 @@ def extract_runbook_steps(
             expected_outcome = None
             rollback = None
             risk_level = None
-            
+
             # Parse remediation steps that may be in format "Problem: Solution" or "Problem: Action"
             # Example: "Connection saturation: Kill idle sessions, increase max_connections if safe."
             if ":" in step_text and len(step_text.split(":")) == 2:
                 parts = step_text.split(":", 1)
                 condition = parts[0].strip()  # Problem/condition
                 action = parts[1].strip()  # Remediation action
-            
+
             # Try to extract condition if present (e.g., "If X, then Y")
             elif "if" in step_text.lower() or "when" in step_text.lower():
                 # Simple heuristic: split on "then" or "do"
@@ -171,16 +175,22 @@ def extract_runbook_steps(
                 if len(parts) >= 2:
                     condition = parts[0].strip()
                     action = parts[1].strip()
-            
+
             # Infer risk level from action text (generic, not hard-coded)
             action_lower = action.lower()
-            if any(word in action_lower for word in ["kill", "restart", "terminate", "remove", "delete", "drop"]):
+            if any(
+                word in action_lower
+                for word in ["kill", "restart", "terminate", "remove", "delete", "drop"]
+            ):
                 risk_level = "medium"
-            elif any(word in action_lower for word in ["increase", "decrease", "adjust", "tune", "optimize"]):
+            elif any(
+                word in action_lower
+                for word in ["increase", "decrease", "adjust", "tune", "optimize"]
+            ):
                 risk_level = "low"
             elif any(word in action_lower for word in ["escalate", "restore", "recover", "repair"]):
                 risk_level = "high"
-            
+
             # Extract rollback from rollback_procedures if available
             if runbook.rollback_procedures:
                 if isinstance(runbook.rollback_procedures, dict):
@@ -189,7 +199,7 @@ def extract_runbook_steps(
                         rollback = "\n".join(rollback) if rollback else None
                 else:
                     rollback = runbook.rollback_procedures
-            
+
             steps.append(
                 RunbookStep(
                     step_id=step_id,
@@ -207,10 +217,10 @@ def extract_runbook_steps(
         # Parse unstructured content to extract steps
         # Look for numbered lists, bullet points, or step markers
         content = runbook.content
-        
+
         # Try multiple strategies to extract steps
         found_steps = []
-        
+
         # Strategy 1: Numbered lists (1., 2., 3., etc.)
         numbered_pattern = r"(?i)^\s*(\d+)[\.\)]\s+(.+?)(?=\n\s*\d+[\.\)]|\n\n\n|\Z)"
         matches = re.finditer(numbered_pattern, content, re.MULTILINE | re.DOTALL)
@@ -218,7 +228,7 @@ def extract_runbook_steps(
             step_text = match.group(2).strip()
             if step_text and len(step_text) > 5:
                 found_steps.append(step_text)
-        
+
         # Strategy 2: "Step N:" or "Step N." patterns
         if not found_steps:
             step_pattern = r"(?i)^\s*step\s+(\d+)[:\.]\s+(.+?)(?=\n\s*step\s+\d+|$)"
@@ -227,7 +237,7 @@ def extract_runbook_steps(
                 step_text = match.group(2).strip()
                 if step_text and len(step_text) > 5:
                     found_steps.append(step_text)
-        
+
         # Strategy 3: Bullet points (- or *)
         if not found_steps:
             bullet_pattern = r"(?i)^\s*[-*•]\s+(.+?)(?=\n\s*[-*•]|\n\n|\Z)"
@@ -236,7 +246,7 @@ def extract_runbook_steps(
                 step_text = match.group(1).strip()
                 if step_text and len(step_text) > 5:
                     found_steps.append(step_text)
-        
+
         # Strategy 4: Split by double newlines (paragraphs)
         if not found_steps:
             paragraphs = re.split(r"\n\s*\n+", content)
@@ -244,7 +254,7 @@ def extract_runbook_steps(
                 para = para.strip()
                 if para and len(para) > 20:  # Only meaningful paragraphs
                     found_steps.append(para)
-        
+
         # Strategy 5: Split by single newlines if content is structured
         if not found_steps and "\n" in content:
             lines = [line.strip() for line in content.split("\n") if line.strip()]
@@ -258,17 +268,23 @@ def extract_runbook_steps(
                     current_step = []
             if current_step:
                 found_steps.append(" ".join(current_step))
-        
+
         # Last resort: treat entire content as one step (but log a warning)
         if not found_steps:
             if content and content.strip():
                 # Split content into paragraphs and treat each as a step
-                paragraphs = [p.strip() for p in content.split("\n\n") if p.strip() and len(p.strip()) > 20]
+                paragraphs = [
+                    p.strip() for p in content.split("\n\n") if p.strip() and len(p.strip()) > 20
+                ]
                 if paragraphs:
                     found_steps = paragraphs
                 else:
                     # If no paragraphs, split by single newlines
-                    lines = [line.strip() for line in content.split("\n") if line.strip() and len(line.strip()) > 20]
+                    lines = [
+                        line.strip()
+                        for line in content.split("\n")
+                        if line.strip() and len(line.strip()) > 20
+                    ]
                     if lines:
                         found_steps = lines
                     else:
@@ -276,6 +292,7 @@ def extract_runbook_steps(
                         found_steps = [content.strip()]
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
                     logger.warning(
                         f"Could not extract structured steps from runbook {runbook_id}. "
@@ -286,35 +303,40 @@ def extract_runbook_steps(
             else:
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
                     logger.error(f"Runbook {runbook_id} has no content to extract steps from!")
                 except:
                     pass
-        
+
         # Create RunbookStep objects
         for idx, step_text in enumerate(found_steps, 1):
             step_id = f"{runbook_id}-S{idx}"
-            
+
             # Extract condition and action if possible
             condition = None
             action = step_text
-            
+
             if "if" in step_text.lower() or "when" in step_text.lower():
                 parts = re.split(r"\s+then\s+|\s+do\s+", step_text, flags=re.IGNORECASE)
                 if len(parts) >= 2:
                     condition = parts[0].strip()
                     action = parts[1].strip()
-            
+
             # Handle rollback procedures
             rollback = None
             if runbook.rollback_procedures:
                 if isinstance(runbook.rollback_procedures, dict):
                     rollback_steps = runbook.rollback_procedures.get("steps", [])
                     if rollback_steps:
-                        rollback = "\n".join(rollback_steps) if isinstance(rollback_steps, list) else str(rollback_steps)
+                        rollback = (
+                            "\n".join(rollback_steps)
+                            if isinstance(rollback_steps, list)
+                            else str(rollback_steps)
+                        )
                 else:
                     rollback = str(runbook.rollback_procedures)
-            
+
             steps.append(
                 RunbookStep(
                     step_id=step_id,
@@ -328,7 +350,7 @@ def extract_runbook_steps(
                     component=runbook.component,
                 )
             )
-    
+
     # Ensure we have at least one step if there's any content
     if len(steps) == 0 and runbook.content and runbook.content.strip():
         # Create a single step from the entire content as absolute last resort
@@ -348,6 +370,7 @@ def extract_runbook_steps(
         )
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
             logger.warning(
                 f"Created single fallback step for runbook {runbook.title} "
@@ -355,32 +378,34 @@ def extract_runbook_steps(
             )
         except:
             pass
-    
+
     # Log final result
     try:
         from ai_service.core import get_logger
+
         logger = get_logger(__name__)
-        logger.info(f"Extracted {len(steps)} steps from runbook {runbook.title} (runbook_id: {runbook_id})")
+        logger.info(
+            f"Extracted {len(steps)} steps from runbook {runbook.title} (runbook_id: {runbook_id})"
+        )
     except:
         pass
-    
+
     return steps
 
 
 def _extract_service_component(
-    incident: IngestIncident, 
-    failure_type: str
+    incident: IngestIncident, failure_type: str
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Extract service and component deterministically from incident data.
-    
+
     Rules:
     1. Service: From affected_services[0] if available, split on '-' if present
     2. Component: Derived from failure_type and incident metadata, not keyword guessing
     """
     service = None
     component = None
-    
+
     # Extract service from affected_services
     if incident.affected_services and len(incident.affected_services) > 0:
         raw_service = incident.affected_services[0]
@@ -388,7 +413,7 @@ def _extract_service_component(
             service = raw_service.split("-")[0].strip()
         else:
             service = raw_service
-    
+
     # Extract component deterministically based on failure_type and metadata
     # This is rule-based, not keyword-based
     if failure_type == "SQL_AGENT_JOB_FAILURE" or failure_type == "DATABASE_FAILURE":
@@ -405,59 +430,59 @@ def _extract_service_component(
         component = "Operating System"
     elif failure_type == "AUTHENTICATION_FAILURE":
         component = "Security"
-    
+
     return service, component
 
 
 def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
     """
     Convert incident to incident signature (pattern, not raw text).
-    
+
     Per architecture: Signatures represent patterns, not stories.
     Uses rule-based, deterministic classification with CSV-driven rules.
-    
+
     Returns:
         IncidentSignature object
     """
     from ingestion.classification import get_classifier
-    
+
     # Get rule-based classifier
     classifier = get_classifier()
-    
+
     # Step 1: Classify failure_type using rules (deterministic)
     failure_type = classifier.classify_failure_type(incident)
-    
+
     # Step 2: Classify error_class using rules (deterministic, depends on failure_type)
     error_class = classifier.classify_error_class(incident, failure_type)
-    
+
     # Step 3: Generate deterministic signature ID (hash-based)
     sig_id = classifier.generate_signature_id(incident, failure_type, error_class)
-    
+
     # Step 4: Normalize symptoms using controlled vocabulary (deterministic)
     symptoms = classifier.normalize_symptoms(incident)
-    
+
     # Extract affected service
     affected_service = None
     if incident.affected_services and len(incident.affected_services) > 0:
         affected_service = incident.affected_services[0]
-    
+
     # Step 5: Extract service/component (deterministic parsing)
     service, component = _extract_service_component(incident, failure_type)
-    
+
     # Resolution refs will be populated later when linking to runbook steps
     resolution_refs = None
-    
+
     # Extract assignment_group from metadata if available
     assignment_group = None
     if incident.metadata and isinstance(incident.metadata, dict):
         assignment_group = incident.metadata.get("assignment_group")
     # Also check tags if not in metadata (for backward compatibility)
-    if not assignment_group and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+    if not assignment_group and hasattr(incident, "tags") and isinstance(incident.tags, dict):
         assignment_group = incident.tags.get("assignment_group")
     # Also check if it's in the incident directly (for IngestIncident from CSV)
-    if not assignment_group and hasattr(incident, 'assignment_group'):
-        assignment_group = getattr(incident, 'assignment_group', None)
-    
+    if not assignment_group and hasattr(incident, "assignment_group"):
+        assignment_group = getattr(incident, "assignment_group", None)
+
     # Extract impact and urgency from metadata if available
     impact = None
     urgency = None
@@ -467,20 +492,20 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
         urgency = incident.metadata.get("urgency")
         close_notes = incident.metadata.get("close_notes")
     # Also check tags if not in metadata (for backward compatibility)
-    if not impact and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+    if not impact and hasattr(incident, "tags") and isinstance(incident.tags, dict):
         impact = incident.tags.get("impact")
-    if not urgency and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+    if not urgency and hasattr(incident, "tags") and isinstance(incident.tags, dict):
         urgency = incident.tags.get("urgency")
-    if not close_notes and hasattr(incident, 'tags') and isinstance(incident.tags, dict):
+    if not close_notes and hasattr(incident, "tags") and isinstance(incident.tags, dict):
         close_notes = incident.tags.get("close_notes")
     # Also check if they're in the incident directly (for IngestIncident from CSV)
-    if not impact and hasattr(incident, 'impact'):
-        impact = getattr(incident, 'impact', None)
-    if not urgency and hasattr(incident, 'urgency'):
-        urgency = getattr(incident, 'urgency', None)
-    if not close_notes and hasattr(incident, 'close_notes'):
-        close_notes = getattr(incident, 'close_notes', None)
-    
+    if not impact and hasattr(incident, "impact"):
+        impact = getattr(incident, "impact", None)
+    if not urgency and hasattr(incident, "urgency"):
+        urgency = getattr(incident, "urgency", None)
+    if not close_notes and hasattr(incident, "close_notes"):
+        close_notes = getattr(incident, "close_notes", None)
+
     return IncidentSignature(
         incident_signature_id=sig_id,
         failure_type=failure_type,
@@ -497,19 +522,21 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
     )
 
 
-def normalize_incident(incident: IngestIncident, validate_schema: bool = False) -> Tuple[Optional[IngestDocument], IncidentSignature]:
+def normalize_incident(
+    incident: IngestIncident, validate_schema: bool = False
+) -> Tuple[Optional[IngestDocument], IncidentSignature]:
     """
     Convert historical incident to incident signature.
-    
+
     Per architecture: Incidents are converted to signatures (patterns, not raw text).
     Returns a minimal document (for metadata) and the signature.
-    
+
     Returns:
         Tuple of (Optional[IngestDocument] for metadata, IncidentSignature)
     """
     # Create incident signature (primary output)
     signature = create_incident_signature(incident)
-    
+
     # Optional JSON schema validation
     if validate_schema:
         incident_dict = incident.model_dump(mode="json", exclude_none=True)
@@ -519,7 +546,7 @@ def normalize_incident(incident: IngestIncident, validate_schema: bool = False) 
 
             logger = get_logger(__name__)
             logger.warning(f"Incident schema validation warnings: {errors}")
-    
+
     # Create minimal document for metadata (optional - signature is primary)
     # The signature will be stored as a chunk, not as document content
     doc = IngestDocument(
@@ -538,17 +565,19 @@ def normalize_incident(incident: IngestIncident, validate_schema: bool = False) 
         },
         last_reviewed_at=incident.timestamp,
     )
-    
+
     return doc, signature
 
 
-def normalize_runbook(runbook: IngestRunbook, validate_schema: bool = False) -> Tuple[IngestDocument, List[RunbookStep]]:
+def normalize_runbook(
+    runbook: IngestRunbook, validate_schema: bool = False
+) -> Tuple[IngestDocument, List[RunbookStep]]:
     """
     Convert runbook to IngestDocument format and extract atomic steps.
-    
+
     Per architecture: Runbook metadata goes in documents table,
     and each step is stored as an atomic chunk.
-    
+
     Returns:
         Tuple of (IngestDocument for metadata, List[RunbookStep] for atomic steps)
     """
@@ -557,18 +586,18 @@ def normalize_runbook(runbook: IngestRunbook, validate_schema: bool = False) -> 
     if not runbook_id:
         # Generate a runbook_id if not provided
         runbook_id = f"RB-{uuid.uuid4().hex[:8].upper()}"
-    
+
     # Extract atomic steps
     steps = extract_runbook_steps(runbook, runbook_id)
-    
+
     # Build metadata content (for document table - not for embedding)
     # This is just metadata, not the actual steps
     content_parts = [f"Runbook: {runbook.title}"]
-    
+
     if runbook.prerequisites:
         prereq_text = "\n".join(f"- {p}" for p in runbook.prerequisites)
         content_parts.append(f"Prerequisites:\n{prereq_text}")
-    
+
     # Note: Steps are NOT included in content - they are stored separately as chunks
     content = "\n\n".join(content_parts)
 
@@ -608,7 +637,7 @@ def normalize_runbook(runbook: IngestRunbook, validate_schema: bool = False) -> 
         tags=tags,
         last_reviewed_at=None,
     )
-    
+
     return doc, steps
 
 

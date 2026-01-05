@@ -80,6 +80,7 @@ async def _triage_agent_state_internal(
 
     # Retrieve context
     from retrieval.hybrid_search import hybrid_search
+
     context_chunks = hybrid_search(
         query_text=query_text,
         service=service_val,
@@ -136,6 +137,7 @@ async def _triage_agent_state_internal(
 
     # Call LLM
     from ai_service.llm_client import call_llm_for_triage
+
     triage_output = call_llm_for_triage(alert, context_chunks)
     state.current_step = AgentStep.LLM_COMPLETED
     state.triage_output = triage_output
