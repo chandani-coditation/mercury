@@ -214,9 +214,9 @@ def format_evidence_chunks(
                 },
                 "metadata": metadata,
                 "scores": {
-                    "vector_score": chunk.get("vector_score"),
-                    "fulltext_score": chunk.get("fulltext_score"),
-                    "rrf_score": chunk.get("rrf_score"),
+                    "vector_score": float(chunk.get("vector_score") or 0.0),
+                    "fulltext_score": float(chunk.get("fulltext_score") or 0.0),
+                    "rrf_score": float(chunk.get("rrf_score") or 0.0),
                 },
             }
         )
@@ -299,16 +299,35 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         alert["ts"] = datetime.utcnow().isoformat()
 
     # Retrieve evidence (incident signatures and runbook metadata only)
-    # Build enhanced query text using query enhancer
+    # Build enhanced query text using query enhancer for vector search
+    # Use original query (title + description) for full-text search to avoid noise
+    # For full-text search, use only the title to avoid issues with URLs and special characters
+    # that can cause plainto_tsquery to produce empty queries
+    title = alert.get("title", "") or ""
+    description = alert.get("description", "") or ""
+    
+    # Extract key terms from description (first line only, before URLs/special content)
+    import re
+    description_lines = description.split('\n')
+    first_line = description_lines[0] if description_lines else ""
+    # Clean first line: remove special chars but keep words
+    first_line_cleaned = re.sub(r'[^\w\s-]', ' ', first_line)
+    first_line_cleaned = re.sub(r'\s+', ' ', first_line_cleaned).strip()
+    
+    # Use title + first line of description (most relevant info)
+    # This avoids URLs and KB content that breaks plainto_tsquery
+    if first_line_cleaned and len(first_line_cleaned) > 5:  # Only add if meaningful
+        fulltext_query_text = f"{title} {first_line_cleaned}".strip()
+    else:
+        fulltext_query_text = title.strip()
+    
     try:
         from retrieval.query_enhancer import enhance_query
-        query_text = enhance_query(alert)
+        query_text = enhance_query(alert)  # Enhanced query for vector search
     except Exception as e:
         # Fallback to basic query if enhancement fails
         logger.warning(f"Query enhancement failed, using basic query: {e}")
-        title = alert.get("title", "") or ""
-        description = alert.get("description", "") or ""
-        query_text = f"{title} {description}".strip()
+        query_text = fulltext_query_text
 
     labels = alert.get("labels", {}) or {}
     service_val = labels.get("service") if isinstance(labels, dict) else None
@@ -316,6 +335,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info(
         f"Starting triage: query_text='{query_text[:150]}...', "
+        f"fulltext_query_text='{fulltext_query_text[:150]}...', "
         f"service={service_val}, component={component_val} "
     )
 
@@ -346,6 +366,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             vector_weight=vector_weight,
             fulltext_weight=fulltext_weight,
             rrf_k=rrf_k,
+            fulltext_query_text=fulltext_query_text,  # Use original query for full-text search
         )
 
         # Validate retrieval boundaries (guardrail: wrong retrieval)
@@ -721,6 +742,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 "failure_type": sig.get("metadata", {}).get("failure_type"),
                 "error_class": sig.get("metadata", {}).get("error_class"),
                 "metadata": sig.get("metadata", {}),
+                "fulltext_score": sig.get("fulltext_score", 0.0),
+                "vector_score": sig.get("vector_score", 0.0),
+                "rrf_score": sig.get("rrf_score", 0.0),
             }
             for sig in incident_signatures
         ]

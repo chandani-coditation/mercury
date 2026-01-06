@@ -19,34 +19,54 @@ const allowedCategories = [
   "application",
   "infrastructure",
   "security",
+  "performance",
   "other",
 ];
 
 // Removed emptyLabels - using real test incident data instead
 
 const makeInitialAlert = () => {
-  // Sample test incident from test_incidents.csv (INC6039763)
-  // This is a real database job failure incident
+  // Sample network alert from test_incidents.csv (INC6003207)
+  // This is a real BGP peer failure network incident - exact data from CSV
   return {
-    alert_id: "INC6039763",
-    title: "SentryOne Monitoring/Alert",
-    description: `The SQL Server Agent job 'BACKUP_Native_SYS_DB_Full' failed on server BRPRWSQL506.INT.MGC.COM.
+    alert_id: "INC6003207",
+    title: "BGP Peer 173.197.165.33 not established on LV-INET-RT-B",
+    description: `Router: LV-INET-RT-B 
+Neighbor IP: 173.197.165.33 
+State: Idle
 
-Error: Unable to determine if the owner (INT\\Ssubramanian) has server access. Could not obtain information about Windows NT group/user 'INT\\Ssubramanian', error code 0x5. [SQLSTATE 42000] (Error 15404).
+Trigger Time: Friday, June 6, 2025 12:29 AM
 
-The job failed immediately (duration: 0 seconds) at 10/29/2025 7:00:00 PM. This is a database maintenance job from Ola Hallengren's maintenance solution.`,
+Router Details: https://orion.int.mgc.com:443/Orion/NetPerfMon/NodeDetails.aspx?NetObject=N:3845 
+
+
+KB: 
+
+BR-INET-RT-A
+AT&T: 12.91.173.93
+
+BR-INET-RT-B
+Spectrum: 173.197.80.1
+Lumen: 4.38.224.189
+
+LV-INET-RT-A
+AT&T: 12.124.140.25
+
+LV-INET-RT-B
+Lumen: 65.56.156.121
+Spectrum: 173.197.165.33`,
     source: "servicenow",
-    category: "Monitoring/Alert",
+    category: "network", // Network alerts category
     labels: {
-      service: "Database-SQL",
-      component: "Database",
-      cmdb_ci: "Database-SQL",
+      service: "Network",
+      component: "Router",
+      cmdb_ci: "Network", // CSV shows affected_services: ['Network']
       environment: "production",
-      severity: "high",
-      alertname: "SQLServerAgentJobFailure",
+      severity: "critical", // CSV shows severity: 'critical'
+      alertname: "BGP Peer Not Established",
     },
-    affected_services: ["Database-SQL"], // Top-level field, not in labels
-    ts: "2025-10-29T19:01:00",
+    affected_services: ["Network"], // CSV shows affected_services: ['Network']
+    ts: "2025-06-06T00:29:00", // CSV timestamp: 2025-06-06T00:29:00
   };
 };
 

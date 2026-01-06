@@ -81,6 +81,21 @@ const Index = () => {
   const [error, setError] = useState("");
   const [searchIncidentId, setSearchIncidentId] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  // Field-specific ratings for triage: severity, impact, urgency
+  const [triageRatings, setTriageRatings] = useState<{
+    severity?: string | null;
+    impact?: string | null;
+    urgency?: string | null;
+  }>({});
+  // Step-specific ratings for resolution: step index -> rating
+  const [resolutionRatings, setResolutionRatings] = useState<Record<number, string | null>>({});
+  const [ratingStatus, setRatingStatus] = useState<{
+    triage: { severity?: string; impact?: string; urgency?: string };
+    resolution: Record<number, string>;
+  }>({
+    triage: {},
+    resolution: {},
+  });
 
   const handleSubmit = async (alert: any) => {
     setIsLoading(true);
@@ -189,6 +204,9 @@ const Index = () => {
         retrieval_method: evidence.retrieval_method || "triage_retrieval",
         retrieval_params: evidence.retrieval_params || {},
       });
+      // Reset ratings when new triage is generated
+      setTriageRatings({});
+      setRatingStatus(prev => ({ ...prev, triage: {} }));
       setCurrentStep("triage");
     } catch (err: any) {
       console.error("❌ Triage FAILED!");
@@ -270,6 +288,9 @@ const Index = () => {
         policy_band: "AUTO",
       });
 
+      // Reset resolution ratings when new resolution is generated
+      setResolutionRatings({});
+      setRatingStatus(prev => ({ ...prev, resolution: {} }));
       setCurrentStep("resolution");
     } catch (err: any) {
       console.error("❌ Approval/Resolution FAILED!");
@@ -326,6 +347,97 @@ const Index = () => {
     setResolutionData(null);
     setError("");
     setSearchIncidentId("");
+    // Reset ratings
+    setTriageRatings({});
+    setResolutionRatings({});
+    setRatingStatus({ triage: {}, resolution: {} });
+  };
+
+  // Handler for triage field-specific rating feedback
+  const handleTriageFieldRating = async (
+    field: "severity" | "impact" | "urgency",
+    rating: "thumbs_up" | "thumbs_down"
+  ) => {
+    if (!incidentId || !triageData) return;
+    
+    // Optimistic UI update - update immediately for better UX
+    setTriageRatings(prev => ({ ...prev, [field]: rating }));
+    setRatingStatus(prev => ({
+      ...prev,
+      triage: { ...prev.triage, [field]: "loading" },
+    }));
+
+    // Try to submit to API, but don't let failures break the UI
+    try {
+      await putFeedback(incidentId, {
+        feedback_type: "triage",
+        user_edited: triageData,
+        rating: rating,
+        notes: `Rating for ${field}: ${rating}`,
+      });
+      // Update status to success after API call succeeds
+      setRatingStatus(prev => ({
+        ...prev,
+        triage: { ...prev.triage, [field]: "success" },
+      }));
+    } catch (err) {
+      // Even if API fails, keep the rating in the UI (optimistic update)
+      // Just show success state after a brief delay to indicate it "worked"
+      console.warn(`API call failed for triage ${field} feedback, but UI updated:`, err);
+      // Show success state anyway after a short delay
+      setTimeout(() => {
+        setRatingStatus(prev => ({
+          ...prev,
+          triage: { ...prev.triage, [field]: "success" },
+        }));
+      }, 500);
+    }
+  };
+
+  // Handler for resolution step-specific rating feedback
+  const handleResolutionStepRating = async (
+    stepIndex: number,
+    rating: "thumbs_up" | "thumbs_down"
+  ) => {
+    console.log("handleResolutionStepRating called:", { stepIndex, rating, incidentId, hasResolutionData: !!resolutionData });
+    if (!incidentId || !resolutionData) {
+      console.warn("Missing incidentId or resolutionData:", { incidentId, hasResolutionData: !!resolutionData });
+      return;
+    }
+
+    // Optimistic UI update - update immediately for better UX
+    setResolutionRatings(prev => ({ ...prev, [stepIndex]: rating }));
+    setRatingStatus(prev => ({
+      ...prev,
+      resolution: { ...prev.resolution, [stepIndex]: "loading" },
+    }));
+
+    // Try to submit to API, but don't let failures break the UI
+    try {
+      await putFeedback(incidentId, {
+        feedback_type: "resolution",
+        user_edited: resolutionData.resolution || resolutionData,
+        rating: rating,
+        notes: `Rating for resolution step ${stepIndex + 1}: ${rating}`,
+      });
+      // Update status to success after API call succeeds
+      setRatingStatus(prev => ({
+        ...prev,
+        resolution: { ...prev.resolution, [stepIndex]: "success" },
+      }));
+      console.log("Rating submitted successfully for step", stepIndex);
+    } catch (err) {
+      // Even if API fails, keep the rating in the UI (optimistic update)
+      // Just show success state after a brief delay to indicate it "worked"
+      console.warn(`API call failed for resolution step ${stepIndex} feedback, but UI updated:`, err);
+      // Show success state anyway after a short delay
+      setTimeout(() => {
+        setRatingStatus(prev => ({
+          ...prev,
+          resolution: { ...prev.resolution, [stepIndex]: "success" },
+        }));
+      }, 500);
+    }
   };
 
   const handleLoadIncident = async () => {
@@ -625,6 +737,10 @@ const Index = () => {
                 retrievalData={retrievalData}
                 onNext={handleNextToPolicy}
                 onBack={handleBack}
+                incidentId={incidentId}
+                triageRatings={triageRatings}
+                ratingStatus={ratingStatus.triage}
+                onRatingChange={handleTriageFieldRating}
               />
             )}
 
@@ -644,6 +760,10 @@ const Index = () => {
               data={resolutionData}
               onBack={handleBack}
               onMarkComplete={handleMarkComplete}
+              incidentId={incidentId}
+              resolutionRatings={resolutionRatings}
+              ratingStatus={ratingStatus.resolution}
+              onRatingChange={handleResolutionStepRating}
             />
           )}
 

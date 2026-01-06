@@ -11,6 +11,21 @@ interface ResultsPanelProps {
   policyData: any;
   retrievalData: any;
   onHide?: () => void;
+  incidentId?: string;
+  triageRatings?: {
+    severity?: string | null;
+    impact?: string | null;
+    urgency?: string | null;
+  };
+  ratingStatus?: {
+    severity?: string;
+    impact?: string;
+    urgency?: string;
+  };
+  onRatingChange?: (
+    field: "severity" | "impact" | "urgency",
+    rating: "thumbs_up" | "thumbs_down"
+  ) => void;
 }
 
 export const ResultsPanel = ({
@@ -18,6 +33,10 @@ export const ResultsPanel = ({
   policyData,
   retrievalData,
   onHide,
+  incidentId,
+  triageRatings,
+  ratingStatus,
+  onRatingChange,
 }: ResultsPanelProps) => {
   const [activeTab, setActiveTab] = useState("triage");
 
@@ -76,7 +95,13 @@ export const ResultsPanel = ({
 
         <div className="glass-card p-6 glow-border">
           <TabsContent value="triage" className="mt-0">
-            <TriageTab data={triageData} />
+            <TriageTab
+              data={triageData}
+              incidentId={incidentId}
+              triageRatings={triageRatings}
+              ratingStatus={ratingStatus}
+              onRatingChange={onRatingChange}
+            />
           </TabsContent>
           <TabsContent value="policy" className="mt-0">
             <PolicyTab data={policyData} />

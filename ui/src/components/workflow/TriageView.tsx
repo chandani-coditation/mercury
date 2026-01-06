@@ -8,6 +8,21 @@ interface TriageViewProps {
   retrievalData: any;
   onNext: () => void;
   onBack: () => void;
+  incidentId?: string;
+  triageRatings?: {
+    severity?: string | null;
+    impact?: string | null;
+    urgency?: string | null;
+  };
+  ratingStatus?: {
+    severity?: string;
+    impact?: string;
+    urgency?: string;
+  };
+  onRatingChange?: (
+    field: "severity" | "impact" | "urgency",
+    rating: "thumbs_up" | "thumbs_down"
+  ) => void;
 }
 
 export const TriageView = ({
@@ -16,6 +31,10 @@ export const TriageView = ({
   retrievalData,
   onNext,
   onBack,
+  incidentId,
+  triageRatings,
+  ratingStatus,
+  onRatingChange,
 }: TriageViewProps) => {
   return (
     <div className="space-y-6">
@@ -24,6 +43,10 @@ export const TriageView = ({
         triageData={triageData}
         policyData={policyData}
         retrievalData={retrievalData}
+        incidentId={incidentId}
+        triageRatings={triageRatings}
+        ratingStatus={ratingStatus}
+        onRatingChange={onRatingChange}
       />
 
       {/* Navigation Buttons */}

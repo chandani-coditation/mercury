@@ -7,6 +7,8 @@ import {
   Terminal,
   Shield,
   Check,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,12 +26,116 @@ interface ResolutionViewProps {
   data: any;
   onBack: () => void;
   onMarkComplete: () => void;
+  incidentId?: string;
+  resolutionRatings?: Record<number, string | null>;
+  ratingStatus?: Record<number, string>;
+  onRatingChange?: (stepIndex: number, rating: "thumbs_up" | "thumbs_down") => void;
 }
+
+// Rating buttons component for resolution steps
+const StepRatingButtons = ({
+  stepIndex,
+  rating,
+  ratingStatus,
+  onRatingChange,
+  disabled,
+}: {
+  stepIndex: number;
+  rating?: string | null;
+  ratingStatus?: string;
+  onRatingChange?: (stepIndex: number, rating: "thumbs_up" | "thumbs_down") => void;
+  disabled?: boolean;
+}) => {
+  if (!onRatingChange) {
+    console.warn("StepRatingButtons: onRatingChange is not provided for step", stepIndex);
+    return null;
+  }
+
+  const handleClick = (ratingType: "thumbs_up" | "thumbs_down") => {
+    console.log(`🔥 Button clicked: ${ratingType} for step ${stepIndex}`);
+    if (onRatingChange) {
+      // Call the handler - it will handle optimistic updates and API calls
+      onRatingChange(stepIndex, ratingType);
+      console.log("✅ onRatingChange called successfully");
+    } else {
+      console.warn("❌ onRatingChange is not available");
+    }
+  };
+
+  return (
+    <div 
+      className="flex items-center gap-1.5" 
+      style={{ 
+        position: "relative", 
+        zIndex: 9999,
+        pointerEvents: "auto",
+      }}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log("🔥 Button element clicked - thumbs_up");
+          handleClick("thumbs_up");
+        }}
+        disabled={disabled || ratingStatus === "loading"}
+        className={`h-8 w-8 p-0 ${
+          rating === "thumbs_up"
+            ? "bg-success/20 text-success border border-success"
+            : "hover:bg-secondary/50"
+        }`}
+        title="Thumbs up - Rate this step"
+        style={{ 
+          pointerEvents: "auto", 
+          zIndex: 9999,
+          position: "relative",
+        }}
+      >
+        <span style={{ fontSize: "16px" }}>👍</span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log("🔥 Button element clicked - thumbs_down");
+          handleClick("thumbs_down");
+        }}
+        disabled={disabled || ratingStatus === "loading"}
+        className={`h-8 w-8 p-0 ${
+          rating === "thumbs_down"
+            ? "bg-destructive/20 text-destructive border border-destructive"
+            : "hover:bg-secondary/50"
+        }`}
+        title="Thumbs down - Rate this step"
+        style={{ 
+          pointerEvents: "auto", 
+          zIndex: 9999,
+          position: "relative",
+        }}
+      >
+        <span style={{ fontSize: "16px" }}>👎</span>
+      </Button>
+      {ratingStatus === "success" && (
+        <span className="text-xs text-success ml-1">✓</span>
+      )}
+    </div>
+  );
+};
 
 export const ResolutionView = ({
   data,
   onBack,
   onMarkComplete,
+  incidentId,
+  resolutionRatings,
+  ratingStatus,
+  onRatingChange,
 }: ResolutionViewProps) => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
@@ -37,7 +143,35 @@ export const ResolutionView = ({
 
   // New structure: steps array with objects (new format)
   // Format: [{ step_number, title, action, expected_outcome }, ...]
-  const stepsArray = resolution.steps || [];
+  // Filter out steps with empty/null/missing actions and renumber sequentially
+  const allSteps = resolution.steps || [];
+  
+  // Filter out steps with empty/null/missing actions
+  const validStepsWithOriginalIndex = allSteps
+    .map((step: any, originalIndex: number) => ({ step, originalIndex }))
+    .filter(({ step }: { step: any }) => {
+      const action = step.action || "";
+      return action.trim().length > 0;
+    });
+  
+  // Renumber the valid steps sequentially starting from 1, but keep original index for rating lookup
+  const stepsArray = validStepsWithOriginalIndex.map(({ step, originalIndex }: { step: any; originalIndex: number }, displayIndex: number) => ({
+    ...step,
+    step_number: displayIndex + 1, // Sequential numbering starting from 1
+    originalIndex, // Keep original index for rating lookup
+    displayIndex, // Display index (0-based for filtered array)
+  }));
+
+  // Debug logging - remove in production
+  if (process.env.NODE_ENV === "development") {
+    console.log("ResolutionView props:", {
+      incidentId,
+      hasOnRatingChange: !!onRatingChange,
+      resolutionRatings,
+      ratingStatus,
+      stepsCount: stepsArray.length,
+    });
+  }
 
   const overallConfidence =
     resolution.overall_confidence || resolution.confidence;
@@ -113,20 +247,22 @@ export const ResolutionView = ({
       )}
 
       {/* Resolution Recommendations */}
-      <Card className="p-6 glass-card glow-border">
-        <div className="space-y-4">
+      <Card className="p-6 glass-card glow-border" style={{ position: "relative", pointerEvents: "auto" }}>
+        <div className="space-y-4" style={{ position: "relative", pointerEvents: "auto" }}>
           <h3 className="font-semibold text-foreground flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-success" />
             Resolution Recommendations
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-3" style={{ position: "relative", pointerEvents: "auto" }}>
             {stepsArray.length > 0 ? (
-              // New format: steps array with objects
-              stepsArray.map((step: any, index: number) => {
-                const stepNumber = step.step_number || index + 1;
+              // New format: steps array with objects (already filtered and renumbered)
+              stepsArray.map((step: any, displayIndex: number) => {
+                const stepNumber = step.step_number || displayIndex + 1;
                 const stepTitle = step.title || "";
                 const stepAction = step.action || "";
                 const stepExpectedOutcome = step.expected_outcome || "";
+                // Use originalIndex for rating lookup to match the original step position in the array
+                const ratingIndex = step.originalIndex !== undefined ? step.originalIndex : displayIndex;
                 const stepCommands =
                   commands[stepNumber - 1] ||
                   commands[(stepNumber - 1).toString()] ||
@@ -135,21 +271,50 @@ export const ResolutionView = ({
 
                 return (
                   <div
-                    key={stepNumber}
+                    key={`step-${stepNumber}-${displayIndex}`}
                     className="bg-background/50 border border-border/30 rounded-lg p-4 hover:border-primary/30 transition-colors"
+                    style={{ position: "relative" }}
                   >
                     <div className="flex items-start gap-3">
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
                         {stepNumber}
                       </span>
                       <div className="flex-1 space-y-2">
-                        {stepTitle && (
-                          <div>
-                            <h4 className="text-sm font-semibold text-foreground">
-                              {stepTitle}
-                            </h4>
+                        <div className="flex items-start justify-between gap-2" style={{ position: "relative" }}>
+                          <div className="flex-1">
+                            {stepTitle && (
+                              <div>
+                                <h4 className="text-sm font-semibold text-foreground">
+                                  {stepTitle}
+                                </h4>
+                              </div>
+                            )}
+                            {!stepTitle && stepAction && (
+                              <div>
+                                <h4 className="text-sm font-semibold text-foreground">
+                                  Step {stepNumber}
+                                </h4>
+                              </div>
+                            )}
                           </div>
-                        )}
+                          <div 
+                            style={{ 
+                              position: "relative", 
+                              zIndex: 9999, 
+                              pointerEvents: "auto",
+                              flexShrink: 0
+                            }}
+                          >
+                            {incidentId && onRatingChange ? (
+                              <StepRatingButtons
+                                stepIndex={ratingIndex}
+                                rating={resolutionRatings?.[ratingIndex] ?? null}
+                                ratingStatus={ratingStatus?.[ratingIndex]}
+                                onRatingChange={onRatingChange}
+                              />
+                            ) : null}
+                          </div>
+                        </div>
                         <div>
                           <span className="text-xs font-semibold text-muted-foreground">
                             Action:{" "}

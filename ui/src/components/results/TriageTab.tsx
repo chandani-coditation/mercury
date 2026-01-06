@@ -38,14 +38,96 @@ interface TriageData {
 
 interface TriageTabProps {
   data: TriageData;
+  incidentId?: string;
+  triageRatings?: {
+    severity?: string | null;
+    impact?: string | null;
+    urgency?: string | null;
+  };
+  ratingStatus?: {
+    severity?: string;
+    impact?: string;
+    urgency?: string;
+  };
+  onRatingChange?: (
+    field: "severity" | "impact" | "urgency",
+    rating: "thumbs_up" | "thumbs_down"
+  ) => void;
 }
 
-export const TriageTab = ({ data }: TriageTabProps) => {
+// Rating buttons component
+const RatingButtons = ({
+  field,
+  rating,
+  ratingStatus,
+  onRatingChange,
+  disabled,
+}: {
+  field: "severity" | "impact" | "urgency";
+  rating?: string | null;
+  ratingStatus?: string;
+  onRatingChange?: (field: "severity" | "impact" | "urgency", rating: "thumbs_up" | "thumbs_down") => void;
+  disabled?: boolean;
+}) => {
+  if (!onRatingChange) return null;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => onRatingChange(field, "thumbs_up")}
+        disabled={disabled || ratingStatus === "loading"}
+        className={`flex items-center justify-center w-7 h-7 rounded-md border transition-all ${
+          rating === "thumbs_up"
+            ? "border-success bg-success/20 text-success"
+            : "border-border/50 bg-background/50 hover:bg-secondary/50 text-muted-foreground"
+        } ${ratingStatus === "loading" || disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+        title="Thumbs up"
+      >
+        <span className="text-sm">👍</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => onRatingChange(field, "thumbs_down")}
+        disabled={disabled || ratingStatus === "loading"}
+        className={`flex items-center justify-center w-7 h-7 rounded-md border transition-all ${
+          rating === "thumbs_down"
+            ? "border-destructive bg-destructive/20 text-destructive"
+            : "border-border/50 bg-background/50 hover:bg-secondary/50 text-muted-foreground"
+        } ${ratingStatus === "loading" || disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+        title="Thumbs down"
+      >
+        <span className="text-sm">👎</span>
+      </button>
+      {ratingStatus === "success" && (
+        <span className="text-xs text-success">✓</span>
+      )}
+    </div>
+  );
+};
+
+export const TriageTab = ({
+  data,
+  incidentId,
+  triageRatings,
+  ratingStatus,
+  onRatingChange,
+}: TriageTabProps) => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header with Severity and Category */}
       <div className="flex flex-wrap items-center gap-3">
-        <SeverityBadge severity={data.severity} />
+        <div className="flex items-center gap-2">
+          <SeverityBadge severity={data.severity} />
+          {incidentId && onRatingChange && (
+            <RatingButtons
+              field="severity"
+              rating={triageRatings?.severity}
+              ratingStatus={ratingStatus?.severity}
+              onRatingChange={onRatingChange}
+            />
+          )}
+        </div>
         {data.category && (
           <div className="px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-sm font-medium">
             {data.category}
@@ -92,11 +174,29 @@ export const TriageTab = ({ data }: TriageTabProps) => {
         <div className="grid grid-cols-2 gap-3">
           {data.impact && (
             <div className="space-y-2">
-              <InfoCard icon={TrendingUp} title="Impact">
-                <span className="text-sm font-semibold text-primary">
-                  {data.impact}
-                </span>
-              </InfoCard>
+              <div className="glass-card p-5 space-y-3 animate-slide-up">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <TrendingUp className="w-4 h-4 text-primary" />
+                    </div>
+                    <h4 className="font-semibold text-foreground">Impact</h4>
+                  </div>
+                  {incidentId && onRatingChange && (
+                    <RatingButtons
+                      field="impact"
+                      rating={triageRatings?.impact}
+                      ratingStatus={ratingStatus?.impact}
+                      onRatingChange={onRatingChange}
+                    />
+                  )}
+                </div>
+                <div className="text-sm text-foreground leading-relaxed">
+                  <span className="text-sm font-semibold text-primary">
+                    {data.impact}
+                  </span>
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
                 <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <span>
@@ -108,11 +208,29 @@ export const TriageTab = ({ data }: TriageTabProps) => {
           )}
           {data.urgency && (
             <div className="space-y-2">
-              <InfoCard icon={TrendingUp} title="Urgency">
-                <span className="text-sm font-semibold text-primary">
-                  {data.urgency}
-                </span>
-              </InfoCard>
+              <div className="glass-card p-5 space-y-3 animate-slide-up">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <TrendingUp className="w-4 h-4 text-primary" />
+                    </div>
+                    <h4 className="font-semibold text-foreground">Urgency</h4>
+                  </div>
+                  {incidentId && onRatingChange && (
+                    <RatingButtons
+                      field="urgency"
+                      rating={triageRatings?.urgency}
+                      ratingStatus={ratingStatus?.urgency}
+                      onRatingChange={onRatingChange}
+                    />
+                  )}
+                </div>
+                <div className="text-sm text-foreground leading-relaxed">
+                  <span className="text-sm font-semibold text-primary">
+                    {data.urgency}
+                  </span>
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
                 <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <span>

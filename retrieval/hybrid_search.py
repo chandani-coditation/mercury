@@ -84,6 +84,7 @@ def hybrid_search(
     vector_weight: float = 0.7,
     fulltext_weight: float = 0.3,
     rrf_k: int = 60,
+    fulltext_query_text: Optional[str] = None,
 ) -> List[Dict]:
     """
     Perform hybrid search using RRF (Reciprocal Rank Fusion).
@@ -101,6 +102,8 @@ def hybrid_search(
     """
     # Normalize and validate parameters
     query_text = _normalize_query_text(query_text)
+    # Use simpler query for full-text search if provided, otherwise use query_text for both
+    fulltext_query = _normalize_query_text(fulltext_query_text) if fulltext_query_text is not None else query_text
     limit = _normalize_limit(limit, default=10)  # Increased default from 5 to 10
     rrf_k = _normalize_limit(rrf_k, default=HybridSearchQueryBuilder.DEFAULT_RRF_K)
     
@@ -111,6 +114,7 @@ def hybrid_search(
     start_time = time.time()
     logger.debug(
         f"Starting hybrid search: query='{query_text[:100]}...', "
+        f"fulltext_query='{fulltext_query[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
     
@@ -181,7 +185,9 @@ def hybrid_search(
                 ROW_NUMBER() OVER (ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s)) DESC) as fulltext_rank
             FROM chunks c
             JOIN documents d ON c.document_id = d.id
-            WHERE c.tsv @@ plainto_tsquery('english', %s)
+            WHERE c.tsv IS NOT NULL
+            AND length(plainto_tsquery('english', %s)::text) > 0
+            AND c.tsv @@ plainto_tsquery('english', %s)
             {filter_clause}
             ORDER BY ts_rank(c.tsv, plainto_tsquery('english', %s)) DESC
             LIMIT %s
@@ -236,11 +242,12 @@ def hybrid_search(
             # 4: limit (vector_results)
             # 5: text (fulltext_score)
             # 6: text (fulltext_rank)
-            # 7: text (WHERE)
-            # 8: text (ORDER BY)
-            # 9: limit (fulltext_results)
-            # 10-15: Service/component match boost params (service_val check, service_val exact, service_val partial, component_val check, component_val exact, component_val partial)
-            # 16: final limit
+            # 7: text (WHERE - first plainto_tsquery)
+            # 8: text (WHERE - empty check)
+            # 9: text (ORDER BY)
+            # 10: limit (fulltext_results)
+            # 11-16: Service/component match boost params (service_val check, service_val exact, service_val partial, component_val check, component_val exact, component_val partial)
+            # 17: final limit
             exec_params = []
 
             # Calculate RRF candidate limit (higher multiplier for better fusion results)
@@ -252,24 +259,30 @@ def hybrid_search(
             exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
             exec_params.append(candidate_limit)  # 4: vector_results limit (improved multiplier)
 
-            # Fulltext results params
-            exec_params.append(query_text)  # 5: fulltext_score text
-            exec_params.append(query_text)  # 6: fulltext_rank text
-            exec_params.append(query_text)  # 7: WHERE text
-            exec_params.append(query_text)  # 8: ORDER BY text
-            exec_params.append(candidate_limit)  # 9: fulltext_results limit (improved multiplier)
+            # Fulltext results params - use simpler query for full-text search
+            exec_params.append(fulltext_query)  # 5: fulltext_score text
+            exec_params.append(fulltext_query)  # 6: fulltext_rank text
+            exec_params.append(fulltext_query)  # 7: WHERE text (first plainto_tsquery)
+            exec_params.append(fulltext_query)  # 8: WHERE text (empty check)
+            exec_params.append(fulltext_query)  # 9: ORDER BY text
+            exec_params.append(candidate_limit)  # 10: fulltext_results limit (improved multiplier)
 
             # Soft filter boost params (using centralized builder)
             exec_params.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
-            )  # 10-15: Service and component boost params
+            )  # 11-16: Service and component boost params
 
             # Final limit
-            exec_params.append(limit)  # 16: final limit
+            exec_params.append(limit)  # 17: final limit
 
             # CRITICAL: Verify we have exactly the right number of parameters
-            # Base: 16 params (9 for search + 6 for soft filter boosts + 1 for final limit)
-            expected_params = 16
+            # Base: 17 params (10 for search + 6 for soft filter boosts + 1 for final limit)
+            # Vector: 3 (score, rank, order by) + 1 (limit) = 4
+            # Fulltext: 5 (score, rank, empty check, @@, order by) + 1 (limit) = 6
+            # Service boost: 3 params, Component boost: 3 params = 6
+            # Final limit: 1
+            # Total: 4 + 6 + 6 + 1 = 17
+            expected_params = 17
 
             if len(exec_params) != expected_params:
                 raise ValueError(
@@ -281,7 +294,7 @@ def hybrid_search(
 
             # Validate parameter count using centralized validator
             is_valid, error_msg = HybridSearchQueryBuilder.validate_parameter_count(
-                query, exec_params, expected_count=16
+                query, exec_params, expected_count=17
             )
             if not is_valid:
                 logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
@@ -459,6 +472,7 @@ def triage_retrieval(
     vector_weight: float = 0.7,
     fulltext_weight: float = 0.3,
     rrf_k: int = 60,
+    fulltext_query_text: Optional[str] = None,
 ) -> Dict[str, List[Dict]]:
     """
     Specialized retrieval for triage agent.
@@ -481,8 +495,11 @@ def triage_retrieval(
         - 'runbook_metadata': List of runbook document metadata (not steps)
     """
     start_time = time.time()
+    # Use simpler query for full-text search if provided, otherwise use query_text for both
+    fulltext_query = fulltext_query_text if fulltext_query_text is not None else query_text
     logger.debug(
         f"Starting triage retrieval: query='{query_text[:100]}...', "
+        f"fulltext_query='{fulltext_query[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
     
@@ -590,7 +607,9 @@ def triage_retrieval(
                 ts_rank(s.tsv, plainto_tsquery('english', %s::text)) as fulltext_score,
                 ROW_NUMBER() OVER (ORDER BY ts_rank(s.tsv, plainto_tsquery('english', %s::text)) DESC) as fulltext_rank
             FROM incident_signatures s
-            WHERE s.tsv @@ plainto_tsquery('english', %s::text)
+            WHERE s.tsv IS NOT NULL
+            AND length(plainto_tsquery('english', %s::text)::text) > 0
+            AND s.tsv @@ plainto_tsquery('english', %s::text)
             {filter_clause}
             ORDER BY ts_rank(s.tsv, plainto_tsquery('english', %s::text)) DESC
             LIMIT %s
@@ -648,18 +667,19 @@ def triage_retrieval(
             sig_params.append(query_embedding_str)  # 2: vector_rank
             sig_params.append(query_embedding_str)  # 3: vector ORDER BY
             sig_params.append(candidate_limit)  # 4: vector limit (improved multiplier)
-            # Fulltext CTE
-            sig_params.append(str(query_text))  # 5: fulltext_score
-            sig_params.append(str(query_text))  # 6: fulltext_rank
-            sig_params.append(str(query_text))  # 7: fulltext WHERE
-            sig_params.append(str(query_text))  # 8: fulltext ORDER BY
-            sig_params.append(candidate_limit)  # 9: fulltext limit (improved multiplier)
+            # Fulltext CTE - use simpler query for full-text search
+            sig_params.append(str(fulltext_query))  # 5: fulltext_score
+            sig_params.append(str(fulltext_query))  # 6: fulltext_rank
+            sig_params.append(str(fulltext_query))  # 7: fulltext WHERE (first plainto_tsquery)
+            sig_params.append(str(fulltext_query))  # 8: fulltext WHERE (empty check)
+            sig_params.append(str(fulltext_query))  # 9: fulltext ORDER BY
+            sig_params.append(candidate_limit)  # 10: fulltext limit (improved multiplier)
             # Soft filter boost params (using centralized builder for dual service matching)
             sig_params.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(service_val, component_val)
-            )  # 10-17: Service (dual) and component boost params
+            )  # 11-18: Service (dual) and component boost params
             # Final limit
-            sig_params.append(limit)  # 18: final limit
+            sig_params.append(limit)  # 19: final limit
             print("incident_sig_query: ", incident_sig_query)
             print("sig_params: ", sig_params)
             # Execute incident signatures query
@@ -780,7 +800,7 @@ def triage_retrieval(
             # Retrieve runbook metadata (documents only, NOT steps)
             # Runbook metadata is in documents table, not chunks
             # PHASE 1: No hard filters - use soft filter boosts in ORDER BY
-            runbook_params = [query_text]  # For full-text search
+            runbook_params = [fulltext_query]  # For full-text search (use simpler query)
 
             # PHASE 1: Soft Filters - Remove hard WHERE filters for runbook metadata
             # Service/component are now used as relevance boosters, not WHERE filters
@@ -815,9 +835,9 @@ def triage_retrieval(
             """
 
             # Build params for runbook metadata query with soft filter boosts
-            # Query params: query_text, soft filter boosts (SELECT only), limit
+            # Query params: fulltext_query, soft filter boosts (SELECT only), limit
             # Note: ORDER BY doesn't use parameters - it just references the calculated columns
-            runbook_params_extended = [query_text]  # 1: fulltext search
+            runbook_params_extended = [fulltext_query]  # 1: fulltext search (use simpler query)
             # Add soft filter boost params for SELECT only (6 params: 3 for service, 3 for component)
             runbook_params_extended.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)

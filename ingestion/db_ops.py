@@ -788,6 +788,8 @@ def insert_incident_signature(
     signature: IncidentSignature,
     source_incident_id: Optional[str] = None,
     source_document_id: Optional[str] = None,
+    incident_title: Optional[str] = None,
+    incident_description: Optional[str] = None,
 ) -> str:
     """
     Insert incident signature into incident_signatures table.
@@ -833,15 +835,27 @@ def insert_incident_signature(
             source_incident_ids_array = [source_incident_id] if source_incident_id else []
 
             # Insert signature into incident_signatures table
+            # Build tsv text for full-text search - include title/description for better matching
+            tsv_text = (
+                f"{signature.failure_type or ''} "
+                f"{signature.error_class or ''} "
+                f"{signature.assignment_group or ''} "
+                f"{signature.impact or ''} "
+                f"{signature.urgency or ''} "
+                f"{' '.join(signature.symptoms) if signature.symptoms else ''} "
+                f"{incident_title or ''} "
+                f"{incident_description or ''}"
+            ).strip()
+            
             signature_id = uuid.uuid4()
             cur.execute(
                 """
                 INSERT INTO incident_signatures (
                     id, incident_signature_id, failure_type, error_class, symptoms,
                     affected_service, service, component, assignment_group, impact, urgency, close_notes, resolution_refs, embedding,
-                    source_incident_ids, source_document_id, last_seen_at
+                    source_incident_ids, source_document_id, last_seen_at, tsv
                 )
-                VALUES (%s, %s, %s, %s, %s::TEXT[], %s, %s, %s, %s, %s, %s, %s, %s::TEXT[], %s::vector, %s::TEXT[], %s, %s)
+                VALUES (%s, %s, %s, %s, %s::TEXT[], %s, %s, %s, %s, %s, %s, %s, %s::TEXT[], %s::vector, %s::TEXT[], %s, %s, to_tsvector('english', %s))
                 ON CONFLICT (incident_signature_id) DO UPDATE SET
                     failure_type = EXCLUDED.failure_type,
                     error_class = EXCLUDED.error_class,
@@ -859,7 +873,17 @@ def insert_incident_signature(
                     source_document_id = COALESCE(EXCLUDED.source_document_id, incident_signatures.source_document_id),
                     last_seen_at = EXCLUDED.last_seen_at,
                     match_count = incident_signatures.match_count + 1,
-                    updated_at = now()
+                    updated_at = now(),
+                    tsv = to_tsvector('english', 
+                        COALESCE(EXCLUDED.failure_type, '') || ' ' || 
+                        COALESCE(EXCLUDED.error_class, '') || ' ' || 
+                        COALESCE(EXCLUDED.assignment_group, '') || ' ' ||
+                        COALESCE(EXCLUDED.impact, '') || ' ' ||
+                        COALESCE(EXCLUDED.urgency, '') || ' ' ||
+                        COALESCE(array_to_string(EXCLUDED.symptoms, ' '), '') || ' ' ||
+                        COALESCE(%s, '') || ' ' ||
+                        COALESCE(%s, '')
+                    )
                 """,
                 (
                     signature_id,
@@ -879,6 +903,9 @@ def insert_incident_signature(
                     source_incident_ids_array,
                     source_document_id,
                     datetime.now(),  # last_seen_at
+                    tsv_text,  # tsv text for full-text search
+                    incident_title or '',  # For ON CONFLICT UPDATE
+                    incident_description or '',  # For ON CONFLICT UPDATE
                 ),
             )
 

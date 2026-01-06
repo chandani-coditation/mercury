@@ -141,6 +141,8 @@ def ingest_incident(incident: IngestIncident):
             signature,
             source_incident_id=incident.incident_id,
             source_document_id=None,  # We don't create a document for signatures
+            incident_title=incident.title,
+            incident_description=incident.description,
         )
         logger.info(
             f"Incident signature ingested successfully: signature_id={signature_id}, signature_id={signature.incident_signature_id}"
