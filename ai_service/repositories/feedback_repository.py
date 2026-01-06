@@ -20,6 +20,7 @@ class FeedbackRepository:
         system_output: dict,
         user_edited: dict,
         notes: Optional[str] = None,
+        rating: Optional[str] = None,
     ) -> str:
         """
         Create a new feedback record.
@@ -30,6 +31,7 @@ class FeedbackRepository:
             system_output: Original system output
             user_edited: User-edited output
             notes: Optional notes from user
+            rating: Optional rating ('thumbs_up' or 'thumbs_down')
 
         Returns:
             Feedback ID
@@ -47,10 +49,14 @@ class FeedbackRepository:
             # Compute diff (simple JSON diff)
             diff = {"original": system_output, "edited": user_edited}
 
+            # Validate rating if provided
+            if rating and rating not in ["thumbs_up", "thumbs_down"]:
+                raise ValueError(f"Invalid rating: {rating}. Must be 'thumbs_up' or 'thumbs_down'")
+            
             cur.execute(
                 """
-                INSERT INTO feedback (id, incident_id, feedback_type, system_output, user_edited, diff, notes)
-                VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+                INSERT INTO feedback (id, incident_id, feedback_type, system_output, user_edited, diff, notes, rating)
+                VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
                 """,
                 (
                     feedback_id,
@@ -60,6 +66,7 @@ class FeedbackRepository:
                     json.dumps(user_edited),
                     json.dumps(diff),
                     notes,
+                    rating,
                 ),
             )
 
@@ -108,7 +115,7 @@ class FeedbackRepository:
         try:
             cur.execute(
                 """
-                SELECT id, incident_id, feedback_type, system_output, user_edited, diff, notes, created_at
+                SELECT id, incident_id, feedback_type, system_output, user_edited, diff, notes, rating, created_at
                 FROM feedback
                 WHERE created_at >= %s AND created_at <= %s
                 ORDER BY created_at ASC
@@ -127,7 +134,8 @@ class FeedbackRepository:
                         "user_edited": r[4],
                         "diff": r[5],
                         "notes": r[6],
-                        "created_at": r[7].isoformat() if r[7] else None,
+                        "rating": r[7],
+                        "created_at": r[8].isoformat() if r[8] else None,
                     }
                 )
             logger.debug(f"Listed {len(results)} feedback records")

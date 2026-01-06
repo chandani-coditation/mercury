@@ -65,6 +65,7 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
             system_output=system_output,
             user_edited=feedback.user_edited,
             notes=feedback.notes,
+            rating=feedback.rating,
         )
 
         # If user provided user_edited triage_output, update the incident with it

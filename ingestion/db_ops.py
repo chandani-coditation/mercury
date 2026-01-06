@@ -181,10 +181,14 @@ def insert_document_and_chunks(
             )
 
         # Generate embeddings in batches (much faster for large documents)
-        # Use batch size of 50 for safety (OpenAI supports up to 2048, but we want to avoid rate limits)
+        # Load batch size from config (graceful degradation if config missing)
         from ingestion.embeddings import embed_texts_batch
-
-        batch_size = 50 if len(chunks_with_headers) > 10 else len(chunks_with_headers)
+        try:
+            from ingestion.normalizers import INGESTION_CONFIG
+            default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
+        except Exception:
+            default_batch_size = 50  # Fallback to default
+        batch_size = default_batch_size if len(chunks_with_headers) > 10 else len(chunks_with_headers)
         embeddings = embed_texts_batch(
             chunks_with_headers, model=embedding_model, batch_size=batch_size
         )
@@ -234,7 +238,7 @@ def insert_document_and_chunks(
         conn.close()
 
 
-def _create_runbook_step_embedding_text(step: RunbookStep) -> str:
+def _create_runbook_step_embedding_text(step: RunbookStep, prerequisites: Optional[List[str]] = None) -> str:
     """
     Create embedding text for a runbook step.
 
@@ -243,9 +247,16 @@ def _create_runbook_step_embedding_text(step: RunbookStep) -> str:
     - Condition (when this step applies)
     - Action (what to do)
     - Expected outcome
+    - Prerequisites (what must be true before this step)
+    - Rollback procedures
     - Failure patterns this addresses
     """
     parts = []
+
+    # Prerequisites - important context for when step applies
+    if prerequisites:
+        prereq_text = ", ".join(prerequisites)
+        parts.append(f"Prerequisites: {prereq_text}")
 
     # Condition (when this applies) - critical for matching
     if step.condition:
@@ -257,10 +268,6 @@ def _create_runbook_step_embedding_text(step: RunbookStep) -> str:
     # Expected outcome - helps with validation
     if step.expected_outcome:
         parts.append(f"Expected Outcome: {step.expected_outcome}")
-
-    # Risk level - important for decision making
-    if step.risk_level:
-        parts.append(f"Risk Level: {step.risk_level}")
 
     # Rollback - important for safety
     if step.rollback:
@@ -338,6 +345,7 @@ def insert_runbook_with_steps(
     tags: dict,
     last_reviewed_at: Optional[datetime],
     steps: List[RunbookStep],
+    prerequisites: Optional[List[str]] = None,
 ) -> str:
     """
     Insert runbook metadata and atomic steps into database.
@@ -406,7 +414,13 @@ def insert_runbook_with_steps(
                     step_id=f"{tags.get('runbook_id', 'RB-UNKNOWN')}-S1",
                     runbook_id=tags.get("runbook_id", "RB-UNKNOWN"),
                     condition="Runbook applies",
-                    action=content.strip()[:2000],  # Limit to 2000 chars
+                    # Load max length from config (graceful degradation if config missing)
+                    try:
+                        from ingestion.normalizers import INGESTION_CONFIG
+                        max_action_length = INGESTION_CONFIG.get("formatting", {}).get("max_fallback_action_length", 2000)
+                    except Exception:
+                        max_action_length = 2000  # Fallback to default
+                    action=content.strip()[:max_action_length],  # Limit from config
                     expected_outcome=None,
                     rollback=None,
                     risk_level=None,
@@ -443,13 +457,19 @@ def insert_runbook_with_steps(
         step_texts = []
 
         for step in steps:
-            # Create embedding text for this step
-            step_text = _create_runbook_step_embedding_text(step)
+            # Create embedding text for this step (include prerequisites from runbook)
+            step_text = _create_runbook_step_embedding_text(step, prerequisites=prerequisites)
             step_texts.append(step_text)
 
         # Generate embeddings for all steps in batch
         embedding_model = DEFAULT_MODEL
-        batch_size = min(50, len(step_texts))
+        # Load batch size from config (graceful degradation if config missing)
+        try:
+            from ingestion.normalizers import INGESTION_CONFIG
+            default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
+        except Exception:
+            default_batch_size = 50  # Fallback to default
+        batch_size = min(default_batch_size, len(step_texts))
         embeddings = embed_texts_batch(step_texts, model=embedding_model, batch_size=batch_size)
 
         if not embeddings or len(embeddings) != len(step_texts):
@@ -643,33 +663,37 @@ def insert_runbook_with_steps(
                 step = steps[0]
                 step_text = _create_runbook_step_embedding_text(step)
                 embedding = embeddings[0] if embeddings else embed_text(step_text)
-                embedding_str = "[" + ",".join(map(str, embedding)) + "]"
+                if embedding is None:
+                    logger.error(f"Failed to generate embedding for fallback chunk. Skipping chunk creation.")
+                    # Skip chunk creation if embedding fails - no chunk will be created
+                else:
+                    embedding_str = "[" + ",".join(map(str, embedding)) + "]"
 
-                metadata_dict = {
-                    "doc_type": "runbook_step",
-                    "step_id": step.step_id,
-                    "runbook_id": step.runbook_id,
-                    "condition": step.condition,
-                    "action": step.action,
-                    "service": step.service or service,
-                    "component": step.component or component,
-                    "title": title,
-                }
+                    metadata_dict = {
+                        "doc_type": "runbook_step",
+                        "step_id": step.step_id,
+                        "runbook_id": step.runbook_id,
+                        "condition": step.condition,
+                        "action": step.action,
+                        "service": step.service or service,
+                        "component": step.component or component,
+                        "title": title,
+                    }
 
-                cur.execute(
-                    """
-                    INSERT INTO chunks (document_id, chunk_index, content, metadata, embedding, tsv)
-                    VALUES (%s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
-                    """,
-                    (
-                        doc_id,
-                        0,
-                        step_text,
-                        json.dumps(metadata_dict),
-                        embedding_str,
-                        step_text,
-                    ),
-                )
+                    cur.execute(
+                        """
+                        INSERT INTO chunks (document_id, chunk_index, content, metadata, embedding, tsv)
+                        VALUES (%s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
+                        """,
+                        (
+                            doc_id,
+                            0,
+                            step_text,
+                            json.dumps(metadata_dict),
+                            embedding_str,
+                            step_text,
+                        ),
+                    )
 
                 try:
                     from ai_service.core import get_logger
@@ -748,6 +772,11 @@ def insert_incident_signature(
         # Generate embedding
         embedding_model = DEFAULT_MODEL
         embedding = embed_text(signature_text, model=embedding_model)
+        if embedding is None:
+            logger.error(f"Failed to generate embedding for incident signature {signature.incident_signature_id}. Skipping signature.")
+            cur.close()
+            conn.close()
+            raise ValueError(f"Failed to generate embedding for incident signature {signature.incident_signature_id}")
         embedding_str = "[" + ",".join(map(str, embedding)) + "]"
 
         # Prepare arrays for PostgreSQL

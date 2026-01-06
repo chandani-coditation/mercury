@@ -52,7 +52,13 @@ def create_triage_graph():
     def retrieve_context_node(state: TriageState) -> TriageState:
         """Node: Retrieve context from knowledge base."""
         alert = state["alert"]
-        query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
+        # Enhance query text for better retrieval
+        try:
+            from retrieval.query_enhancer import enhance_query
+            query_text = enhance_query(alert)
+        except Exception as e:
+            logger.warning(f"Query enhancement failed, using basic query: {e}")
+            query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
         labels = alert.get("labels", {}) or {}
         service_val = labels.get("service") if isinstance(labels, dict) else None
         component_val = labels.get("component") if isinstance(labels, dict) else None
@@ -66,6 +72,7 @@ def create_triage_graph():
         retrieval_limit = retrieval_cfg.get("limit", 5)
         vector_weight = retrieval_cfg.get("vector_weight", 0.7)
         fulltext_weight = retrieval_cfg.get("fulltext_weight", 0.3)
+        rrf_k = retrieval_cfg.get("rrf_k", 60)
 
         # Retrieve context
         context_chunks = hybrid_search(
@@ -75,6 +82,7 @@ def create_triage_graph():
             limit=retrieval_limit,
             vector_weight=vector_weight,
             fulltext_weight=fulltext_weight,
+            rrf_k=rrf_k,
         )
 
         # Apply retrieval preferences
@@ -257,9 +265,16 @@ def create_resolution_graph():
         alert = state.get("alert") or {}
         triage_output = state.get("triage_output") or {}
 
-        query_text = (
-            f"{alert.get('title', '')} {alert.get('description', '')} resolution steps runbook"
-        )
+        # Enhance query text for better retrieval
+        try:
+            from retrieval.query_enhancer import enhance_query
+            base_query = enhance_query(alert)
+            query_text = f"{base_query} resolution steps runbook"
+        except Exception as e:
+            logger.warning(f"Query enhancement failed, using basic query: {e}")
+            query_text = (
+                f"{alert.get('title', '')} {alert.get('description', '')} resolution steps runbook"
+            )
         labels = alert.get("labels", {}) or {}
         service_val = labels.get("service") if isinstance(labels, dict) else None
         component_val = labels.get("component") if isinstance(labels, dict) else None
@@ -274,16 +289,32 @@ def create_resolution_graph():
         retrieval_limit = resolution_retrieval_cfg.get("limit", 10)
         vector_weight = resolution_retrieval_cfg.get("vector_weight", 0.7)
         fulltext_weight = resolution_retrieval_cfg.get("fulltext_weight", 0.3)
+        use_mmr = resolution_retrieval_cfg.get("use_mmr", False)
+        mmr_diversity = resolution_retrieval_cfg.get("mmr_diversity", 0.5)
 
         # Retrieve context
-        context_chunks = hybrid_search(
-            query_text=query_text,
-            service=service_val,
-            component=component_val,
-            limit=retrieval_limit,
-            vector_weight=vector_weight,
-            fulltext_weight=fulltext_weight,
-        )
+        from retrieval.hybrid_search import hybrid_search
+        
+        if use_mmr:
+            from retrieval.hybrid_search import mmr_search
+            context_chunks = mmr_search(
+                query_text=query_text,
+                service=service_val,
+                component=component_val,
+                limit=retrieval_limit,
+                diversity=mmr_diversity,
+            )
+        else:
+            rrf_k = resolution_retrieval_cfg.get("rrf_k", 60)
+            context_chunks = hybrid_search(
+                query_text=query_text,
+                service=service_val,
+                component=component_val,
+                limit=retrieval_limit,
+                vector_weight=vector_weight,
+                fulltext_weight=fulltext_weight,
+                rrf_k=rrf_k,
+            )
 
         # Apply retrieval preferences
         context_chunks = apply_retrieval_preferences(context_chunks, resolution_retrieval_cfg)

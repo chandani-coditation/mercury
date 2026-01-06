@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS feedback (
   user_edited JSONB,
   diff JSONB,
   notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
+  rating TEXT, -- 'thumbs_up' or 'thumbs_down' for simple user feedback
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT feedback_rating_check CHECK (rating IS NULL OR rating IN ('thumbs_up', 'thumbs_down'))
 );
 
 -- agent_state: for state-based HITL persistence
@@ -156,7 +158,7 @@ CREATE TABLE IF NOT EXISTS runbook_steps (
     action TEXT NOT NULL,
     expected_outcome TEXT,
     rollback TEXT,
-    risk_level TEXT,
+    risk_level TEXT, -- DEPRECATED: Not based on historical data, removed from LLM output
     service TEXT,
     component TEXT,
     embedding vector(1536),
@@ -230,7 +232,7 @@ CREATE TABLE IF NOT EXISTS resolution_outputs (
     incident_id UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
     triage_result_id UUID NOT NULL REFERENCES triage_results(id) ON DELETE CASCADE,
     overall_confidence NUMERIC(5,4) NOT NULL,
-    risk_level TEXT NOT NULL,
+    risk_level TEXT, -- DEPRECATED: Not based on historical data, removed from LLM output
     recommendations JSONB NOT NULL,
     retrieved_step_ids TEXT[],
     used_signature_ids TEXT[],
@@ -244,8 +246,7 @@ CREATE TABLE IF NOT EXISTS resolution_outputs (
     execution_notes TEXT,
     CONSTRAINT resolution_outputs_overall_confidence_range 
         CHECK (overall_confidence >= 0.0 AND overall_confidence <= 1.0),
-    CONSTRAINT resolution_outputs_risk_level_check 
-        CHECK (risk_level IN ('low', 'medium', 'high')),
+    -- DEPRECATED: risk_level constraint removed (field is deprecated)
     CONSTRAINT resolution_outputs_execution_status_check 
         CHECK (execution_status IS NULL OR execution_status IN 
             ('pending', 'accepted', 'executed', 'rejected', 'cancelled'))

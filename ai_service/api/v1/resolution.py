@@ -63,11 +63,11 @@ async def resolution(
             result = run_resolution_graph(incident_id=incident_id, alert=alert_dict)
         elif use_state:
             if not incident_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="State-based resolution requires an incident_id. "
-                    "Please triage the alert first.",
+                error_msg = format_user_friendly_error(
+                    ValueError("State-based resolution requires an incident_id. Please triage the alert first."),
+                    error_type="validation"
                 )
+                raise HTTPException(status_code=400, detail=error_msg)
             result = await resolution_agent_state(
                 incident_id=incident_id,
                 alert=alert_dict,
@@ -80,10 +80,11 @@ async def resolution(
                     incident = repository.get_by_id(incident_id)
                     triage_output = incident.get("triage_output")
                     if not triage_output:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Incident {incident_id} has no triage output. Please triage the alert first.",
+                        error_msg = format_user_friendly_error(
+                            ValueError(f"Incident {incident_id} has no triage output. Please triage the alert first."),
+                            error_type="validation"
                         )
+                        raise HTTPException(status_code=400, detail=error_msg)
                     resolution_result = resolution_agent(triage_output)
 
                     metadata = resolution_result.get("_metadata", {})
@@ -101,8 +102,9 @@ async def resolution(
                             "steps_retrieved": len(resolution_result.get("steps", [])),
                         },
                     }
-                except IncidentNotFoundError:
-                    raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
+                except IncidentNotFoundError as e:
+                    error_msg = format_user_friendly_error(e, error_type="not_found")
+                    raise HTTPException(status_code=404, detail=error_msg)
             else:
                 result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
 
@@ -115,25 +117,28 @@ async def resolution(
         return result
 
     except ApprovalRequiredError as e:
+        error_msg = format_user_friendly_error(e, error_type="approval_required")
         logger.info(f"Resolution requires approval: {str(e)}")
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "approval_required",
-                "message": str(e),
+                "message": error_msg,
                 "incident_id": incident_id if incident_id else None,
             },
         )
     except ValueError as e:
-        error_msg = str(e)
-        logger.warning(f"Resolution validation error: {error_msg}")
+        error_msg = format_user_friendly_error(e, error_type="validation")
+        logger.warning(f"Resolution validation error: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
     except IncidentNotFoundError as e:
+        error_msg = format_user_friendly_error(e, error_type="not_found")
         logger.warning(f"Resolution error - incident not found: {str(e)}")
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=error_msg)
     except ValidationError as e:
+        error_msg = format_user_friendly_error(e, error_type="validation")
         logger.warning(f"Resolution validation error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=error_msg)
     except HTTPException:
         raise
     except Exception as e:

@@ -92,25 +92,48 @@ async def _resolution_agent_state_internal(
     vector_weight = resolution_cfg.get("vector_weight", 0.6)
     fulltext_weight = resolution_cfg.get("fulltext_weight", 0.4)
 
-    query_text = (
-        f"{alert_dict.get('title', '')} "
-        f"{alert_dict.get('description', '')} resolution steps runbook"
-    )
+    # Enhance query text for better retrieval
+    try:
+        from retrieval.query_enhancer import enhance_query
+        base_query = enhance_query(alert_dict)
+        query_text = f"{base_query} resolution steps runbook"
+    except Exception as e:
+        logger.warning(f"Query enhancement failed, using basic query: {e}")
+        query_text = (
+            f"{alert_dict.get('title', '')} "
+            f"{alert_dict.get('description', '')} resolution steps runbook"
+        )
     labels = alert_dict.get("labels") or {}
     service_val = labels.get("service") if isinstance(labels, dict) else None
     component_val = labels.get("component") if isinstance(labels, dict) else None
 
+    # Check if MMR should be used
+    use_mmr = resolution_cfg.get("use_mmr", False)
+    mmr_diversity = resolution_cfg.get("mmr_diversity", 0.5)
+    
     # Retrieve context
     from retrieval.hybrid_search import hybrid_search
-
-    context_chunks = hybrid_search(
-        query_text=query_text,
-        service=service_val,
-        component=component_val,
-        limit=retrieval_limit,
-        vector_weight=vector_weight,
-        fulltext_weight=fulltext_weight,
-    )
+    
+    if use_mmr:
+        from retrieval.hybrid_search import mmr_search
+        context_chunks = mmr_search(
+            query_text=query_text,
+            service=service_val,
+            component=component_val,
+            limit=retrieval_limit,
+            diversity=mmr_diversity,
+        )
+    else:
+        rrf_k = resolution_cfg.get("rrf_k", 60)
+        context_chunks = hybrid_search(
+            query_text=query_text,
+            service=service_val,
+            component=component_val,
+            limit=retrieval_limit,
+            vector_weight=vector_weight,
+            fulltext_weight=fulltext_weight,
+            rrf_k=rrf_k,
+        )
     context_chunks = apply_retrieval_preferences(context_chunks, resolution_cfg)
     state.context_chunks = context_chunks
     state.context_chunks_count = len(context_chunks)

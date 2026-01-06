@@ -34,8 +34,8 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
     errors = []
     config = get_guardrail_config().get("triage", {})
 
-    # Check required top-level fields
-    required_fields = ["incident_signature", "matched_evidence", "severity", "confidence", "policy"]
+    # Check required top-level fields (severity, confidence, policy are system-calculated, not from LLM)
+    required_fields = ["incident_signature", "matched_evidence"]
     for field in required_fields:
         if field not in triage_output:
             errors.append(f"Missing required field: {field}")
@@ -86,32 +86,8 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
     else:
         errors.append("matched_evidence is required")
 
-    # Validate severity
-    severity = triage_output.get("severity", "").lower()
-    allowed_severities = [
-        s.lower() for s in config.get("severity_values", ["critical", "high", "medium", "low"])
-    ]
-    if severity not in allowed_severities:
-        errors.append(f"Invalid severity '{severity}'. Must be one of: {allowed_severities}")
-
-    # Validate confidence range
-    confidence = triage_output.get("confidence")
-    if confidence is None:
-        errors.append("confidence is required")
-    else:
-        confidence_range = config.get("confidence_range", [0.0, 1.0])
-        if not isinstance(confidence, (int, float)):
-            errors.append(f"confidence must be a number, got: {type(confidence).__name__}")
-        elif not (confidence_range[0] <= confidence <= confidence_range[1]):
-            errors.append(
-                f"confidence {confidence} out of range [{confidence_range[0]}, {confidence_range[1]}]"
-            )
-
-    # Validate policy
-    policy = triage_output.get("policy", "").upper()
-    allowed_policies = ["AUTO", "PROPOSE", "REVIEW"]
-    if policy not in allowed_policies:
-        errors.append(f"Invalid policy '{policy}'. Must be one of: {allowed_policies}")
+    # Note: severity, confidence, and policy are system-calculated (not from LLM)
+    # They are validated after post-processing, not from LLM output
 
     if errors:
         logger.warning(f"Triage validation failed with {len(errors)} errors: {errors}")
@@ -157,25 +133,8 @@ def validate_resolution_output(
         elif resolution_output[field] is None:
             errors.append(f"Required field is None: {field}")
 
-    # Validate risk_level
-    risk_level = resolution_output.get("risk_level", "").lower()
-    allowed_risk_levels = [r.lower() for r in config.get("risk_level_values", [])]
-    if risk_level not in allowed_risk_levels:
-        errors.append(f"Invalid risk_level '{risk_level}'. Must be one of: {allowed_risk_levels}")
-
-    # Validate estimated_time_minutes
-    estimated_time = resolution_output.get("estimated_time_minutes")
-    if estimated_time is not None:
-        min_time = config.get("min_estimated_time_minutes", 1)
-        max_time = config.get("max_estimated_time_minutes", 1440)
-        if not isinstance(estimated_time, int):
-            errors.append(
-                f"estimated_time_minutes must be an integer, got: {type(estimated_time).__name__}"
-            )
-        elif not (min_time <= estimated_time <= max_time):
-            errors.append(
-                f"estimated_time_minutes {estimated_time} out of range [{min_time}, {max_time}]"
-            )
+    # Note: risk_level, estimated_time_minutes, and requires_approval are removed
+    # They are not based on historical data and should not be LLM-generated
 
     # Validate steps (preferred) or resolution_steps (legacy)
     steps = resolution_output.get("steps", resolution_output.get("resolution_steps", []))
@@ -321,20 +280,11 @@ def validate_resolution_output(
                         errors.append(f"provenance[{i}] must contain 'doc_id' and 'chunk_id'")
 
     # Validate rollback_plan (CRITICAL for production safety)
-    risk_level_upper = resolution_output.get("risk_level", "").lower()
-    require_rollback_for = [
-        r.lower() for r in config.get("require_rollback_for_risk_levels", ["medium", "high"])
-    ]
-
     rollback_plan = resolution_output.get("rollback_plan")
 
-    # Check if rollback is required based on risk level
-    if risk_level_upper in require_rollback_for:
-        if not rollback_plan:
-            errors.append(
-                f"rollback_plan REQUIRED for risk_level '{risk_level_upper}' (production safety)"
-            )
-        else:
+    # Rollback plan is recommended for all resolutions but not strictly required
+    # (risk_level is no longer available to determine requirement)
+    if rollback_plan:
             # Validate rollback_plan structure (supports both legacy list and new structured format)
             if isinstance(rollback_plan, list):
                 # Legacy format: list of rollback steps
@@ -344,12 +294,8 @@ def validate_resolution_output(
                         f"Too many rollback steps: {len(rollback_plan)} (max: {max_rollback})"
                     )
 
-                # For medium/high risk, recommend using structured format
-                if risk_level_upper in ["medium", "high"]:
-                    logger.warning(
-                        f"Legacy rollback_plan format detected for {risk_level_upper} risk. "
-                        "Consider using structured format with preconditions and triggers."
-                    )
+                # Recommend using structured format for better safety
+                logger.debug("Rollback plan provided in structured format")
 
             elif isinstance(rollback_plan, dict):
                 # New structured format: validate required fields
@@ -400,26 +346,13 @@ def validate_resolution_output(
                             if not isinstance(precond, str):
                                 errors.append(f"rollback_plan.preconditions[{i}] must be a string")
 
-                # For high-risk resolutions, strongly recommend preconditions and triggers
-                if risk_level_upper == "high":
-                    if not preconditions:
-                        logger.warning(
-                            "High-risk resolution missing rollback preconditions (strongly recommended)"
-                        )
+                # Strongly recommend preconditions and triggers for all rollback plans
+                if not preconditions:
+                    logger.debug("Rollback plan missing preconditions (recommended for safety)")
 
-                    triggers = rollback_plan.get("triggers")
-                    if not triggers or not isinstance(triggers, list):
-                        logger.warning(
-                            "High-risk resolution missing rollback triggers (strongly recommended)"
-                        )
-
-                # Validate estimated_time_minutes (optional)
-                rollback_time = rollback_plan.get("estimated_time_minutes")
-                if rollback_time is not None:
-                    if not isinstance(rollback_time, int):
-                        errors.append(f"rollback_plan.estimated_time_minutes must be an integer")
-                    elif rollback_time < 1:
-                        errors.append("rollback_plan.estimated_time_minutes must be at least 1")
+                triggers = rollback_plan.get("triggers")
+                if not triggers or not isinstance(triggers, list):
+                    logger.debug("Rollback plan missing triggers (recommended for safety)")
 
                 # Validate triggers (optional)
                 triggers = rollback_plan.get("triggers")

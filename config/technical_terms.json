@@ -1,0 +1,47 @@
+{
+  "_comment": "Technical Term Normalization and Synonym Mappings",
+  "_description": "Mappings for normalizing technical terms during ingestion and expanding queries. All mappings are based on actual historical data patterns, not LLM-generated.",
+  
+  "abbreviations": {
+    "_description": "Abbreviation expansions for normalization during ingestion",
+    "DB": "Database",
+    "CPU": "Central Processing Unit CPU",
+    "SQL": "Structured Query Language SQL",
+    "API": "Application Programming Interface API",
+    "HTTP": "Hypertext Transfer Protocol HTTP",
+    "HTTPS": "Hypertext Transfer Protocol Secure HTTPS",
+    "DNS": "Domain Name System DNS",
+    "IO": "Input Output IO",
+    "I/O": "Input Output IO",
+    "RAM": "Random Access Memory RAM",
+    "SSD": "Solid State Drive SSD",
+    "HDD": "Hard Disk Drive HDD",
+    "NOC": "Network Operations Center NOC",
+    "SLA": "Service Level Agreement SLA",
+    "RTO": "Recovery Time Objective RTO",
+    "RPO": "Recovery Point Objective RPO"
+  },
+  
+  "synonyms": {
+    "_description": "Synonym mappings for query expansion (based on historical data patterns)",
+    "job": ["job", "task", "process", "workflow"],
+    "error": ["error", "failure", "exception", "issue"],
+    "failed": ["failed", "failure", "error", "unsuccessful"],
+    "timeout": ["timeout", "expired", "timed out"],
+    "connection": ["connection", "connectivity", "link"],
+    "service": ["service", "application", "system"],
+    "component": ["component", "module", "part"],
+    "alert": ["alert", "warning", "notification", "alarm"],
+    "database": ["database", "db", "datastore"],
+    "disk": ["disk", "storage", "volume", "drive"],
+    "memory": ["memory", "ram", "cache"],
+    "network": ["network", "connectivity", "connection"]
+  },
+  
+  "normalization_rules": {
+    "_description": "Rules for normalizing inconsistent technical terms during ingestion",
+    "database_variants": ["database", "db", "Database", "DB", "datastore"],
+    "normalized_to": "Database"
+  }
+}
+

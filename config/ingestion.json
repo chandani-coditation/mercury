@@ -1,0 +1,25 @@
+{
+  "_comment": "Ingestion Configuration",
+  "_description": "Centralized configuration for text chunking, batch sizes, and formatting. Update this file to tune ingestion behavior without code changes.",
+  
+  "chunking": {
+    "min_tokens": 180,
+    "max_tokens": 320,
+    "target_tokens": 250,
+    "overlap": 30,
+    "safe_max_tokens": 3000,
+    "large_paragraph_threshold": 100000
+  },
+  
+  "batch_sizes": {
+    "embedding_batch": 50,
+    "embedding_batch_default": 100
+  },
+  
+  "formatting": {
+    "error_code_prefix": "error",
+    "max_fallback_action_length": 2000,
+    "max_fallback_title_length": 1000
+  }
+}
+

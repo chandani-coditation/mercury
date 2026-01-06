@@ -5,12 +5,107 @@ Per architecture: Resolution agent retrieves:
 - Historical resolution references (from incident signatures)
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from db.connection import get_db_connection
 from ai_service.core import get_logger
 from ingestion.embeddings import embed_text
+import uuid
 
 logger = get_logger(__name__)
+
+
+def _normalize_uuid_list(ids: Optional[List[Union[str, uuid.UUID]]]) -> List[str]:
+    """
+    Normalize a list of IDs to strings (handles UUID objects, strings, None values).
+    
+    Args:
+        ids: List of IDs (can be UUID objects, strings, or None)
+    
+    Returns:
+        List of string IDs (None values and invalid IDs are filtered out)
+    """
+    if not ids:
+        return []
+    
+    normalized = []
+    for id_val in ids:
+        if id_val is None:
+            continue
+        try:
+            # Convert UUID to string if needed
+            if isinstance(id_val, uuid.UUID):
+                normalized.append(str(id_val))
+            elif isinstance(id_val, str):
+                # Validate it's a valid UUID string format
+                uuid.UUID(id_val)  # Will raise ValueError if invalid
+                normalized.append(id_val)
+            else:
+                # Try to convert to string
+                str_val = str(id_val).strip()
+                if str_val:
+                    uuid.UUID(str_val)  # Validate
+                    normalized.append(str_val)
+        except (ValueError, AttributeError, TypeError):
+            logger.warning(f"Invalid ID format, skipping: {repr(id_val)}")
+            continue
+    
+    return normalized
+
+
+def _normalize_limit(limit: Union[int, str, float, None], default: int = 20) -> int:
+    """
+    Normalize limit parameter to integer.
+    
+    Args:
+        limit: Limit value (can be int, string, float, or None)
+        default: Default value if limit is None or invalid
+    
+    Returns:
+        Integer limit value
+    """
+    if limit is None:
+        return default
+    
+    try:
+        if isinstance(limit, (int, float)):
+            limit_int = int(limit)
+        elif isinstance(limit, str):
+            limit_int = int(limit.strip())
+        else:
+            return default
+        
+        # Ensure positive
+        if limit_int < 1:
+            return default
+        return limit_int
+    except (ValueError, TypeError, AttributeError):
+        logger.warning(f"Invalid limit value: {repr(limit)}, using default: {default}")
+        return default
+
+
+def _normalize_query_text(query_text: Optional[str]) -> Optional[str]:
+    """
+    Normalize query text parameter.
+    
+    Args:
+        query_text: Query text (can be None, empty string, or string)
+    
+    Returns:
+        Normalized query text (None if empty/invalid)
+    """
+    if query_text is None:
+        return None
+    
+    if isinstance(query_text, str):
+        text = query_text.strip()
+        return text if text else None
+    
+    # Try to convert to string
+    try:
+        text = str(query_text).strip()
+        return text if text else None
+    except Exception:
+        return None
 
 
 def retrieve_runbook_steps(
@@ -40,6 +135,12 @@ def retrieve_runbook_steps(
     Returns:
         List of runbook step dictionaries with all step details, ordered by relevance
     """
+    # Normalize and validate parameters
+    document_ids = _normalize_uuid_list(document_ids) if document_ids else []
+    runbook_ids = _normalize_uuid_list(runbook_ids) if runbook_ids else []
+    query_text = _normalize_query_text(query_text)
+    limit = _normalize_limit(limit, default=20)
+    
     # Prefer document_ids over runbook_ids (chunks contain full recommendations)
     if document_ids:
         return retrieve_runbook_chunks_by_document_id(document_ids, query_text, limit)
@@ -51,45 +152,56 @@ def retrieve_runbook_steps(
     cur = conn.cursor()
 
     try:
+        # Safety check: ensure we have valid IDs (should already be validated, but double-check)
+        if not runbook_ids or len(runbook_ids) == 0:
+            logger.warning("Empty runbook_ids list, returning empty results")
+            return []
+        
         placeholders = ",".join(["%s"] * len(runbook_ids))
 
         # If query_text is provided, use semantic search to find relevant steps
+        semantic_search_success = False
         if query_text:
             try:
                 # Generate query embedding for semantic search
                 query_embedding = embed_text(query_text)
-                embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+                if query_embedding is None:
+                    logger.warning(f"Failed to generate query embedding for semantic search. Falling back to direct retrieval.")
+                    # Fall back to direct retrieval without semantic search
+                    query_text = None
+                else:
+                    embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
-                # Build query with semantic similarity
-                # Parameters: $1 = embedding (for similarity), $2-$N = runbook_ids, $N+1 = embedding (for ORDER BY), $N+2 = limit
-                query = f"""
-                SELECT 
-                    rs.id,
-                    rs.step_id,
-                    rs.runbook_id,
-                    rs.condition,
-                    rs.action,
-                    rs.expected_outcome,
-                    rs.rollback,
-                    rs.risk_level,
-                    rs.service,
-                    rs.component,
-                    rs.runbook_title,
-                    rs.runbook_document_id,
-                    1 - (rs.embedding <=> %s::vector) as similarity_score
-                FROM runbook_steps rs
-                WHERE rs.runbook_id IN ({placeholders})
-                AND rs.embedding IS NOT NULL
-                ORDER BY rs.embedding <=> %s::vector
-                LIMIT %s
-                """
+                    # Build query with semantic similarity
+                    # Parameters: $1 = embedding (for similarity), $2-$N = runbook_ids, $N+1 = embedding (for ORDER BY), $N+2 = limit
+                    query = f"""
+                    SELECT 
+                        rs.id,
+                        rs.step_id,
+                        rs.runbook_id,
+                        rs.condition,
+                        rs.action,
+                        rs.expected_outcome,
+                        rs.rollback,
+                        rs.service,
+                        rs.component,
+                        rs.runbook_title,
+                        rs.runbook_document_id,
+                        1 - (rs.embedding <=> %s::vector) as similarity_score
+                    FROM runbook_steps rs
+                    WHERE rs.runbook_id IN ({placeholders})
+                    AND rs.embedding IS NOT NULL
+                    ORDER BY rs.embedding <=> %s::vector
+                    LIMIT %s
+                    """
 
-                # Execute with: embedding (for similarity calc), runbook_ids, embedding (for ORDER BY), limit
-                params = (embedding_str,) + tuple(runbook_ids) + (embedding_str, limit)
-                cur.execute(query, params)
-                logger.info(
-                    f"Retrieved relevant runbook steps using semantic search for query: {query_text[:50]}..."
-                )
+                    # Execute with: embedding (for similarity calc), runbook_ids, embedding (for ORDER BY), limit
+                    params = (embedding_str,) + tuple(runbook_ids) + (embedding_str, limit)
+                    cur.execute(query, params)
+                    logger.info(
+                        f"Retrieved relevant runbook steps using semantic search for query: {query_text[:50]}..."
+                    )
+                    semantic_search_success = True
             except Exception as e:
                 logger.warning(f"Semantic search failed, falling back to direct retrieval: {e}")
                 # Rollback the failed transaction before trying fallback
@@ -97,32 +209,33 @@ def retrieve_runbook_steps(
                 # Fall back to direct retrieval without semantic search
                 query_text = None
 
-        # If no query_text or semantic search failed, retrieve all steps (fallback)
-        if not query_text:
-            query = f"""
-            SELECT 
-                id,
-                step_id,
-                runbook_id,
-                condition,
-                action,
-                expected_outcome,
-                rollback,
-                risk_level,
-                service,
-                component,
-                runbook_title,
-                runbook_document_id,
-                1.0 as similarity_score
-            FROM runbook_steps
-            WHERE runbook_id IN ({placeholders})
-            ORDER BY runbook_id, step_id
-            LIMIT %s
-            """
+        # If semantic search failed or wasn't attempted, use direct retrieval
+        if not semantic_search_success:
+            # If no query_text or semantic search failed, retrieve all steps (fallback)
+            if not query_text:
+                query = f"""
+                SELECT 
+                    id,
+                    step_id,
+                    runbook_id,
+                    condition,
+                    action,
+                    expected_outcome,
+                    rollback,
+                    service,
+                    component,
+                    runbook_title,
+                    runbook_document_id,
+                    1.0 as similarity_score
+                FROM runbook_steps
+                WHERE runbook_id IN ({placeholders})
+                ORDER BY runbook_id, step_id
+                LIMIT %s
+                """
 
-            # Execute with runbook_ids and limit
-            params = tuple(runbook_ids) + (limit,)
-            cur.execute(query, params)
+                # Execute with runbook_ids and limit
+                params = tuple(runbook_ids) + (limit,)
+                cur.execute(query, params)
 
         rows = cur.fetchall()
 
@@ -136,7 +249,6 @@ def retrieve_runbook_steps(
                     "action": row["action"],
                     "expected_outcome": row.get("expected_outcome"),
                     "rollback": row.get("rollback"),
-                    "risk_level": row.get("risk_level", "medium"),
                     "service": row.get("service"),
                     "component": row.get("component"),
                     "runbook_title": row.get("runbook_title"),
@@ -157,6 +269,7 @@ def retrieve_runbook_steps(
                 steps.append(step)
             else:
                 # Handle tuple result
+                # Column order: id, step_id, runbook_id, condition, action, expected_outcome, rollback, service, component, runbook_title, runbook_document_id, similarity_score
                 step = {
                     "step_id": row[1],
                     "runbook_id": row[2],
@@ -164,18 +277,17 @@ def retrieve_runbook_steps(
                     "action": row[4],
                     "expected_outcome": row[5],
                     "rollback": row[6],
-                    "risk_level": row[7] if row[7] else "medium",
-                    "service": row[8],
-                    "component": row[9],
-                    "runbook_title": row[10],
-                    "runbook_document_id": str(row[11]) if row[11] else None,
+                    "service": row[7],
+                    "component": row[8],
+                    "runbook_title": row[9],
+                    "runbook_document_id": str(row[10]) if row[10] else None,
                     # For compatibility
                     "chunk_id": str(row[0]),
-                    "document_id": str(row[11]) if row[11] else None,
+                    "document_id": str(row[10]) if row[10] else None,
                 }
                 # Add similarity score if available (from semantic search)
-                if len(row) > 12:
-                    step["similarity_score"] = float(row[12]) if row[12] else 0.0
+                if len(row) > 11:
+                    step["similarity_score"] = float(row[11]) if row[11] else 0.0
                 steps.append(step)
 
         logger.info(f"Retrieved {len(steps)} runbook steps for runbook_ids: {runbook_ids}")
@@ -203,6 +315,11 @@ def retrieve_runbook_chunks_by_document_id(
     Returns:
         List of runbook step dictionaries with full content from chunks
     """
+    # Normalize and validate parameters
+    document_ids = _normalize_uuid_list(document_ids) if document_ids else []
+    query_text = _normalize_query_text(query_text)
+    limit = _normalize_limit(limit, default=20)
+    
     if not document_ids:
         return []
 
@@ -210,13 +327,23 @@ def retrieve_runbook_chunks_by_document_id(
     cur = conn.cursor()
 
     try:
+        # Safety check: ensure we have valid IDs (should already be validated, but double-check)
+        if not document_ids or len(document_ids) == 0:
+            logger.warning("Empty document_ids list, returning empty results")
+            return []
+        
         placeholders = ",".join(["%s"] * len(document_ids))
 
         # If query_text is provided, use semantic search
+        semantic_search_success = False
         if query_text:
             try:
                 query_embedding = embed_text(query_text)
-                embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+                if query_embedding is None:
+                    logger.warning(f"Failed to generate query embedding for semantic search. Falling back to direct retrieval.")
+                    query_text = None
+                else:
+                    embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
                 query = f"""
                 SELECT 
@@ -284,7 +411,6 @@ def retrieve_runbook_chunks_by_document_id(
                     "action": row.get("content") or metadata.get("action") or "",
                     "expected_outcome": metadata.get("expected_outcome"),
                     "rollback": metadata.get("rollback"),
-                    "risk_level": metadata.get("risk_level", "medium"),
                     "service": metadata.get("service"),
                     "component": metadata.get("component"),
                     "runbook_title": row.get("runbook_title"),
@@ -314,11 +440,6 @@ def retrieve_runbook_chunks_by_document_id(
                         metadata.get("expected_outcome") if isinstance(metadata, dict) else None
                     ),
                     "rollback": metadata.get("rollback") if isinstance(metadata, dict) else None,
-                    "risk_level": (
-                        metadata.get("risk_level", "medium")
-                        if isinstance(metadata, dict)
-                        else "medium"
-                    ),
                     "service": metadata.get("service") if isinstance(metadata, dict) else None,
                     "component": metadata.get("component") if isinstance(metadata, dict) else None,
                     "runbook_title": row[6],
@@ -339,7 +460,7 @@ def retrieve_runbook_chunks_by_document_id(
 
 
 def retrieve_close_notes_from_signatures(
-    incident_signature_ids: List[str], limit: int = 10
+    incident_signature_ids: Optional[List[str]] = None, limit: int = 10
 ) -> List[Dict]:
     """
     Retrieve close_notes from incident signatures.
@@ -349,8 +470,8 @@ def retrieve_close_notes_from_signatures(
     about how similar incidents were resolved.
 
     Args:
-        incident_signature_ids: List of incident_signature_id values from triage output
-        limit: Maximum number of close_notes to return
+        incident_signature_ids: List of incident_signature_id values from triage output (normalized to strings)
+        limit: Maximum number of close_notes to return (normalized to int)
 
     Returns:
         List of dictionaries with close_notes and metadata:
@@ -364,6 +485,15 @@ def retrieve_close_notes_from_signatures(
             }
         ]
     """
+    # Normalize and validate parameters
+    # Note: incident_signature_ids are strings (not UUIDs), so we just validate they're strings
+    if incident_signature_ids:
+        incident_signature_ids = [str(id_val).strip() for id_val in incident_signature_ids if id_val and str(id_val).strip()]
+    else:
+        incident_signature_ids = []
+    
+    limit = _normalize_limit(limit, default=10)
+    
     if not incident_signature_ids:
         return []
 
@@ -371,6 +501,11 @@ def retrieve_close_notes_from_signatures(
     cur = conn.cursor()
 
     try:
+        # Safety check: ensure we have valid IDs (should already be validated, but double-check)
+        if not incident_signature_ids or len(incident_signature_ids) == 0:
+            logger.warning("Empty incident_signature_ids list, returning empty results")
+            return []
+        
         placeholders = ",".join(["%s"] * len(incident_signature_ids))
 
         query = f"""
@@ -427,7 +562,7 @@ def retrieve_close_notes_from_signatures(
 
 
 def retrieve_historical_resolutions(
-    incident_signature_ids: List[str], limit: int = 10
+    incident_signature_ids: Optional[List[str]] = None, limit: int = 10
 ) -> List[Dict]:
     """
     Retrieve historical resolutions from incidents that match incident signatures.
@@ -436,12 +571,21 @@ def retrieve_historical_resolutions(
     We find incidents that were resolved using steps referenced by the incident signatures.
 
     Args:
-        incident_signature_ids: List of incident_signature_id values from triage output
-        limit: Maximum number of historical resolutions to return
+        incident_signature_ids: List of incident_signature_id values from triage output (normalized to strings)
+        limit: Maximum number of historical resolutions to return (normalized to int)
 
     Returns:
         List of historical resolution records with success indicators
     """
+    # Normalize and validate parameters
+    # Note: incident_signature_ids are strings (not UUIDs), so we just validate they're strings
+    if incident_signature_ids:
+        incident_signature_ids = [str(id_val).strip() for id_val in incident_signature_ids if id_val and str(id_val).strip()]
+    else:
+        incident_signature_ids = []
+    
+    limit = _normalize_limit(limit, default=10)
+    
     if not incident_signature_ids:
         return []
 
@@ -639,6 +783,11 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
                 }
                 for step_id in step_ids
             }
+
+        # Safety check: ensure we have valid chunk_ids
+        if not all_chunk_ids or len(all_chunk_ids) == 0:
+            logger.warning("Empty all_chunk_ids list, returning empty statistics")
+            return {}
 
         chunk_placeholders = ",".join(["%s"] * len(all_chunk_ids))
 

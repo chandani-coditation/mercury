@@ -4,7 +4,7 @@ from retrieval.incident_descriptions import get_incident_descriptions
 
 import os
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from db.connection import get_db_connection
 from ingestion.embeddings import embed_text
 
@@ -21,6 +21,60 @@ except ImportError:
 logger = get_logger(__name__)
 
 
+def _normalize_limit(limit: Union[int, str, float, None], default: int = 5) -> int:
+    """
+    Normalize limit parameter to integer.
+    
+    Args:
+        limit: Limit value (can be int, string, float, or None)
+        default: Default value if limit is None or invalid
+    
+    Returns:
+        Integer limit value
+    """
+    if limit is None:
+        return default
+    
+    try:
+        if isinstance(limit, (int, float)):
+            limit_int = int(limit)
+        elif isinstance(limit, str):
+            limit_int = int(limit.strip())
+        else:
+            return default
+        
+        # Ensure positive
+        if limit_int < 1:
+            return default
+        return limit_int
+    except (ValueError, TypeError, AttributeError):
+        logger.warning(f"Invalid limit value: {repr(limit)}, using default: {default}")
+        return default
+
+
+def _normalize_query_text(query_text: Optional[str]) -> str:
+    """
+    Normalize query text parameter.
+    
+    Args:
+        query_text: Query text (can be None, empty string, or string)
+    
+    Returns:
+        Normalized query text (empty string if None/invalid)
+    """
+    if query_text is None:
+        return ""
+    
+    if isinstance(query_text, str):
+        return query_text.strip()
+    
+    # Try to convert to string
+    try:
+        return str(query_text).strip()
+    except Exception:
+        return ""
+
+
 def hybrid_search(
     query_text: str,
     service: Optional[str] = None,
@@ -28,6 +82,7 @@ def hybrid_search(
     limit: int = 5,
     vector_weight: float = 0.7,
     fulltext_weight: float = 0.3,
+    rrf_k: int = 60,
 ) -> List[Dict]:
     """
     Perform hybrid search using RRF (Reciprocal Rank Fusion).
@@ -43,11 +98,27 @@ def hybrid_search(
     Returns:
         List of chunks with scores
     """
+    # Normalize and validate parameters
+    query_text = _normalize_query_text(query_text)
+    limit = _normalize_limit(limit, default=5)
+    rrf_k = _normalize_limit(rrf_k, default=60)
+    
+    if not query_text:
+        logger.warning("Empty query text provided to hybrid_search, returning empty results")
+        return []
+    
     start_time = time.time()
     logger.debug(
         f"Starting hybrid search: query='{query_text[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
+    
+    # TASK #7: Track retrieval metrics
+    try:
+        from retrieval.metrics import record_retrieval
+        _track_metrics = True
+    except ImportError:
+        _track_metrics = False
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -55,6 +126,9 @@ def hybrid_search(
     try:
         # Generate query embedding
         query_embedding = embed_text(query_text)
+        if query_embedding is None:
+            logger.error(f"Failed to generate query embedding. Cannot proceed with hybrid search.")
+            return []
         # Convert to pgvector string format
         query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
@@ -123,9 +197,9 @@ def hybrid_search(
                 COALESCE(f.fulltext_score, 0.0) as fulltext_score,
                 COALESCE(v.vector_rank, 999) as vector_rank,
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
-                -- RRF: 1/(k + rank) where k=60 is standard
-                (1.0 / (60.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
-                (1.0 / (60.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
+                -- RRF: 1/(k + rank) where k is configurable (default 60)
+                (1.0 / ({rrf_k}.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
+                (1.0 / ({rrf_k}.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
                 -- PHASE 1: Soft filter boosts for service/component matching
                 -- Service match boost: exact match = 0.15, partial match = 0.10, no match = 0.0
                 CASE 
@@ -283,25 +357,45 @@ def hybrid_search(
         # Convert to list of dicts
         chunks = []
         for row in results:
+            # Safe metadata access - ensure it's a dict (psycopg with dict_row should always return dicts)
+            metadata = row.get("metadata") if isinstance(row, dict) else {}
+            if not isinstance(metadata, dict):
+                logger.warning(f"Metadata is not a dict, converting: {type(metadata)}")
+                metadata = {}
+            
             chunks.append(
                 {
-                    "chunk_id": str(row["id"]),
-                    "document_id": str(row["document_id"]),
-                    "chunk_index": row["chunk_index"],
-                    "content": row["content"],
-                    "metadata": row["metadata"],
-                    "doc_title": row["doc_title"],
-                    "doc_type": row["doc_type"],
-                    "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
-                    "fulltext_score": (
-                        float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
-                    ),
-                    "rrf_score": float(row["rrf_score"]),
-                    "service_match_boost": float(row.get("service_match_boost", 0.0)) if "service_match_boost" in row else 0.0,
-                    "component_match_boost": float(row.get("component_match_boost", 0.0)) if "component_match_boost" in row else 0.0,
-                    "final_score": float(row.get("final_score", row["rrf_score"])) if "final_score" in row else float(row["rrf_score"]),
+                    "chunk_id": str(row.get("id", "")),
+                    "document_id": str(row.get("document_id", "")),
+                    "chunk_index": row.get("chunk_index", 0),
+                    "content": row.get("content", ""),
+                    "metadata": metadata,
+                    "doc_title": row.get("doc_title", ""),
+                    "doc_type": row.get("doc_type", ""),
+                    "vector_score": float(row.get("vector_score", 0.0)) if row.get("vector_score") else 0.0,
+                    "fulltext_score": float(row.get("fulltext_score", 0.0)) if row.get("fulltext_score") else 0.0,
+                    "rrf_score": float(row.get("rrf_score", 0.0)),
+                    "service_match_boost": float(row.get("service_match_boost", 0.0)),
+                    "component_match_boost": float(row.get("component_match_boost", 0.0)),
+                    "final_score": float(row.get("final_score", row.get("rrf_score", 0.0))),
                 }
             )
+
+        # TASK #7: Record retrieval metrics
+        if _track_metrics:
+            retrieval_time_ms = (time.time() - start_time) * 1000
+            try:
+                record_retrieval(
+                    results=chunks,
+                    retrieval_type="hybrid_search",
+                    service=service,
+                    component=component,
+                    query_service=service,
+                    query_component=component,
+                    retrieval_time_ms=retrieval_time_ms,
+                )
+            except Exception as e:
+                logger.debug(f"Failed to record retrieval metrics: {e}")
 
         return chunks
 
@@ -330,6 +424,9 @@ def mmr_search(
     Returns:
         List of diverse chunks
     """
+    # Normalize limit
+    limit = _normalize_limit(limit, default=5)
+    
     # Get initial results from hybrid search
     candidates = hybrid_search(query_text, service, component, limit=limit * 3)
 
@@ -383,6 +480,7 @@ def triage_retrieval(
     limit: int = 5,
     vector_weight: float = 0.7,
     fulltext_weight: float = 0.3,
+    rrf_k: int = 60,
 ) -> Dict[str, List[Dict]]:
     """
     Specialized retrieval for triage agent.
@@ -404,10 +502,18 @@ def triage_retrieval(
         - 'incident_signatures': List of incident signature chunks
         - 'runbook_metadata': List of runbook document metadata (not steps)
     """
+    start_time = time.time()
     logger.debug(
         f"Starting triage retrieval: query='{query_text[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
+    
+    # TASK #7: Track retrieval metrics
+    try:
+        from retrieval.metrics import record_retrieval
+        _track_metrics = True
+    except ImportError:
+        _track_metrics = False
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -415,6 +521,9 @@ def triage_retrieval(
     try:
         # Generate query embedding
         query_embedding = embed_text(query_text)
+        if query_embedding is None:
+            logger.error(f"Failed to generate query embedding for triage retrieval. Cannot proceed.")
+            return {"incident_signatures": [], "runbook_metadata": []}
         query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
         # Normalize service and component
@@ -520,8 +629,8 @@ def triage_retrieval(
                 COALESCE(f.fulltext_score, 0.0) as fulltext_score,
                 COALESCE(v.vector_rank, 999) as vector_rank,
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
-                (1.0 / (60.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
-                (1.0 / (60.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
+                (1.0 / ({rrf_k}.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
+                (1.0 / ({rrf_k}.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
                 -- PHASE 1: Soft filter boosts for service/component matching
                 -- Service match boost: exact match = 0.15, partial match = 0.10, no match = 0.0
                 -- Check both service and affected_service fields
@@ -830,10 +939,30 @@ def triage_retrieval(
             f"{len(runbook_metadata)} runbook metadata"
         )
 
-        return {
+        result = {
             "incident_signatures": incident_signatures,
             "runbook_metadata": runbook_metadata,
         }
+        
+        # TASK #7: Record retrieval metrics
+        if _track_metrics:
+            retrieval_time_ms = (time.time() - start_time) * 1000
+            try:
+                # Combine all results for metrics
+                all_results = incident_signatures + runbook_metadata
+                record_retrieval(
+                    results=all_results,
+                    retrieval_type="triage_retrieval",
+                    service=service,
+                    component=component,
+                    query_service=service,
+                    query_component=component,
+                    retrieval_time_ms=retrieval_time_ms,
+                )
+            except Exception as e:
+                logger.debug(f"Failed to record triage retrieval metrics: {e}")
+        
+        return result
 
     finally:
         cur.close()

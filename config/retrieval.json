@@ -25,7 +25,12 @@
     "prefer_types": ["runbook", "incident", "log"],
     "max_per_type": {
       "runbook": 5
-    }
+    },
+    "use_mmr": false,
+    "mmr_diversity": 0.5,
+    "_note_mmr": "Set use_mmr=true to use Maximal Marginal Relevance for more diverse results",
+    "rrf_k": 60,
+    "_note_rrf_k": "RRF parameter k (default 60). Lower values give more weight to top results, higher values flatten the ranking."
   },
   "resolution": {
     "method": "hybrid_search",
@@ -46,7 +51,12 @@
         "partial_match_boost": 0.05
       }
     },
-    "prefer_types": ["runbook", "log", "past_incident", "sop"]
+    "prefer_types": ["runbook", "log", "past_incident", "sop"],
+    "use_mmr": false,
+    "mmr_diversity": 0.5,
+    "_note_mmr": "Set use_mmr=true to use Maximal Marginal Relevance for more diverse results",
+    "rrf_k": 60,
+    "_note_rrf_k": "RRF parameter k (default 60). Lower values give more weight to top results, higher values flatten the ranking."
   }
 }
 

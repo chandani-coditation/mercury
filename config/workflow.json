@@ -4,6 +4,10 @@
   
   "feedback_before_policy": false,
   "feedback_timeout_secs": 0,
-  "resolution_requires_approval": false
+  "resolution_requires_approval": false,
+  "resolution": {
+    "allow_resolution_without_context": false,
+    "_note": "If true, resolution agent will generate resolution with low confidence even when no context is found. Default: false (strict validation)"
+  }
 }
 

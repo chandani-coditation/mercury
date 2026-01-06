@@ -40,9 +40,9 @@ class TriageOutput(BaseModel):
 
     incident_signature: IncidentSignature
     matched_evidence: MatchedEvidence
-    severity: str  # critical, high, medium, low (derived from impact/urgency)
-    confidence: float  # 0.0 to 1.0
-    policy: str  # AUTO, PROPOSE, REVIEW (determined by policy gate, but included in output)
+    severity: str  # critical, high, medium, low (derived from impact/urgency - system-calculated, not from LLM)
+    confidence: float  # 0.0 to 1.0 (system-calculated based on evidence quality, not from LLM)
+    policy: str  # AUTO, PROPOSE, REVIEW (determined by policy gate - system-calculated, not from LLM)
     routing: Optional[str] = (
         None  # Team queue assignment (e.g., "SE DBA SQL") - derived from assignment_group
     )
@@ -52,8 +52,11 @@ class TriageOutput(BaseModel):
     urgency: Optional[str] = (
         None  # Original urgency value from historical evidence (e.g., "2 - Medium", "1 - High")
     )
+    category: Optional[str] = (
+        None  # Category from historical incidents or alert labels (e.g., "Database", "Network")
+    )
     likely_cause: Optional[str] = (
-        None  # Most likely root cause based on alert description and matched incident signatures (max 300 chars)
+        None  # LLM-generated summary based on evidence patterns (not a direct quote from historical data, max 300 chars)
     )
 
 
@@ -65,7 +68,6 @@ class RollbackPlan(BaseModel):
     preconditions: Optional[List[str]] = (
         None  # What to verify BEFORE rollback (state checks, backups)
     )
-    estimated_time_minutes: Optional[int] = None  # Time to complete rollback
     triggers: Optional[List[str]] = None  # Conditions indicating rollback is needed
 
 
@@ -78,9 +80,6 @@ class ResolutionOutput(BaseModel):
     rollback_plan: Optional[Union[List[str], RollbackPlan, Dict]] = (
         None  # Support both legacy (list) and new (structured) formats
     )
-    estimated_time_minutes: int
-    risk_level: str  # low, medium, high
-    requires_approval: bool
     confidence: Optional[float] = None  # System's confidence in these steps (0.0-1.0)
     reasoning: Optional[str] = (
         None  # Short explanation citing evidence chunks (renamed from rationale)
@@ -98,3 +97,4 @@ class FeedbackInput(BaseModel):
     policy_band: Optional[str] = (
         None  # Optional: Override policy band (AUTO, PROPOSE, REVIEW) for approval
     )
+    rating: Optional[str] = None  # "thumbs_up" or "thumbs_down" for simple user feedback

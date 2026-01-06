@@ -1,0 +1,22 @@
+{
+  "_comment": "Classification Fallback Rules",
+  "_description": "Fallback inference rules for failure_type and error_class when no matching incident signatures are found. Update this file to modify fallback behavior without changing prompt templates.",
+  
+  "failure_type_fallbacks": {
+    "SQL_AGENT_JOB_FAILURE": ["job failed", "step failed"],
+    "CONNECTION_FAILURE": ["connection", "timeout"],
+    "STORAGE_FAILURE": ["disk", "volume", "space"],
+    "RESOURCE_FAILURE": ["memory", "cpu"],
+    "UNKNOWN_FAILURE": []
+  },
+  
+  "error_class_fallbacks": {
+    "PERMISSION_ERROR": ["Unable to open", "permission denied"],
+    "CONNECTION_FAILURE": ["timeout", "connection refused"],
+    "SERVICE_ACCOUNT_DISABLED": ["service account", "disabled"],
+    "FILE_ACCESS_ERROR": ["step failed", "output file"],
+    "STEP_EXECUTION_ERROR": ["step failed", "output file"],
+    "UNKNOWN_ERROR": []
+  }
+}
+

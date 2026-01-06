@@ -182,6 +182,7 @@ def ingest_runbook(runbook: IngestRunbook):
             tags=doc.tags,
             last_reviewed_at=doc.last_reviewed_at,
             steps=steps,
+            prerequisites=runbook.prerequisites,  # Pass prerequisites from historical data
         )
         logger.info(f"Runbook ingested successfully: document_id={doc_id}, steps={len(steps)}")
 

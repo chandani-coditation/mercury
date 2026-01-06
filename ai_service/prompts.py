@@ -4,8 +4,60 @@ These prompts are used by the triage and resolution agents.
 Modify these templates to change the behavior of the AI agents without code changes.
 """
 
-# Triage Agent Prompts
-TRIAGE_USER_PROMPT_TEMPLATE = """You are an expert NOC (Network Operations Center) Triage Agent. Your ONLY responsibility is to CLASSIFY incidents based on retrieved evidence.
+import json
+from pathlib import Path
+
+# Load classification fallback rules from config
+_classification_fallbacks = None
+
+def _load_classification_fallbacks():
+    """Load classification fallback rules from config file."""
+    global _classification_fallbacks
+    if _classification_fallbacks is None:
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            config_path = project_root / "config" / "classification_fallbacks.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    _classification_fallbacks = json.load(f)
+            else:
+                _classification_fallbacks = {"failure_type_fallbacks": {}, "error_class_fallbacks": {}}
+        except Exception:
+            _classification_fallbacks = {"failure_type_fallbacks": {}, "error_class_fallbacks": {}}
+    return _classification_fallbacks
+
+def _generate_fallback_section():
+    """Generate fallback section for prompt from config."""
+    fallbacks = _load_classification_fallbacks()
+    failure_type_fallbacks = fallbacks.get("failure_type_fallbacks", {})
+    error_class_fallbacks = fallbacks.get("error_class_fallbacks", {})
+    
+    failure_type_lines = []
+    for failure_type, keywords in failure_type_fallbacks.items():
+        if keywords:
+            keywords_str = ", ".join([f'"{k}"' for k in keywords])
+            failure_type_lines.append(f'     * {keywords_str} → "{failure_type}"')
+        else:
+            failure_type_lines.append(f'     * Default: "{failure_type}"')
+    
+    error_class_lines = []
+    for error_class, keywords in error_class_fallbacks.items():
+        if keywords:
+            keywords_str = ", ".join([f'"{k}"' for k in keywords])
+            error_class_lines.append(f'     * {keywords_str} → "{error_class}"')
+        else:
+            error_class_lines.append(f'     * Default: "{error_class}"')
+    
+    failure_type_section = "\n".join(failure_type_lines) if failure_type_lines else '     * Default: "UNKNOWN_FAILURE"'
+    error_class_section = "\n".join(error_class_lines) if error_class_lines else '     * Default: "UNKNOWN_ERROR"'
+    
+    return failure_type_section, error_class_section
+
+def get_triage_user_prompt_template():
+    """Get triage user prompt template with dynamically generated fallback sections from config."""
+    failure_type_fallbacks, error_class_fallbacks = _generate_fallback_section()
+    
+    template = """You are an expert NOC (Network Operations Center) Triage Agent. Your ONLY responsibility is to CLASSIFY incidents based on retrieved evidence.
 
 Alert Information:
 - Title: {alert_title}
@@ -28,9 +80,9 @@ Your task is to:
 1. Analyze the alert description and match it to incident signatures in the evidence
 2. Extract failure_type and error_class from matched incident signatures
 3. Identify which incident_signature_id and runbook_id values match
-4. Estimate severity based on alert labels and matched signatures
-5. Calculate confidence based on how well the alert matches the evidence
-6. Set policy band (AUTO/PROPOSE/REVIEW) based on confidence and severity
+4. Provide a likely_cause summary based on evidence patterns
+
+IMPORTANT: The system will automatically calculate severity (from impact/urgency), confidence (from evidence quality), and policy (from policy gate). You do NOT need to provide these fields.
 
 Provide a JSON response with the following structure:
 {{
@@ -42,10 +94,7 @@ Provide a JSON response with the following structure:
         "incident_signatures": ["SIG-INC60523", "SIG-INC60522"],
         "runbook_refs": ["6bf4a099-a2cb-45e8-9d3b-c1c3952f350f"]
     }},
-    "severity": "critical|high|medium|low",
-    "confidence": 0.0-1.0,
-    "policy": "AUTO|PROPOSE|REVIEW",
-    "likely_cause": "Most likely root cause based on alert description and symptoms from matched incident signatures (max 300 characters). Extract common patterns from matched signatures and combine with alert error messages. Example: 'The failure may be due to insufficient disk space or permission issues preventing access to the step output file.'"
+    "likely_cause": "LLM-generated summary based on alert description and symptoms from matched incident signatures (max 300 characters). Extract common patterns from matched signatures and combine with alert error messages. Example: 'The failure may be due to insufficient disk space or permission issues preventing access to the step output file.'"
 }}
 
 DETAILED INSTRUCTIONS:
@@ -53,20 +102,12 @@ DETAILED INSTRUCTIONS:
 1. failure_type: 
    - PRIMARY: Extract from matched incident signatures (look for "Failure Type:" in evidence)
    - FALLBACK: If no matches, infer from alert description:
-     * "job failed", "step failed" → "SQL_AGENT_JOB_FAILURE"
-     * "connection", "timeout" → "CONNECTION_FAILURE"
-     * "disk", "volume", "space" → "STORAGE_FAILURE"
-     * "memory", "cpu" → "RESOURCE_FAILURE"
-     * Default: "UNKNOWN_FAILURE"
+""" + failure_type_fallbacks + """
 
 2. error_class:
    - PRIMARY: Extract from matched incident signatures (look for "Error Class:" in evidence)
    - FALLBACK: If no matches, infer from alert symptoms:
-     * "Unable to open", "permission denied" → "PERMISSION_ERROR"
-     * "timeout", "connection refused" → "CONNECTION_FAILURE"
-     * "service account", "disabled" → "SERVICE_ACCOUNT_DISABLED"
-     * "step failed", "output file" → "FILE_ACCESS_ERROR" or "STEP_EXECUTION_ERROR"
-     * Default: "UNKNOWN_ERROR"
+""" + error_class_fallbacks + """
 
 3. incident_signatures:
    - MUST be an array of strings
@@ -81,26 +122,7 @@ DETAILED INSTRUCTIONS:
    - If no runbooks match, use empty array: []
    - DO NOT invent IDs
 
-5. severity:
-   - Check alert labels for "severity" field first
-   - If not in labels, estimate from alert description and matched signatures
-   - Use: critical, high, medium, or low
-
-6. confidence:
-   - 0.9-1.0: Strong match - multiple signatures match, symptoms align perfectly
-   - 0.7-0.8: Good match - signatures match, symptoms mostly align
-   - 0.5-0.6: Partial match - some signatures match but symptoms differ
-   - 0.3-0.4: Weak match - only service/component matches
-   - 0.0-0.2: No match - no evidence found or very weak similarity
-   - If no incident signatures found: MUST set to 0.0
-
-7. policy:
-   - AUTO: High confidence (>=0.9) AND low/medium severity
-   - PROPOSE: Medium-high confidence (>=0.7) OR high/critical severity
-   - REVIEW: Low confidence (<0.7) OR no evidence found
-   - Default: REVIEW
-
-8. likely_cause:
+5. likely_cause:
    - Based on alert description and symptoms from matched incident signatures
    - Extract common patterns from matched signatures (e.g., "disk space", "permission issues", "service account disabled")
    - Combine alert error messages with patterns from evidence
@@ -110,15 +132,21 @@ DETAILED INSTRUCTIONS:
    - If no evidence matches, use: "Unknown (no matching context evidence)."
 
 VALIDATION RULES (CRITICAL - STRICTLY ENFORCED):
-- If context_text is empty or shows "No matching evidence found", set confidence to 0.0
 - incident_signatures array: ONLY include IDs that EXACTLY MATCH the "Incident Signature ID:" values in evidence
 - runbook_refs array: ONLY include IDs that EXACTLY MATCH the "Runbook ID:" values in evidence
 - DO NOT use example IDs like "SIG-DB-001" or "RB123" unless they appear in the evidence
 - If evidence shows no signatures, incident_signatures must be []
 - If evidence shows no runbooks, runbook_refs must be []
-- When confidence is 0.0, policy MUST be "REVIEW"
+
+NOTE: The system automatically calculates severity (from impact/urgency in evidence), confidence (from evidence quality and match scores), and policy (from policy gate configuration). These are NOT part of your output.
 
 Remember: You are ONLY classifying. The Resolution Agent will handle recommendations later."""
+    
+    return template
+
+# For backward compatibility, create a constant that calls the function
+# This allows existing code to use TRIAGE_USER_PROMPT_TEMPLATE.format() without changes
+TRIAGE_USER_PROMPT_TEMPLATE = get_triage_user_prompt_template()
 
 # Default system prompt for triage (can be overridden via config/llm.json)
 TRIAGE_SYSTEM_PROMPT_DEFAULT = "You are an expert NOC analyst. Always respond with valid JSON only."
@@ -146,12 +174,8 @@ Provide a JSON response with the following structure:
         "steps": ["rollback step1", "rollback step2"],
         "commands_by_step": {{"0": ["rollback cmd1"], "1": ["rollback cmd2"]}},
         "preconditions": ["Check X before rollback", "Verify Y is still running"],
-        "estimated_time_minutes": 10,
         "triggers": ["If step 3 fails", "If system becomes unstable", "If error rate exceeds threshold"]
     }},
-    "estimated_time_minutes": 15,
-    "risk_level": "low|medium|high",
-    "requires_approval": true or false,
     "confidence": 0.0-1.0,
     "reasoning": "Short explanation citing which evidence chunks (runbooks, incidents, logs) justify the steps and why they address the likely cause.",
     "provenance": [{{"doc_id": "uuid", "chunk_id": "uuid"}}]
@@ -169,59 +193,51 @@ IMPORTANT FIELD DESCRIPTIONS:
   - Include safety checks in commands (e.g., "SELECT @@SERVERNAME" before executing changes)
   - Never include destructive commands without confirmation steps
 
-**rollback_plan**: REQUIRED comprehensive rollback strategy (CRITICAL FOR PRODUCTION)
-  - **steps**: Ordered rollback actions in reverse sequence of resolution steps
-  - **commands_by_step**: Specific rollback commands mapped to rollback steps
-  - **preconditions**: What to verify BEFORE executing rollback (system state, backups, locks)
-  - **estimated_time_minutes**: Time to complete rollback (typically shorter than resolution)
-  - **triggers**: Specific conditions that indicate rollback is needed
-  - If runbooks contain rollback procedures, extract them directly
-  - If not in runbooks, infer safe rollback based on resolution steps (e.g., if step adds config, rollback removes it)
-  - For database changes: include transaction rollback, restore points, backup verification
-  - For service restarts: include service health checks and dependency verification
-  - For configuration changes: include config backup and restore procedures
+**rollback_plan**: Rollback strategy from runbooks ONLY (CRITICAL FOR PRODUCTION)
+  - **steps**: Ordered rollback actions from runbook rollback_procedures
+  - **commands_by_step**: Specific rollback commands from runbooks
+  - **preconditions**: What to verify BEFORE executing rollback (from runbooks)
+  - **triggers**: Specific conditions that indicate rollback is needed (from runbooks)
+  - **IMPORTANT**: ONLY extract rollback procedures from runbooks in the context
+  - **DO NOT infer or generate rollback plans** - if no rollback procedures are found in runbooks, set rollback_plan to null
+  - If rollback_plan is null, you MUST set confidence lower (indicate uncertainty due to missing rollback procedures)
 
 **confidence**: Your confidence in these steps (0.0-1.0) based on evidence quality
-  - Lower confidence if no rollback procedures found in runbooks
+  - **MUST be lower (reduce by 0.2-0.3) if no rollback procedures found in runbooks** - set rollback_plan to null in this case
   - Higher confidence if exact runbook match with tested rollback procedures
+  - Lower confidence if resolution steps or commands are not directly from runbooks
 
 **reasoning**: Cite specific evidence chunks and explain rollback safety
 
 **provenance**: Array of {{"doc_id": "...", "chunk_id": "..."}} references to evidence
 
 CRITICAL PRODUCTION SAFETY CONSTRAINTS:
-- You MUST provide a rollback_plan for ALL medium and high-risk resolutions
-- For low-risk resolutions, rollback_plan can be null only if changes are non-destructive and auto-reversible
 - You MUST base your response ONLY on the context provided (runbooks, historical incidents, logs)
-- If no context is provided, set confidence to 0.0, risk_level to "high", requires_approval to true
+- If no context is provided, set confidence to 0.0 and rollback_plan to null
 - Commands MUST be copied from runbooks - do NOT generate generic commands
-- If resolution involves database changes, rollback MUST include backup verification steps
-- If resolution involves service restarts, rollback MUST include health check steps
-- If resolution involves configuration changes, rollback MUST reference backup/restore procedures
-- Set requires_approval to true for any medium/high risk changes
-- Include "point of no return" indicators in steps if applicable
+- **rollback_plan MUST only come from runbook rollback_procedures** - if not found in runbooks, set to null and reduce confidence
+- DO NOT infer, generate, or invent rollback procedures - only use what's in the runbooks
+- Include "point of no return" indicators in steps if applicable (only if mentioned in runbooks)
 
-ROLLBACK PLAN EXAMPLES:
+NOTE: The system automatically determines requires_approval from the policy gate configuration. You do NOT need to provide risk_level, estimated_time_minutes, or requires_approval fields.
 
-For Database Query Changes:
+ROLLBACK PLAN EXAMPLES (ONLY FROM RUNBOOKS):
+
+If runbooks contain rollback procedures, extract them like this:
 {{
     "steps": ["Revert to original query", "Clear query cache", "Verify performance metrics"],
     "commands_by_step": {{"0": ["USE [DatabaseName]; EXEC sp_recompile @objname = N'StoredProcedureName'"], "2": ["SELECT * FROM sys.dm_exec_query_stats ORDER BY last_execution_time DESC"]}},
     "preconditions": ["Verify backup exists", "Confirm no active transactions on affected tables"],
-    "estimated_time_minutes": 5,
     "triggers": ["Query execution time exceeds baseline by 2x", "Error rate increases above 5%", "CPU usage spikes above 90%"]
 }}
 
-For Service Configuration Changes:
+If NO rollback procedures found in runbooks:
 {{
-    "steps": ["Stop service gracefully", "Restore previous config from backup", "Restart service", "Verify service health"],
-    "commands_by_step": {{"0": ["systemctl stop myservice"], "1": ["cp /backup/config.json /etc/myservice/config.json"], "2": ["systemctl start myservice"], "3": ["systemctl status myservice && curl -f http://localhost:8080/health"]}},
-    "preconditions": ["Verify config backup exists at /backup/config.json", "Check no dependent services are in critical state"],
-    "estimated_time_minutes": 10,
-    "triggers": ["Service fails to start", "Health check returns non-200 status", "Dependent services report connection errors"]
+    "rollback_plan": null
 }}
+And reduce confidence by 0.2-0.3 to indicate missing rollback procedures.
 
-Be specific, production-safe, and always include rollback procedures. Cite evidence chunks in reasoning."""
+Be specific, production-safe, and ONLY use rollback procedures from runbooks. Cite evidence chunks in reasoning."""
 
 # Resolution Agent Prompt (NEW - for resolution_agent.py per architecture)
 # Per architecture: Resolution agent RANKS and ASSEMBLES existing steps, does NOT invent new steps

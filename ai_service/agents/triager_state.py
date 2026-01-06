@@ -57,7 +57,13 @@ async def _triage_agent_state_internal(
         alert["ts"] = datetime.utcnow().isoformat()
 
     # Retrieve context
-    query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
+    # Enhance query text for better retrieval
+    try:
+        from retrieval.query_enhancer import enhance_query
+        query_text = enhance_query(alert)
+    except Exception as e:
+        logger.warning(f"Query enhancement failed, using basic query: {e}")
+        query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
     labels = alert.get("labels", {}) or {}
     service_val = labels.get("service") if isinstance(labels, dict) else None
     component_val = labels.get("component") if isinstance(labels, dict) else None

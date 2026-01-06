@@ -1,0 +1,29 @@
+{
+  "_comment": "Regex Patterns for Structured Data Extraction",
+  "_description": "Centralized regex patterns for extracting error codes, job names, IDs, and service names from text. Update this file to add/modify extraction patterns without code changes.",
+  
+  "error_code_patterns": [
+    "\\b(?:Error|ERROR|error)\\s+(\\d+)\\b",
+    "\\b(?:SQLSTATE|sqlstate)\\s+(\\d{5})\\b",
+    "\\b(?:HTTP|http)\\s+(\\d{3})\\b",
+    "\\b(?:Code|CODE|code)\\s+(\\d+)\\b",
+    "\\b(?:Status|STATUS|status)\\s+(\\d+)\\b"
+  ],
+  
+  "job_patterns": [
+    "\\b(?:job|process|task|service)\\s+[\"']?([A-Z][a-zA-Z0-9_-]+)[\"']?",
+    "[\"']([A-Z][a-zA-Z0-9_-]+)[\"']"
+  ],
+  
+  "id_patterns": [
+    "\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b",
+    "\\bID[:\\s]+([A-Z0-9-]+)\\b",
+    "\\b([A-Z]{2,}-\\d+)\\b"
+  ],
+  
+  "service_patterns": [
+    "\\b([A-Z][a-zA-Z0-9]+(?:-[A-Z][a-zA-Z0-9]+)+)\\b",
+    "\\b([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+)\\b"
+  ]
+}
+

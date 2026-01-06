@@ -63,6 +63,9 @@ function App() {
   const [sideOpen, setSideOpen] = useState(true);
   const [resultTab, setResultTab] = useState("triage");
   const [acknowledgeNoEvidence, setAcknowledgeNoEvidence] = useState(false);
+  const [triageRating, setTriageRating] = useState(null); // 'thumbs_up' or 'thumbs_down'
+  const [resolutionRating, setResolutionRating] = useState(null); // 'thumbs_up' or 'thumbs_down'
+  const [ratingStatus, setRatingStatus] = useState({ triage: "idle", resolution: "idle" });
   const hasResults =
     triage || policy || retrieval || resolution || resolutionError;
 
@@ -341,6 +344,9 @@ function App() {
       }
       setResolution(data.resolution || data);
       setResolutionStatus("success");
+      // Reset resolution rating when new resolution is generated
+      setResolutionRating(null);
+      setRatingStatus(prev => ({ ...prev, resolution: "idle" }));
     } catch (err) {
       // Capture error detail for display in right panel
       const errorDetail = err.response?.data || {
@@ -802,7 +808,77 @@ function App() {
               <div className="card result-card fill">
                 {resultTab === "triage" && triage ? (
                   <>
-                    <div className="section-title">Triage Output</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                      <div className="section-title">Triage Output</div>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.85em", color: "#666" }}>Was this helpful?</span>
+                        <button
+                          type="button"
+                          className={`icon-button ${triageRating === "thumbs_up" ? "active" : ""}`}
+                          onClick={async () => {
+                            if (!incidentId) return;
+                            setRatingStatus(prev => ({ ...prev, triage: "loading" }));
+                            try {
+                              await putFeedback(incidentId, {
+                                feedback_type: "triage",
+                                user_edited: triage,
+                                rating: "thumbs_up",
+                              });
+                              setTriageRating("thumbs_up");
+                              setRatingStatus(prev => ({ ...prev, triage: "success" }));
+                            } catch (err) {
+                              setRatingStatus(prev => ({ ...prev, triage: "error" }));
+                              console.error("Failed to submit feedback:", err);
+                            }
+                          }}
+                          disabled={ratingStatus.triage === "loading"}
+                          style={{
+                            fontSize: "1.2em",
+                            padding: "4px 8px",
+                            border: triageRating === "thumbs_up" ? "2px solid #4CAF50" : "1px solid #ddd",
+                            backgroundColor: triageRating === "thumbs_up" ? "#e8f5e9" : "transparent",
+                            cursor: "pointer",
+                          }}
+                          title="Thumbs up"
+                        >
+                          👍
+                        </button>
+                        <button
+                          type="button"
+                          className={`icon-button ${triageRating === "thumbs_down" ? "active" : ""}`}
+                          onClick={async () => {
+                            if (!incidentId) return;
+                            setRatingStatus(prev => ({ ...prev, triage: "loading" }));
+                            try {
+                              await putFeedback(incidentId, {
+                                feedback_type: "triage",
+                                user_edited: triage,
+                                rating: "thumbs_down",
+                              });
+                              setTriageRating("thumbs_down");
+                              setRatingStatus(prev => ({ ...prev, triage: "success" }));
+                            } catch (err) {
+                              setRatingStatus(prev => ({ ...prev, triage: "error" }));
+                              console.error("Failed to submit feedback:", err);
+                            }
+                          }}
+                          disabled={ratingStatus.triage === "loading"}
+                          style={{
+                            fontSize: "1.2em",
+                            padding: "4px 8px",
+                            border: triageRating === "thumbs_down" ? "2px solid #f44336" : "1px solid #ddd",
+                            backgroundColor: triageRating === "thumbs_down" ? "#ffebee" : "transparent",
+                            cursor: "pointer",
+                          }}
+                          title="Thumbs down"
+                        >
+                          👎
+                        </button>
+                        {ratingStatus.triage === "success" && (
+                          <span style={{ fontSize: "0.75em", color: "#4CAF50" }}>✓</span>
+                        )}
+                      </div>
+                    </div>
                     <div className="json-box fill">
                       {JSON.stringify(triage, null, 2)}
                     </div>
@@ -834,7 +910,77 @@ function App() {
                 ) : null}
                 {resultTab === "resolution" && resolution ? (
                   <>
-                    <div className="section-title">Resolution</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                      <div className="section-title">Resolution</div>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.85em", color: "#666" }}>Was this helpful?</span>
+                        <button
+                          type="button"
+                          className={`icon-button ${resolutionRating === "thumbs_up" ? "active" : ""}`}
+                          onClick={async () => {
+                            if (!incidentId) return;
+                            setRatingStatus(prev => ({ ...prev, resolution: "loading" }));
+                            try {
+                              await putFeedback(incidentId, {
+                                feedback_type: "resolution",
+                                user_edited: resolution.resolution || resolution,
+                                rating: "thumbs_up",
+                              });
+                              setResolutionRating("thumbs_up");
+                              setRatingStatus(prev => ({ ...prev, resolution: "success" }));
+                            } catch (err) {
+                              setRatingStatus(prev => ({ ...prev, resolution: "error" }));
+                              console.error("Failed to submit feedback:", err);
+                            }
+                          }}
+                          disabled={ratingStatus.resolution === "loading"}
+                          style={{
+                            fontSize: "1.2em",
+                            padding: "4px 8px",
+                            border: resolutionRating === "thumbs_up" ? "2px solid #4CAF50" : "1px solid #ddd",
+                            backgroundColor: resolutionRating === "thumbs_up" ? "#e8f5e9" : "transparent",
+                            cursor: "pointer",
+                          }}
+                          title="Thumbs up"
+                        >
+                          👍
+                        </button>
+                        <button
+                          type="button"
+                          className={`icon-button ${resolutionRating === "thumbs_down" ? "active" : ""}`}
+                          onClick={async () => {
+                            if (!incidentId) return;
+                            setRatingStatus(prev => ({ ...prev, resolution: "loading" }));
+                            try {
+                              await putFeedback(incidentId, {
+                                feedback_type: "resolution",
+                                user_edited: resolution.resolution || resolution,
+                                rating: "thumbs_down",
+                              });
+                              setResolutionRating("thumbs_down");
+                              setRatingStatus(prev => ({ ...prev, resolution: "success" }));
+                            } catch (err) {
+                              setRatingStatus(prev => ({ ...prev, resolution: "error" }));
+                              console.error("Failed to submit feedback:", err);
+                            }
+                          }}
+                          disabled={ratingStatus.resolution === "loading"}
+                          style={{
+                            fontSize: "1.2em",
+                            padding: "4px 8px",
+                            border: resolutionRating === "thumbs_down" ? "2px solid #f44336" : "1px solid #ddd",
+                            backgroundColor: resolutionRating === "thumbs_down" ? "#ffebee" : "transparent",
+                            cursor: "pointer",
+                          }}
+                          title="Thumbs down"
+                        >
+                          👎
+                        </button>
+                        {ratingStatus.resolution === "success" && (
+                          <span style={{ fontSize: "0.75em", color: "#4CAF50" }}>✓</span>
+                        )}
+                      </div>
+                    </div>
                     <div className="json-box fill">
                       {JSON.stringify(resolution, null, 2)}
                     </div>
@@ -862,3 +1008,4 @@ function App() {
 }
 
 export default App;
+

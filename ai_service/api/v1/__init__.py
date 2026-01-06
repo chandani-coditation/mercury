@@ -10,6 +10,7 @@ from ai_service.api.v1 import (
     health,
     simulate,
     agents,
+    metrics,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
@@ -23,5 +24,6 @@ router.include_router(feedback.router)
 router.include_router(calibration.router)
 router.include_router(simulate.router)
 router.include_router(agents.router)
+router.include_router(metrics.router)
 
 __all__ = ["router"]

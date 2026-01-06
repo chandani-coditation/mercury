@@ -90,12 +90,13 @@ async def triage(
 
     except ValueError as e:
         # Handle validation errors (e.g., guardrail validation failures)
-        error_msg = str(e)
-        logger.warning(f"Triage validation error: {error_msg}")
+        error_msg = format_user_friendly_error(e, error_type="validation")
+        logger.warning(f"Triage validation error: {str(e)}")
         raise HTTPException(status_code=400, detail=error_msg)
     except ValidationError as e:
+        error_msg = format_user_friendly_error(e, error_type="validation")
         logger.warning(f"Triage validation error: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=error_msg)
     except HTTPException:
         raise
     except Exception as e:

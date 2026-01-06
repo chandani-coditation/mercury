@@ -27,6 +27,7 @@ class FeedbackService:
         system_output: dict,
         user_edited: dict,
         notes: Optional[str] = None,
+        rating: Optional[str] = None,
     ) -> str:
         """
         Create a new feedback record.
@@ -37,12 +38,13 @@ class FeedbackService:
             system_output: Original system output
             user_edited: User-edited output
             notes: Optional notes from user
+            rating: Optional rating ('thumbs_up' or 'thumbs_down')
 
         Returns:
             Feedback ID
         """
         logger.debug(
-            f"Creating feedback via service for incident: {incident_id}, type={feedback_type}"
+            f"Creating feedback via service for incident: {incident_id}, type={feedback_type}, rating={rating}"
         )
         return self.repository.create(
             incident_id=incident_id,
@@ -50,6 +52,7 @@ class FeedbackService:
             system_output=system_output,
             user_edited=user_edited,
             notes=notes,
+            rating=rating,
         )
 
     def list_feedback_between(

@@ -2,40 +2,71 @@
 
 import tiktoken
 import re
+import json
+from pathlib import Path
 from typing import List
+
+# Load chunking config
+_chunking_config = None
+
+def _load_chunking_config():
+    """Load chunking configuration from config file."""
+    global _chunking_config
+    if _chunking_config is None:
+        try:
+            project_root = Path(__file__).parent.parent
+            config_path = project_root / "config" / "ingestion.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                    _chunking_config = config.get("chunking", {})
+            else:
+                _chunking_config = {}
+        except Exception:
+            _chunking_config = {}
+    return _chunking_config
 
 
 def chunk_text(
     text: str,
-    min_tokens: int = 180,
-    max_tokens: int = 320,
-    target_tokens: int = 250,
-    overlap: int = 30,
+    min_tokens: int = None,
+    max_tokens: int = None,
+    target_tokens: int = None,
+    overlap: int = None,
 ) -> List[str]:
     """
     Chunk text into token-sized pieces with overlap.
 
     Args:
         text: Text to chunk
-        min_tokens: Minimum tokens per chunk
-        max_tokens: Maximum tokens per chunk
-        target_tokens: Target tokens per chunk
-        overlap: Number of tokens to overlap between chunks
+        min_tokens: Minimum tokens per chunk (defaults to config)
+        max_tokens: Maximum tokens per chunk (defaults to config)
+        target_tokens: Target tokens per chunk (defaults to config)
+        overlap: Number of tokens to overlap between chunks (defaults to config)
 
     Returns:
         List of text chunks
     """
+    # Load config values (graceful degradation with defaults)
+    chunking_config = _load_chunking_config()
+    min_tokens = min_tokens or chunking_config.get("min_tokens", 180)
+    max_tokens = max_tokens or chunking_config.get("max_tokens", 320)
+    target_tokens = target_tokens or chunking_config.get("target_tokens", 250)
+    overlap = overlap or chunking_config.get("overlap", 30)
+    safe_max_tokens_config = chunking_config.get("safe_max_tokens", 3000)
+    large_paragraph_threshold = chunking_config.get("large_paragraph_threshold", 100000)
+    
     encoding = tiktoken.get_encoding("cl100k_base")  # Used by text-embedding-3-small
 
     # Safety limit: ensure chunks never exceed embedding model limit (8191 tokens)
-    # We use a conservative limit of 3000 tokens to account for headers and safety margin
-    SAFE_MAX_TOKENS = min(max_tokens, 3000)
+    # We use a conservative limit from config (default 3000) to account for headers and safety margin
+    SAFE_MAX_TOKENS = min(max_tokens, safe_max_tokens_config)
 
     # Split by paragraphs first
     paragraphs = re.split(r"\n\s*\n", text.strip())
 
     # If no paragraph breaks (e.g., large log file), split by single newlines
-    if len(paragraphs) == 1 and len(text) > 100000:  # Large single paragraph
+    if len(paragraphs) == 1 and len(text) > large_paragraph_threshold:  # Large single paragraph (from config)
         paragraphs = text.split("\n")
 
     chunks = []

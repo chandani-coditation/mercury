@@ -299,50 +299,16 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         alert["ts"] = datetime.utcnow().isoformat()
 
     # Retrieve evidence (incident signatures and runbook metadata only)
-    # Build query text with better keyword extraction
-    title = alert.get("title", "") or ""
-    description = alert.get("description", "") or ""
-
-    # Extract key phrases from description for better matching
-    # Remove common noise words and focus on error messages
-    key_phrases = []
-    if description:
-        # Extract error messages, job names, step names
-        import re
-
-        # Look for patterns like "Unable to...", "The step failed", "Job failed"
-        error_patterns = [
-            r"Unable to [^\.]+",
-            r"[Tt]he step failed",
-            r"[Jj]ob failed",
-            r"[Ee]rror[^\.]*",
-            r"[Ff]ailed[^\.]*",
-        ]
-        for pattern in error_patterns:
-            matches = re.findall(pattern, description)
-            key_phrases.extend(matches)
-
-    # Combine title, description, and unique key phrases
-    query_parts = [title, description]
-    if key_phrases:
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_phrases = []
-        for phrase in key_phrases:
-            phrase_lower = phrase.lower().strip()
-            if phrase_lower and phrase_lower not in seen:
-                seen.add(phrase_lower)
-                unique_phrases.append(phrase.strip())
-        query_parts.extend(unique_phrases)
-
-    # Join and clean up extra whitespace
-    query_text = " ".join(query_parts).strip()
-    # Clean up: remove extra spaces, normalize punctuation
-    import re
-
-    query_text = re.sub(r"\s+", " ", query_text)  # Multiple spaces to single
-    query_text = re.sub(r"\.\s*\.", ".", query_text)  # Multiple periods
-    query_text = query_text.strip()
+    # Build enhanced query text using query enhancer
+    try:
+        from retrieval.query_enhancer import enhance_query
+        query_text = enhance_query(alert)
+    except Exception as e:
+        # Fallback to basic query if enhancement fails
+        logger.warning(f"Query enhancement failed, using basic query: {e}")
+        title = alert.get("title", "") or ""
+        description = alert.get("description", "") or ""
+        query_text = f"{title} {description}".strip()
 
     labels = alert.get("labels", {}) or {}
     service_val = labels.get("service") if isinstance(labels, dict) else None
@@ -359,9 +325,19 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     retrieval_limit = retrieval_cfg.get("limit", 5)
     vector_weight = retrieval_cfg.get("vector_weight", 0.7)
     fulltext_weight = retrieval_cfg.get("fulltext_weight", 0.3)
+    use_mmr = retrieval_cfg.get("use_mmr", False)
+    mmr_diversity = retrieval_cfg.get("mmr_diversity", 0.5)
 
     # Use specialized triage retrieval (incident signatures + runbook metadata only)
     try:
+        # Check if MMR should be used
+        if use_mmr:
+            from retrieval.hybrid_search import mmr_search
+            # MMR requires hybrid_search results first, so we use triage_retrieval then apply MMR
+            # For now, use triage_retrieval and note that MMR can be applied to results if needed
+            logger.debug(f"MMR requested but triage_retrieval doesn't support MMR yet. Using standard retrieval.")
+        
+        rrf_k = retrieval_config.get("rrf_k", 60)
         triage_evidence = triage_retrieval(
             query_text=query_text,
             service=service_val,
@@ -369,6 +345,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             limit=retrieval_limit,
             vector_weight=vector_weight,
             fulltext_weight=fulltext_weight,
+            rrf_k=rrf_k,
         )
 
         # Validate retrieval boundaries (guardrail: wrong retrieval)
@@ -398,6 +375,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     # Check if we have evidence
     evidence_warning = None
     has_evidence = len(incident_signatures) > 0 or len(runbook_metadata) > 0
+    evidence_status = "success" if has_evidence else "no_evidence"
 
     if not has_evidence:
         try:
@@ -415,22 +393,30 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
         if doc_count is None:
             evidence_warning = (
-                "No matching evidence found (could not verify database). Manual review required."
+                "⚠️ NO EVIDENCE FOUND: Could not verify database state. "
+                "Manual review required. Status: FAILED (no historical evidence available)."
             )
+            evidence_status = "failed_no_evidence"
         elif doc_count == 0:
             evidence_warning = (
-                "No historical data found in knowledge base. Please ingest runbooks/incidents. "
-                "Proceeding with REVIEW and confidence=0.0."
+                "⚠️ NO EVIDENCE FOUND: No historical data in knowledge base. "
+                "Please ingest runbooks and historical incidents first using: "
+                "`python scripts/data/ingest_runbooks.py` and `python scripts/data/ingest_servicenow_tickets.py`. "
+                "Status: FAILED (no historical evidence available). Proceeding with REVIEW and confidence=0.0."
             )
+            evidence_status = "failed_no_evidence"
         else:
             evidence_warning = (
-                f"No matching evidence found. Database has {doc_count} documents, but none match the alert context. "
-                "Proceeding with REVIEW and confidence=0.0. Please align service/component metadata or ingest matching data."
+                f"⚠️ NO EVIDENCE FOUND: Database has {doc_count} documents, but none match the alert context. "
+                "This may be due to service/component metadata mismatch. "
+                "Please align service/component metadata or ingest matching data. "
+                "Status: FAILED (no matching historical evidence). Proceeding with REVIEW and confidence=0.0."
             )
+            evidence_status = "failed_no_matching_evidence"
 
     # Call LLM for triage with evidence
     if has_evidence:
-        logger.info("Calling LLM for triage with evidence...")
+        logger.info(f"✅ TRIAGE SUCCESS: Found {len(incident_signatures)} incident signatures and {len(runbook_metadata)} runbook metadata. Calling LLM for triage...")
         triage_output = call_llm_for_triage(alert, triage_evidence)
 
         # Validate triage output with guardrails
@@ -655,6 +641,26 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             if routing:
                 triage_output["routing"] = routing
                 logger.info(f"Routing extracted from alert labels (fallback): {routing}")
+
+        # EXTRACT category from incident signatures or alert labels
+        category = None
+        # First, try to extract from incident signatures
+        if incident_signatures:
+            for sig in incident_signatures[:3]:  # Check top 3 signatures
+                metadata = sig.get("metadata", {})
+                # Check if category is stored in metadata (from historical incidents)
+                if "category" in metadata:
+                    category = metadata.get("category")
+                    if category:
+                        break
+        # Fallback: Extract from alert labels
+        if not category:
+            labels = alert.get("labels", {})
+            if isinstance(labels, dict):
+                category = labels.get("category")
+        if category:
+            triage_output["category"] = category
+            logger.info(f"Category extracted: {category}")
 
         # Apply policy gate AFTER severity has been set from impact/urgency
         # This ensures policy uses the correct severity value
@@ -938,9 +944,24 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         "evidence": formatted_evidence,
         "policy_band": policy_band,
         "policy_decision": policy_decision,
+        "evidence_warning": evidence_warning,
+        "evidence_status": evidence_status,  # "success", "failed_no_evidence", "failed_no_matching_evidence"
+        "status": "success" if has_evidence else "failed_no_evidence",  # Overall status
+        "evidence_count": {
+            "incident_signatures": len(incident_signatures),
+            "runbook_metadata": len(runbook_metadata),
+            "total": len(incident_signatures) + len(runbook_metadata)
+        },
     }
 
+    # Add warning field for backward compatibility
     if evidence_warning:
         result["warning"] = evidence_warning
+
+    # Log clear status message
+    if has_evidence:
+        logger.info(f"✅ TRIAGE SUCCESS: Found {len(incident_signatures)} incident signatures and {len(runbook_metadata)} runbook metadata. Triage completed successfully.")
+    else:
+        logger.warning(f"❌ TRIAGE FAILED: No evidence found. {evidence_warning or 'No matching historical evidence available.'}")
 
     return result
