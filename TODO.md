@@ -2,7 +2,90 @@
 
 ## 🟡 Medium Priority Issues
 
-### 1. MMR Testing and Documentation
+### 1. Remove Hardcoded Step Type and Risk Level Logic
+**Status**: 🟡 PENDING  
+**Impact**: Step type detection, risk level assessment, and step ordering use hardcoded values  
+**Location**: `ai_service/step_transformation.py`, `ai_service/ranking.py`, `ai_service/policy.py`
+
+**Hardcoded Values Found**:
+- **step_transformation.py**:
+  - Line 103-109: Documentation phrase detection keywords (hardcoded list)
+  - Line 245: Step type whitelist `["documentation", "context"]` (hardcoded)
+  - Line 288: Step type priority order `["investigation", "mitigation", "resolution", "verification", "rollback"]` (hardcoded)
+  - Line 452: Risk level validation `["low", "medium", "high"]` (hardcoded)
+  - Line 456, 459: Dangerous/risky keyword lists (hardcoded)
+- **ranking.py**:
+  - Line 291: Dangerous action keywords `["kill", "delete", "drop", "remove", "stop", "restart"]` (hardcoded)
+  - Line 294: Modification keywords `["update", "modify", "change", "alter"]` (hardcoded)
+  - Line 304: Condition text exclusions `["step applies", "n/a"]` (hardcoded)
+- **policy.py**:
+  - Line 172: High risk levels `["high", "critical"]` (hardcoded)
+  - Line 199: Risk level check for "high" (hardcoded)
+
+**Tasks**:
+- [ ] Create `config/step_classification.json` with:
+  - Step type definitions and priority order
+  - Documentation phrase patterns
+  - Risk level definitions and keywords
+  - Dangerous action keywords
+  - Modification keywords
+  - Condition text exclusions
+- [ ] Refactor `step_transformation.py` to use config
+- [ ] Refactor `ranking.py` to use config
+- [ ] Refactor `policy.py` to use config
+- [ ] Test with various step types and risk levels
+
+---
+
+### 2. Remove Hardcoded Problem Keyword Detection
+**Status**: 🟡 PENDING  
+**Impact**: Problem keyword extraction uses hardcoded lists  
+**Location**: `ai_service/agents/resolution_agent.py`
+
+**Hardcoded Values Found**:
+- Line 238-247: Corrective action keywords `["reduce", "clean", "fix", "resolve", "remove", "clear", "free", "backup"]` (hardcoded)
+- Line 268: Step type filter `["mitigation", "resolution"]` (hardcoded)
+- Line 609-628: Problem keyword detection lists:
+  - Connection: `["connection", "saturation", "max_connections"]`
+  - Replication: `["replication", "lag", "delay"]`
+  - Deadlock: `["deadlock", "lock"]`
+  - Performance: `["slow", "query", "performance"]`
+  - Cluster: `["cluster", "node", "quorum"]`
+  - Disk: `["disk", "space", "volume", "usage"]`
+  - IO: `["io", "i/o", "wait"]`
+  - Memory: `["memory", "ram"]`
+  - CPU: `["cpu", "load"]`
+  - Network: `["network", "latency", "bandwidth"]`
+
+**Tasks**:
+- [ ] Create `config/problem_keywords.json` with keyword groups and mappings
+- [ ] Refactor `resolution_agent.py` to use config-driven keyword detection
+- [ ] Test problem keyword extraction with various summaries
+
+---
+
+### 3. Remove Hardcoded UI Defaults
+**Status**: 🟢 LOW PRIORITY  
+**Impact**: UI components have hardcoded default values  
+**Location**: `ui/src/App.jsx`, `ui/src/components/TicketForm.tsx`
+
+**Hardcoded Values Found**:
+- **App.jsx**:
+  - Line 9-16: `allowedCategories` array (hardcoded)
+  - Line 18-23: `emptyLabels` object with `service: "Database"`, `component: "Alerts"`, `cmdb_ci: "Database-SQL"` (hardcoded)
+- **TicketForm.tsx**:
+  - Line 20-23: `allowedCategories` array (hardcoded)
+  - Line 25-29: `emptyLabels` object with `service: "Database"`, `component: "Database"`, `cmdb_ci: "Database-SQL"` (hardcoded)
+
+**Tasks**:
+- [ ] Create API endpoint to fetch UI defaults from config
+- [ ] Or create `config/ui_defaults.json` and load in UI
+- [ ] Refactor UI components to use config-driven defaults
+- [ ] Ensure defaults match backend service/component mappings
+
+---
+
+### 4. MMR Testing and Documentation
 **Status**: 🟡 PENDING  
 **Impact**: MMR is implemented but not fully tested or documented  
 **Location**: `retrieval/hybrid_search.py`, `README.md`
@@ -14,7 +97,7 @@
 
 ---
 
-### 2. Integration Tests for Service/Component Filtering
+### 5. Integration Tests for Service/Component Filtering
 **Status**: 🟡 Medium  
 **Tasks**:
 - [ ] Test triage with mismatched service/component
@@ -26,7 +109,7 @@
 
 ---
 
-### 3. Document Service/Component Standardization
+### 6. Document Service/Component Standardization
 **Status**: 🟡 Medium  
 **Tasks**:
 - [ ] Document service/component naming conventions
@@ -36,30 +119,9 @@
 
 ---
 
-### 4. Centralize SQL Query Patterns
-**Status**: ✅ COMPLETED  
-**Impact**: Code duplication, maintenance risk, inconsistent scoring logic  
-**Location**: `retrieval/hybrid_search.py`, `retrieval/query_builders.py`
-
-**Completed**:
-- ✅ Created `retrieval/query_builders.py` with shared query components
-- ✅ Extracted RRF score formula (used in 2 queries)
-- ✅ Extracted soft filter boost cases (used in all 3 queries)
-- ✅ Standardized parameter building logic
-- ✅ Refactored `hybrid_search()` query to use builder
-- ✅ Refactored `triage_retrieval()` incident signatures query
-- ✅ Refactored `triage_retrieval()` runbook metadata query
-- ✅ Increased default limits from 5 to 10 for better results
-- ✅ Improved RRF candidate multiplier from 2x to 3x for better fusion
-
-**Remaining**:
-- [ ] Add unit tests for scoring formulas (low priority)
-
----
-
 ## 🟢 Low Priority / Enhancements
 
-### 5. Embedding Caching
+### 1. Embedding Caching
 **Status**: 🟢 Low  
 **Impact**: Redundant API calls, slower ingestion  
 **Location**: `ingestion/embeddings.py`
@@ -80,7 +142,7 @@
 
 ---
 
-### 6. Performance Tests for Retrieval
+### 2. Performance Tests for Retrieval
 **Status**: 🟢 Low  
 **Tasks**:
 - [ ] Benchmark retrieval performance with large datasets
@@ -90,7 +152,7 @@
 
 ---
 
-### 7. Document Retrieval Configuration
+### 3. Document Retrieval Configuration
 **Status**: 🟢 Low  
 **Tasks**:
 - [ ] Document RRF parameters
@@ -102,7 +164,7 @@
 
 ## 💡 Long-term Enhancements
 
-### 8. Auto-updating Technical Terms Dictionary
+### 1. Auto-updating Technical Terms Dictionary
 **Status**: 🔵 Future  
 **Problem**: Current `technical_terms.json` is static and requires manual updates  
 **Solution**: Pattern-based learning from ingested historical data:
@@ -125,7 +187,7 @@
 
 ---
 
-### 9. LLM-based Query Rewriting
+### 2. LLM-based Query Rewriting
 **Status**: 🔵 Future  
 **Description**: Use LLM to rewrite queries for better retrieval
 - Extract intent and expand queries semantically
@@ -133,7 +195,7 @@
 
 ---
 
-### 10. Embedding Fine-tuning
+### 3. Embedding Fine-tuning
 **Status**: 🔵 Future  
 **Description**: Fine-tune embeddings on domain-specific data
 - Better semantic understanding of NOC terminology
@@ -141,7 +203,7 @@
 
 ---
 
-### 11. Hybrid Retrieval with Reranking
+### 4. Hybrid Retrieval with Reranking
 **Status**: 🔵 Future  
 **Description**: Use cross-encoder for reranking
 - More accurate but slower
@@ -152,21 +214,23 @@
 ## 🎯 Priority Summary
 
 **Medium Priority**:
-1. 🟡 MMR Testing and Documentation (#1)
-2. 🟡 Integration Tests for Service/Component Filtering (#2)
-3. 🟡 Document Service/Component Standardization (#3)
-4. 🟡 Centralize SQL Query Patterns (#4)
+1. 🟡 Remove Hardcoded Step Type and Risk Level Logic (#1)
+2. 🟡 Remove Hardcoded Problem Keyword Detection (#2)
+3. 🟢 Remove Hardcoded UI Defaults (#3) - LOW PRIORITY
+4. 🟡 MMR Testing and Documentation (#4)
+5. 🟡 Integration Tests for Service/Component Filtering (#5)
+6. 🟡 Document Service/Component Standardization (#6)
 
 **Low Priority**:
-5. 🟢 Embedding Caching (#5)
-6. 🟢 Performance Tests for Retrieval (#6)
-7. 🟢 Document Retrieval Configuration (#7)
+1. 🟢 Embedding Caching (#1)
+2. 🟢 Performance Tests for Retrieval (#2)
+3. 🟢 Document Retrieval Configuration (#3)
 
 **Future Enhancements**:
-8. 🔵 Auto-updating Technical Terms Dictionary (#8)
-9. 🔵 LLM-based Query Rewriting (#9)
-10. 🔵 Embedding Fine-tuning (#10)
-11. 🔵 Hybrid Retrieval with Reranking (#11)
+1. 🔵 Auto-updating Technical Terms Dictionary (#1)
+2. 🔵 LLM-based Query Rewriting (#2)
+3. 🔵 Embedding Fine-tuning (#3)
+4. 🔵 Hybrid Retrieval with Reranking (#4)
 
 ---
 

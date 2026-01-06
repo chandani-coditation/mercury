@@ -289,7 +289,11 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
     tags = {k: v for k, v in tags.items() if v is not None}
 
     # PHASE 2: Normalize service/component using mapping configuration
-    normalized_service, normalized_component = normalize_service_component(service, component)
+    # Pass context (title + description) for intelligent "Server" → "Infrastructure"/"Storage" mapping
+    context_text = f"{alert.title or ''} {alert.description or ''}".strip()
+    normalized_service, normalized_component = normalize_service_component(
+        service, component, context=context_text if context_text else None
+    )
     
     # Extract structured data for metadata (error codes, IDs, job names)
     structured_data = extract_structured_data(content)
@@ -643,7 +647,11 @@ def validate_service_component_value(value: Optional[str], field_name: str) -> O
     return value
 
 
-def normalize_service_component(service: Optional[str], component: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+def normalize_service_component(
+    service: Optional[str], 
+    component: Optional[str], 
+    context: Optional[str] = None
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Normalize and validate service/component values using mapping configuration.
     
@@ -656,9 +664,15 @@ def normalize_service_component(service: Optional[str], component: Optional[str]
     - Validates format (length, special characters)
     - Logs validation warnings
     
+    Intelligent Service Mapping:
+    - When service is "Server", intelligently maps to "Infrastructure" or "Storage" based on:
+      1. Component value (CPU/Memory → Infrastructure, Disk → Storage)
+      2. Context text analysis (title/description keywords) if component is missing
+    
     Args:
         service: Raw service value (may be None)
         component: Raw component value (may be None)
+        context: Optional context text (title/description) for intelligent mapping when service is "Server"
     
     Returns:
         Tuple of (normalized_service, normalized_component)
@@ -678,33 +692,110 @@ def normalize_service_component(service: Optional[str], component: Optional[str]
     component_aliases = SERVICE_COMPONENT_MAPPING.get("component_aliases", {})
     
     normalized_service = validated_service
-    normalized_component = validated_component
+    # Start with validated component, but may be updated from context detection
+    component_to_normalize = validated_component
     
-    # Normalize service
-    if validated_service and validated_service in service_aliases:
-        normalized_service = service_aliases[validated_service]
-    elif validated_service:
+    # INTELLIGENT MAPPING: When service is ambiguous (e.g., "Server"), map to correct service based on component or context
+    special_values = SERVICE_COMPONENT_MAPPING.get("special_values", {})
+    ambiguous_service_name = special_values.get("ambiguous_service", "Server")
+    
+    if validated_service and validated_service.lower() == ambiguous_service_name.lower():
+        detected_component = None
+        
+        # First, try to infer from existing component
+        if validated_component:
+            detected_component = validated_component
+        # If component doesn't help, detect from context (title/description) using config-driven patterns
+        elif context:
+            detected_component = _detect_component_from_text(context)
+            # Update component_to_normalize if we detected from context
+            if detected_component:
+                component_to_normalize = detected_component
+        
+        # Map detected component to appropriate service using config-driven mapping
+        if detected_component:
+            component_to_service = SERVICE_COMPONENT_MAPPING.get("component_to_service_mapping", {})
+            # Normalize component name for lookup (case-insensitive)
+            component_key = detected_component.capitalize()  # Match config keys like "CPU", "Memory", "Disk"
+            if component_key in component_to_service:
+                normalized_service = component_to_service[component_key]
+            else:
+                # Try case-insensitive match
+                component_lower = detected_component.lower()
+                for comp_key, service_value in component_to_service.items():
+                    if comp_key.lower() == component_lower:
+                        normalized_service = service_value
+                        break
+    
+    # Normalize service using aliases (after intelligent mapping)
+    if normalized_service and normalized_service in service_aliases:
+        normalized_service = service_aliases[normalized_service]
+    elif normalized_service:
         # Try case-insensitive match
-        service_lower = validated_service.lower()
+        service_lower = normalized_service.lower()
         for alias, canonical in service_aliases.items():
             if alias.lower() == service_lower:
                 normalized_service = canonical
                 break
     
-    # Normalize component
-    if validated_component and validated_component in component_aliases:
-        mapped_value = component_aliases[validated_component]
+    # Normalize component (may be from validated_component or detected from context)
+    normalized_component = component_to_normalize
+    if component_to_normalize and component_to_normalize in component_aliases:
+        mapped_value = component_aliases[component_to_normalize]
         # If mapped to null, remove component
         normalized_component = None if mapped_value is None else mapped_value
-    elif validated_component:
+    elif component_to_normalize:
         # Try case-insensitive match
-        component_lower = validated_component.lower()
+        component_lower = component_to_normalize.lower()
         for alias, canonical in component_aliases.items():
             if alias.lower() == component_lower:
                 normalized_component = None if canonical is None else canonical
                 break
     
     return normalized_service, normalized_component
+
+
+def _detect_component_from_text(text: str) -> Optional[str]:
+    """
+    Intelligently detect component from text using configurable patterns.
+    
+    Uses component_detection_patterns from service_component_mapping.json to match
+    regex patterns against text. This is config-driven, not hardcoded.
+    
+    Args:
+        text: Text to analyze (typically title + description)
+    
+    Returns:
+        Detected component name (e.g., "CPU", "Memory", "Disk") or None
+    """
+    if not text:
+        return None
+    
+    text_lower = text.lower()
+    detection_patterns = SERVICE_COMPONENT_MAPPING.get("component_detection_patterns", {})
+    
+    # Try each component's patterns in order (config defines priority)
+    for component_name, patterns in detection_patterns.items():
+        if not isinstance(patterns, list):
+            continue
+        
+        for pattern_str in patterns:
+            try:
+                # Compile pattern with case-insensitive flag
+                pattern = re.compile(pattern_str, re.IGNORECASE)
+                if pattern.search(text_lower):
+                    return component_name
+            except re.error:
+                # Skip invalid regex patterns (graceful degradation)
+                try:
+                    from ai_service.core import get_logger
+                    logger = get_logger(__name__)
+                    logger.warning(f"Invalid regex pattern in component_detection_patterns: {pattern_str}")
+                except:
+                    pass
+                continue
+    
+    return None
 
 
 def _extract_service_component(
@@ -715,35 +806,50 @@ def _extract_service_component(
 
     Rules:
     1. Service: From affected_services[0] if available, split on '-' if present
-    2. Component: Derived from failure_type and incident metadata, not keyword guessing
+    2. Component: Derived from failure_type and incident metadata
+    3. For PERFORMANCE_FAILURE: Uses config-driven pattern matching from text
     """
     service = None
     component = None
 
-    # Extract service from affected_services
+    # Extract service from affected_services using config-driven extraction rules
     if incident.affected_services and len(incident.affected_services) > 0:
         raw_service = incident.affected_services[0]
-        if "-" in raw_service:
-            service = raw_service.split("-")[0].strip()
+        service_extraction_config = SERVICE_COMPONENT_MAPPING.get("service_extraction", {})
+        delimiter = service_extraction_config.get("delimiter", "-")
+        take_first_part = service_extraction_config.get("take_first_part", True)
+        
+        if delimiter and delimiter in raw_service:
+            if take_first_part:
+                service = raw_service.split(delimiter)[0].strip()
+            else:
+                # Take last part (if needed in future)
+                service = raw_service.split(delimiter)[-1].strip()
         else:
             service = raw_service
 
-    # Extract component deterministically based on failure_type and metadata
-    # This is rule-based, not keyword-based
-    if failure_type == "SQL_AGENT_JOB_FAILURE" or failure_type == "DATABASE_FAILURE":
-        component = "Database"
-    elif failure_type == "STORAGE_FAILURE":
-        component = None  # Storage signatures don't have component (per existing data)
-    elif failure_type == "CONNECTION_FAILURE" or failure_type == "TIMEOUT_FAILURE":
-        component = "Network"
-    elif failure_type == "PERFORMANCE_FAILURE":
-        # Component can be determined from error_class if available
-        # But for now, leave as None to match existing behavior
-        component = None
-    elif failure_type == "OPERATING_SYSTEM_FAILURE":
-        component = "Operating System"
-    elif failure_type == "AUTHENTICATION_FAILURE":
-        component = "Security"
+    # Extract component deterministically based on failure_type using config-driven mapping
+    failure_type_to_component = SERVICE_COMPONENT_MAPPING.get("failure_type_to_component_mapping", {})
+    
+    if failure_type in failure_type_to_component:
+        mapped_component = failure_type_to_component[failure_type]
+        
+        # Special case: DETECT_FROM_TEXT means we need to detect component from title/description
+        special_values = SERVICE_COMPONENT_MAPPING.get("special_values", {})
+        detect_from_text_value = special_values.get("detect_from_text", "DETECT_FROM_TEXT")
+        
+        if mapped_component == detect_from_text_value:
+            title_desc = f"{incident.title or ''} {incident.description or ''}".strip()
+            component = _detect_component_from_text(title_desc)
+        # None means this failure type doesn't have a component
+        elif mapped_component is None:
+            component = None
+        else:
+            component = mapped_component
+    else:
+        # If failure_type not in mapping, try to detect from text as fallback
+        title_desc = f"{incident.title or ''} {incident.description or ''}".strip()
+        component = _detect_component_from_text(title_desc)
 
     return service, component
 
@@ -784,7 +890,9 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
     service, component = _extract_service_component(incident, failure_type)
     
     # PHASE 2: Normalize service/component using mapping configuration
-    service, component = normalize_service_component(service, component)
+    # Pass context (title + description) for intelligent "Server" → "Infrastructure"/"Storage" mapping
+    context_text = f"{incident.title or ''} {incident.description or ''}".strip()
+    service, component = normalize_service_component(service, component, context=context_text if context_text else None)
 
     # Resolution refs will be populated later when linking to runbook steps
     resolution_refs = None

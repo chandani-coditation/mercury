@@ -27,6 +27,8 @@ sys.path.insert(0, str(project_root))
 from ai_service.core import get_field_mappings_config, get_logger, setup_logging
 from ingestion.models import IngestRunbook
 import requests
+import json
+from pathlib import Path
 
 # Default ingestion service URL
 INGESTION_SERVICE_URL = "http://localhost:8002"
@@ -261,50 +263,79 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
     # Use field mappings to determine which fields to use
     mappings = field_mappings.get("field_mappings", {})
 
-    # Extract service/component from filename or content (if available)
+    # Extract service/component from filename using config-driven pattern matching
     service = None
     component = None
 
-    # Try to extract from filename with smart pattern matching
+    # Try to extract from filename with config-driven pattern matching
     filename_clean = docx_path.stem.replace("Runbook -", "").replace("Runbook –", "").strip()
     filename_lower = filename_clean.lower()
 
-    # Pattern matching for common runbook types
-    if "database" in filename_lower or "sql" in filename_lower or "db" in filename_lower:
-        service = "Database"
-        component = filename_clean.replace("Database", "").replace("database", "").strip()
-    elif "network" in filename_lower:
-        service = "Network"
-        component = filename_clean.replace("Network", "").replace("network", "").strip()
-    elif "cpu" in filename_lower:
-        service = "Infrastructure"
-        component = filename_clean
-    elif "memory" in filename_lower or "ram" in filename_lower:
-        service = "Infrastructure"
-        component = filename_clean
-    elif "disk" in filename_lower or "volume" in filename_lower or "storage" in filename_lower:
-        service = "Storage"
-        component = filename_clean
-    elif "high" in filename_lower:
-        # Generic "High" alerts - categorize as Infrastructure
-        service = "Infrastructure"
-        component = filename_clean
-    else:
-        # Fallback: split by spaces
+    # Load runbook filename patterns from config
+    try:
+        project_root = Path(__file__).parent.parent.parent
+        mapping_path = project_root / "config" / "service_component_mapping.json"
+        if mapping_path.exists():
+            with open(mapping_path, "r") as f:
+                service_component_mapping = json.load(f)
+            runbook_patterns_config = service_component_mapping.get("runbook_filename_patterns", {})
+            patterns = runbook_patterns_config.get("patterns", [])
+            default_service = runbook_patterns_config.get("default_service", "General")
+            component_suffixes = runbook_patterns_config.get("component_suffixes_to_remove", [" Alerts", " Alert"])
+        else:
+            patterns = []
+            default_service = "General"
+            component_suffixes = [" Alerts", " Alert"]
+    except Exception:
+        patterns = []
+        default_service = "General"
+        component_suffixes = [" Alerts", " Alert"]
+
+    # Try each pattern in order (first match wins)
+    matched = False
+    for pattern in patterns:
+        keywords = pattern.get("keywords", [])
+        # Check if any keyword matches in filename
+        if any(keyword in filename_lower for keyword in keywords):
+            service = pattern.get("service", default_service)
+            component_extraction = pattern.get("component_extraction", "remove_keywords")
+            
+            if component_extraction == "use_full_filename":
+                component = filename_clean
+            elif component_extraction == "remove_keywords":
+                # Remove matched keywords from filename to get component
+                component = filename_clean
+                for keyword in keywords:
+                    # Remove keyword (case-insensitive)
+                    import re
+                    component = re.sub(re.escape(keyword), "", component, flags=re.IGNORECASE).strip()
+                component = " ".join(component.split())  # Normalize whitespace
+            else:
+                component = None
+            
+            matched = True
+            break
+
+    # Fallback: if no pattern matched, use default logic
+    if not matched:
         filename_parts = filename_clean.split()
         if len(filename_parts) >= 2:
             service = filename_parts[0]
             component = " ".join(filename_parts[1:])
         else:
-            service = filename_parts[0] if filename_parts else "General"
+            service = filename_parts[0] if filename_parts else default_service
             component = None
 
-    # Clean up component (remove trailing words like "Alerts")
+    # Clean up component (remove trailing suffixes like "Alerts")
     if component:
         component = component.strip()
-        # Normalize common suffixes
-        if component.endswith(" Alerts"):
-            component = component.replace(" Alerts", "").strip() or "Alerts"
+        for suffix in component_suffixes:
+            if component.endswith(suffix):
+                component = component.replace(suffix, "").strip()
+                break
+        # If component is empty after cleanup, set to None
+        if not component:
+            component = None
 
     # Build comprehensive tags
     runbook_id = str(uuid.uuid4())

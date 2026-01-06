@@ -55,6 +55,116 @@
       "service": "Infrastructure",
       "component": "Memory"
     }
+  },
+  
+  "component_detection_patterns": {
+    "_description": "Regex patterns to detect component from text when component is missing. Used for intelligent component extraction from incident titles/descriptions.",
+    "_note": "Patterns are matched in order, first match wins. Use word boundaries (\\b) to avoid false positives.",
+    "CPU": [
+      "\\bcpu\\b",
+      "\\bhigh cpu\\b",
+      "\\bcpu utilization\\b",
+      "\\bcpu usage\\b",
+      "\\bcpu percent\\b",
+      "\\bprocessor\\b"
+    ],
+    "Memory": [
+      "\\bmemory\\b",
+      "\\bram\\b",
+      "\\bhigh memory\\b",
+      "\\bmemory utilization\\b",
+      "\\bmemory usage\\b",
+      "\\bmemory percent\\b",
+      "\\bmem\\b"
+    ],
+    "Disk": [
+      "\\bdisk\\b",
+      "\\bvolume\\b",
+      "\\bhigh disk\\b",
+      "\\bdisk utilization\\b",
+      "\\bdisk usage\\b",
+      "\\bdisk percent\\b",
+      "\\bdisk space\\b",
+      "\\bvolume utilization\\b",
+      "\\bvolume usage\\b",
+      "\\bstorage\\b"
+    ]
+  },
+  
+  "component_to_service_mapping": {
+    "_description": "Maps detected components to their corresponding services. Used when service is 'Server' to intelligently map to the correct service.",
+    "_note": "This mapping is used for intelligent service resolution when the service is ambiguous (e.g., 'Server').",
+    "CPU": "Infrastructure",
+    "Memory": "Infrastructure",
+    "Disk": "Storage"
+  },
+  
+  "failure_type_to_component_mapping": {
+    "_description": "Maps failure types to their corresponding components. Used during incident signature creation to extract component from failure_type.",
+    "_note": "If component is null, it means that failure type doesn't have a component. If component is 'DETECT_FROM_TEXT', component will be detected from title/description using component_detection_patterns.",
+    "SQL_AGENT_JOB_FAILURE": "Database",
+    "DATABASE_FAILURE": "Database",
+    "STORAGE_FAILURE": null,
+    "CONNECTION_FAILURE": "Network",
+    "TIMEOUT_FAILURE": "Network",
+    "PERFORMANCE_FAILURE": "DETECT_FROM_TEXT",
+    "OPERATING_SYSTEM_FAILURE": "Operating System",
+    "AUTHENTICATION_FAILURE": "Security"
+  },
+  
+  "service_extraction": {
+    "_description": "Configuration for extracting service names from affected_services field.",
+    "_note": "When affected_services contains a delimiter (e.g., 'Database-SQL'), the service name is extracted by splitting on the delimiter and taking the first part.",
+    "delimiter": "-",
+    "take_first_part": true
+  },
+  
+  "special_values": {
+    "_description": "Special constant values used in the mapping logic.",
+    "_note": "These values are used as markers in the mapping logic and should not be actual service/component names.",
+    "ambiguous_service": "Server",
+    "detect_from_text": "DETECT_FROM_TEXT"
+  },
+  
+  "runbook_filename_patterns": {
+    "_description": "Patterns to extract service/component from runbook filenames. Patterns are matched in order, first match wins.",
+    "_note": "Each pattern can specify keywords (case-insensitive), service mapping, and component extraction rules.",
+    "patterns": [
+      {
+        "keywords": ["database", "sql", "db"],
+        "service": "Database",
+        "component_extraction": "remove_keywords"
+      },
+      {
+        "keywords": ["network"],
+        "service": "Network",
+        "component_extraction": "remove_keywords"
+      },
+      {
+        "keywords": ["cpu"],
+        "service": "Infrastructure",
+        "component_extraction": "use_full_filename"
+      },
+      {
+        "keywords": ["memory", "ram"],
+        "service": "Infrastructure",
+        "component_extraction": "use_full_filename"
+      },
+      {
+        "keywords": ["disk", "volume", "storage"],
+        "service": "Storage",
+        "component_extraction": "use_full_filename"
+      },
+      {
+        "keywords": ["high"],
+        "service": "Infrastructure",
+        "component_extraction": "use_full_filename",
+        "_note": "Generic 'High' alerts default to Infrastructure"
+      }
+    ],
+    "default_service": "General",
+    "component_suffixes_to_remove": [" Alerts", " Alert"]
   }
 }
+
 
