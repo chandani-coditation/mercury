@@ -1,0 +1,790 @@
+number,problem_id,opened_at,u_next_action_due_date,short_description,cmdb_ci,category,state,assignment_group,opened_by,impact,urgency,sys_updated_on,description
+INC6053788,,20/12/2025 21:33,,Volume is Critical: brprwmgt017.int.mgc.com-Physical Memory,Server,Performance,Resolved,NOC,SW User,1 - High,1 - High,21/12/2025 20:23,"Node: brprwmgt017.int.mgc.com
+ Volume brprwmgt017.int.mgc.com-Physical Memory:
+  Total size: 23.0 G
+  Free space: 1.0 G
+  Percent used: 95 %
+ 
+ Trigger Time: Saturday, December 20, 2025 9:33 PM"
+INC6053191,,18/12/2025 01:30,,Volume is Critical: BRPRWSCM518A -Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,22/12/2025 00:00,"Node: BRPRWSCM518A
+ Volume BRPRWSCM518A -Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, December 18, 2025 1:30 AM"
+INC6053190,,18/12/2025 01:29,,Volume is Critical: BRPRWSCV518A-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,22/12/2025 00:00,"Node: BRPRWSCV518A
+ Volume BRPRWSCV518A-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.5 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, December 18, 2025 1:29 AM"
+INC6053189,,18/12/2025 01:29,,Volume is Critical: BRPRWSQL518A-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,22/12/2025 00:00,"Node: BRPRWSQL518A
+ Volume BRPRWSQL518A-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, December 18, 2025 1:29 AM"
+INC6053186,,18/12/2025 00:57,,Volume is Critical: brprwsql321-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,22/12/2025 00:00,"Node: brprwsql321
+ Volume brprwsql321-Physical Memory:
+  Total size: 42.0 G
+  Free space: 2.0 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, December 18, 2025 12:57 AM"
+INC6051857,,11/12/2025 14:00,,Volume is Critical: brprwapp803-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,15/12/2025 00:00,"Node: brprwapp803
+ Volume brprwapp803-Physical Memory:
+  Total size: 8.0 G
+  Free space: 184 M
+  Percent used: 98 %
+ 
+ Trigger Time: Thursday, December 11, 2025 2:00 PM"
+INC6050261,,04/12/2025 20:08,,Volume is Critical: brprwmgt023.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/12/2025 0:00,"Node: brprwmgt023.int.mgc.com
+ Volume brprwmgt023.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 151 M
+  Percent used: 96 %
+ 
+ Trigger Time: Thursday, December 4, 2025 8:08 PM"
+INC6048010,,22/11/2025 22:08,,Volume is Critical: brprwmgt017.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,27/11/2025 00:00,"Node: brprwmgt017.int.mgc.com
+ Volume brprwmgt017.int.mgc.com-Physical Memory:
+  Total size: 23.0 G
+  Free space: 913 M
+  Percent used: 96 %
+ 
+ Trigger Time: Saturday, November 22, 2025 10:08 PM"
+INC6047972,,21/11/2025 22:04,,Volume is Critical: brprwmgt015.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,27/11/2025 00:00,"Node: brprwmgt015.int.mgc.com
+ Volume brprwmgt015.int.mgc.com-Physical Memory:
+  Total size: 24.0 G
+  Free space: 843 M
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, November 21, 2025 10:04 PM"
+INC6047968,,21/11/2025 20:31,,Volume is Critical: brprwpl005.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,25/11/2025 00:00,"Node: brprwpl005.int.mgc.com
+ Volume brprwpl005.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 140 M
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, November 21, 2025 8:31 PM"
+INC6047967,,21/11/2025 20:31,,Volume is Critical: brprwnde010.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,25/11/2025 00:00,"Node: brprwnde010.int.mgc.com
+ Volume brprwnde010.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 168 M
+  Percent used: 96 %
+ 
+ Trigger Time: Friday, November 21, 2025 8:31 PM"
+INC6047738,,21/11/2025 02:54,,Volume is Critical: brprwdka101.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,25/11/2025 00:00,"Node: brprwdka101.int.mgc.com
+ Volume brprwdka101.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 166 M
+  Percent used: 96 %
+ 
+ Trigger Time: Friday, November 21, 2025 2:54 AM"
+INC6047723,,21/11/2025 00:09,,Volume is Critical: brprwsql506-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,25/11/2025 00:00,"Node: brprwsql506
+ Volume brprwsql506-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.0 G
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, November 21, 2025 12:09 AM"
+INC6047412,,20/11/2025 07:24,,Volume is Critical: brprwsql321-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,24/11/2025 00:00,"Node: brprwsql321
+ Volume brprwsql321-Physical Memory:
+  Total size: 42.0 G
+  Free space: 2.1 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, November 20, 2025 7:24 AM"
+INC6046970,,19/11/2025 05:43,,Volume is Critical: brprwmgt016.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,23/11/2025 00:00,"Node: brprwmgt016.int.mgc.com
+ Volume brprwmgt016.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 130 M
+  Percent used: 97 %
+ 
+ Trigger Time: Wednesday, November 19, 2025 5:43 AM"
+INC6046192,,17/11/2025 18:00,,Volume is Critical: brprwdrs113.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,21/11/2025 00:00,"Node: brprwdrs113.int.mgc.com
+ Volume brprwdrs113.int.mgc.com-Physical Memory:
+  Total size: 6.0 G
+  Free space: 178 M
+  Percent used: 97 %
+ 
+ Trigger Time: Monday, November 17, 2025 6:00 PM"
+INC6046096,,17/11/2025 13:39,,Volume is Critical: brprwvas026.int.mgc.com-Physical Memory,Server,Performance,Closed,Telecom Engineering,SW User,1 - High,1 - High,25/11/2025 00:00,"Node: brprwvas026.int.mgc.com
+ Volume brprwvas026.int.mgc.com-Physical Memory:
+  Total size: 23.7 G
+  Free space: 1.1 G
+  Percent used: 95 %
+ 
+ Trigger Time: Monday, November 17, 2025 1:39 PM"
+INC6046090,,17/11/2025 13:33,,NOC - High Memory Utilization (non-VM's) brprwvas026.int.mgc.com,Server,Performance,Closed,Telecom Engineering,SW User,2 - Medium,2 - Medium,22/11/2025 00:00,"Device: brprwvas026.int.mgc.com
+ IP: 10.6.214.151
+ 
+ Available Memory: 5 %
+ 
+ Triggered:Monday, November 17, 2025 1:33 PM
+ 
+ Details URL: https://orion.int.mgc.com:443/Orion/NetPerfMon/NodeDetails.aspx?NetObject=N:1980"
+INC6044695,,14/11/2025 06:09,,Volume is Critical: brprwsql506-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,18/11/2025 00:00,"Node: brprwsql506
+ Volume brprwsql506-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.3 G
+  Percent used: 96 %
+ 
+ Trigger Time: Friday, November 14, 2025 6:09 AM"
+INC6043874,,12/11/2025 1:43,,Volume is Critical: brprwmgt016.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,16/11/2025 00:00,"Node: brprwmgt016.int.mgc.com
+ Volume brprwmgt016.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 73 M
+  Percent used: 98 %
+ 
+ Trigger Time: Wednesday, November 12, 2025 1:43 AM"
+INC6043771,,11/11/2025 12:39,,Volume is Critical: BRPRWSQL308-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,15/11/2025 00:00,"Node: BRPRWSQL308
+ Volume BRPRWSQL308-Physical Memory:
+  Total size: 64.0 G
+  Free space: 2.9 G
+  Percent used: 95 %
+ 
+ Trigger Time: Tuesday, November 11, 2025 12:39 PM"
+INC6043038,,09/11/2025 5:08,,Volume is Critical: brnpehst146-Real Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,17/11/2025 00:00,"Node: brnpehst146
+ Volume brnpehst146-Real Memory:
+  Total size: 1.0 T
+  Free space: 36.9 G
+  Percent used: 96 %
+ 
+ Trigger Time: Sunday, November 9, 2025 5:08 AM"
+INC6043037,,09/11/2025 5:08,,Volume is Critical: brprwsql506-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,13/11/2025 00:00,"Node: brprwsql506
+ Volume brprwsql506-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Sunday, November 9, 2025 5:08 AM"
+INC6041373,,04/11/2025 15:37,,Volume is Critical: brprwvas026.int.mgc.com-Physical Memory,Server,Performance,Closed,Telecom Engineering,SW User,1 - High,1 - High,08/11/2025 0:00,"Node: brprwvas026.int.mgc.com
+ Volume brprwvas026.int.mgc.com-Physical Memory:
+  Total size: 23.7 G
+  Free space: 784 M
+  Percent used: 97 %
+ 
+ Trigger Time: Tuesday, November 4, 2025 3:37 PM"
+INC6041370,,04/11/2025 15:32,,NOC - High Memory Utilization (non-VM's) brprwvas026.int.mgc.com,Server,Performance,Closed,Telecom Engineering,SW User,2 - Medium,2 - Medium,09/11/2025 0:01,"Device: brprwvas026.int.mgc.com
+ IP: 10.6.214.151
+ 
+ Available Memory: 4 %
+ 
+ Triggered:Tuesday, November 4, 2025 3:32 PM
+ 
+ Details URL: https://orion.int.mgc.com:443/Orion/NetPerfMon/NodeDetails.aspx?NetObject=N:1980"
+INC6040402,,01/11/2025 15:12,,Volume is Critical: brprwnet024.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,05/11/2025 0:00,"Node: brprwnet024.int.mgc.com
+ Volume brprwnet024.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 122 M
+  Percent used: 97 %
+ 
+ Trigger Time: Saturday, November 1, 2025 3:12 PM"
+INC6038546,,26/10/2025 01:32,,Volume is Critical: brprwmgt017.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,30/10/2025 00:00,"Node: brprwmgt017.int.mgc.com
+ Volume brprwmgt017.int.mgc.com-Physical Memory:
+  Total size: 23.0 G
+  Free space: 769 M
+  Percent used: 97 %
+ 
+ Trigger Time: Sunday, October 26, 2025 1:32 AM"
+INC6038545,,26/10/2025 01:25,,Volume is Critical: brprwmgt015.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,30/10/2025 00:00,"Node: brprwmgt015.int.mgc.com
+ Volume brprwmgt015.int.mgc.com-Physical Memory:
+  Total size: 24.0 G
+  Free space: 862 M
+  Percent used: 96 %
+ 
+ Trigger Time: Sunday, October 26, 2025 1:25 AM"
+INC6038187,,23/10/2025 22:48,,Volume is Critical: brprwwfs701.waic.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,27/10/2025 00:00,"Node: brprwwfs701.waic.com
+ Volume brprwwfs701.waic.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 104 M
+  Percent used: 97 %
+ 
+ Trigger Time: Thursday, October 23, 2025 10:48 PM"
+INC6037827,,23/10/2025 03:46,,Volume is Critical: brprwsql321-Physical Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,27/10/2025 00:00,"Node: brprwsql321
+ Volume brprwsql321-Physical Memory:
+  Total size: 42.0 G
+  Free space: 2.0 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, October 23, 2025 3:46 AM"
+INC6037500,,22/10/2025 01:29,,Volume is Critical: brprwdrs112.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,26/10/2025 00:00,"Node: brprwdrs112.int.mgc.com
+ Volume brprwdrs112.int.mgc.com-Physical Memory:
+  Total size: 6.0 G
+  Free space: 135 M
+  Percent used: 98 %
+ 
+ Trigger Time: Wednesday, October 22, 2025 1:29 AM"
+INC6036614,,16/10/2025 22:10,,Volume is Critical: brprwvas026.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,20/10/2025 00:00,"Node: brprwvas026.int.mgc.com
+ Volume brprwvas026.int.mgc.com-Physical Memory:
+  Total size: 23.7 G
+  Free space: 1.1 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, October 16, 2025 10:10 PM"
+INC6031888,,01/10/2025 6:53,,Volume is Critical: BRPRWSQL308-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,05/10/2025 0:00,"Node: BRPRWSQL308
+ Volume BRPRWSQL308-Physical Memory:
+  Total size: 64.0 G
+  Free space: 3.1 G
+  Percent used: 95 %
+ 
+ Trigger Time: Wednesday, October 1, 2025 6:53 AM"
+INC6029987,,23/09/2025 11:54,,Volume is Critical: brprwvas026.int.mgc.com-Physical Memory,Server,Performance,Closed,Telecom Engineering,SW User,1 - High,1 - High,27/09/2025 00:00,"Node: brprwvas026.int.mgc.com
+ Volume brprwvas026.int.mgc.com-Physical Memory:
+  Total size: 23.7 G
+  Free space: 1.1 G
+  Percent used: 95 %
+ 
+ Trigger Time: Tuesday, September 23, 2025 11:54 AM"
+INC6029372,,21/09/2025 01:40,,Volume is Critical: brprwmgt015.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,25/09/2025 00:00,"Node: brprwmgt015.int.mgc.com
+ Volume brprwmgt015.int.mgc.com-Physical Memory:
+  Total size: 24.0 G
+  Free space: 927 M
+  Percent used: 96 %
+ 
+ Trigger Time: Sunday, September 21, 2025 1:40 AM"
+INC6029293,,19/09/2025 21:52,,Volume is Critical: brprwsql603-Physical Memory,Server,Performance,Closed,SE Windows,SW User,1 - High,1 - High,29/10/2025 00:00,"Node: brprwsql603
+ Volume brprwsql603-Physical Memory:
+  Total size: 32.0 G
+  Free space: 904 M
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, September 19, 2025 9:52 PM"
+INC6029292,,19/09/2025 21:36,,Volume is Critical: brprwmgt017.int.mgc.com-Physical Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,25/09/2025 00:00,"Node: brprwmgt017.int.mgc.com
+ Volume brprwmgt017.int.mgc.com-Physical Memory:
+  Total size: 23.0 G
+  Free space: 735 M
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, September 19, 2025 9:36 PM"
+INC6029196,,19/09/2025 13:35,,Volume is Critical: brprwsql506-Physical Memory,Server,Performance,Closed,SE DBA SQL,SW User,1 - High,1 - High,23/09/2025 00:00,"Node: brprwsql506
+ Volume brprwsql506-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.3 G
+  Percent used: 96 %
+ 
+ Trigger Time: Friday, September 19, 2025 1:35 PM"
+INC6028936,,18/09/2025 15:37,,Volume is Critical: BRPRWSQL308-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,22/09/2025 00:00,"Node: BRPRWSQL308
+ Volume BRPRWSQL308-Physical Memory:
+  Total size: 64.0 G
+  Free space: 3.2 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, September 18, 2025 3:37 PM"
+INC6028727,,18/09/2025 08:11,,Volume is Critical: brprwwfs701.waic.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,22/09/2025 00:00,"Node: brprwwfs701.waic.com
+ Volume brprwwfs701.waic.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 196 M
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, September 18, 2025 8:11 AM"
+INC6028684,,18/09/2025 05:06,,Volume is Critical: brprwsql321-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,22/09/2025 00:00,"Node: brprwsql321
+ Volume brprwsql321-Physical Memory:
+  Total size: 42.0 G
+  Free space: 2.1 G
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, September 18, 2025 5:06 AM"
+INC6027701,,14/09/2025 09:05,,Volume is Critical: brprwsql321-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,18/09/2025 00:00,"Node: brprwsql321
+ Volume brprwsql321-Physical Memory:
+  Total size: 42.0 G
+  Free space: 2.1 G
+  Percent used: 95 %
+ 
+ Trigger Time: Sunday, September 14, 2025 9:05 AM"
+INC6027668,,12/09/2025 21:19,,Volume is Critical: brprwsan006.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,16/09/2025 00:00,"Node: brprwsan006.int.mgc.com
+ Volume brprwsan006.int.mgc.com-Physical Memory:
+  Total size: 32.0 G
+  Free space: 482 M
+  Percent used: 99 %
+ 
+ Trigger Time: Friday, September 12, 2025 9:19 PM"
+INC6025800,,05/09/2025 15:36,,Volume is Critical: brprwdrs111.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,09/09/2025 0:00,"Node: brprwdrs111.int.mgc.com
+ Volume brprwdrs111.int.mgc.com-Physical Memory:
+  Total size: 6.0 G
+  Free space: 84 M
+  Percent used: 99 %
+ 
+ Trigger Time: Friday, September 5, 2025 3:36 PM"
+INC6024739,,02/09/2025 15:20,,Volume is Critical: BRPRWHYL319-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,06/09/2025 0:00,"Node: BRPRWHYL319
+ Volume BRPRWHYL319-Physical Memory:
+  Total size: 16.0 G
+  Free space: 781 M
+  Percent used: 95 %
+ 
+ Trigger Time: Tuesday, September 2, 2025 3:20 PM"
+INC6021640,,24/08/2025 01:35,,Volume is Critical: brprwmgt015.int.mgc.com-Physical Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,28/08/2025 00:00,"Node: brprwmgt015.int.mgc.com
+ Volume brprwmgt015.int.mgc.com-Physical Memory:
+  Total size: 24.0 G
+  Free space: 615 M
+  Percent used: 97 %
+ 
+ Trigger Time: Sunday, August 24, 2025 1:35 AM"
+INC6021606,,23/08/2025 00:18,,Volume is Critical: brprwmgt016.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,27/08/2025 00:00,"Node: brprwmgt016.int.mgc.com
+ Volume brprwmgt016.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 117 M
+  Percent used: 97 %
+ 
+ Trigger Time: Saturday, August 23, 2025 12:18 AM"
+INC6021599,,22/08/2025 21:31,,Volume is Critical: brprwmgt017.int.mgc.com-Physical Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,28/08/2025 00:00,"Node: brprwmgt017.int.mgc.com
+ Volume brprwmgt017.int.mgc.com-Physical Memory:
+  Total size: 24.0 G
+  Free space: 1.1 G
+  Percent used: 96 %
+ 
+ Trigger Time: Friday, August 22, 2025 9:31 PM"
+INC6021355,,22/08/2025 02:28,,Volume is Critical: brprwdrs113.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,26/08/2025 00:00,"Node: brprwdrs113.int.mgc.com
+ Volume brprwdrs113.int.mgc.com-Physical Memory:
+  Total size: 6.0 G
+  Free space: 138 M
+  Percent used: 98 %
+ 
+ Trigger Time: Friday, August 22, 2025 2:28 AM"
+INC6020895,,20/08/2025 11:42,,Volume is Critical: brprwsql513-Physical Memory,Server,Performance,Closed,SE DBA SQL,SW User,1 - High,1 - High,26/08/2025 00:00,"Node: brprwsql513
+ Volume brprwsql513-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.3 G
+  Percent used: 96 %
+ 
+ Trigger Time: Wednesday, August 20, 2025 11:42 AM"
+INC6020452,,19/08/2025 07:57,,Volume is Critical: BRPRWSQL401B-Physical Memory,Server,Performance,Closed,SE DBA SQL,SW User,1 - High,1 - High,25/08/2025 00:00,"Node: BRPRWSQL401B
+ Volume BRPRWSQL401B-Physical Memory:
+  Total size: 3.0 T
+  Free space: 153.5 G
+  Percent used: 95 %
+ 
+ Trigger Time: Tuesday, August 19, 2025 7:57 AM"
+INC6018428,,11/08/2025 11:57,,Volume is Critical: brprwsql513-Physical Memory,Server,Performance,Closed,SE DBA SQL,SW User,1 - High,1 - High,19/08/2025 00:00,"Node: brprwsql513
+ Volume brprwsql513-Physical Memory:
+  Total size: 32.0 G
+  Free space: 0.9 G
+  Percent used: 97 %
+ 
+ Trigger Time: Monday, August 11, 2025 11:57 AM"
+INC6014715,,27/07/2025 00:26,,Volume is Critical: brprwsan005.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/08/2025 0:00,"Node: brprwsan005.int.mgc.com
+ Volume brprwsan005.int.mgc.com-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.5 G
+  Percent used: 95 %
+ 
+ Trigger Time: Sunday, July 27, 2025 12:26 AM"
+INC6013302,,21/07/2025 14:56,,Volume brprwvas026.int.mgc.com-Physical Memory:,Server,Performance,Closed,Telecom Engineering,SW User,1 - High,1 - High,28/07/2025 00:00,"Node: brprwvas026.int.mgc.com
+ Volume brprwvas026.int.mgc.com-Physical Memory:
+  Total size: 23.7 G
+  Free space: 1.1 G
+  Percent used: 96 %
+ 
+ Trigger Time: Monday, July 21, 2025 2:56 PM"
+INC6012979,,20/07/2025 01:47,,Volume is Critical: brprwmgt017.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,24/07/2025 00:00,"Node: brprwmgt017.int.mgc.com
+ Volume brprwmgt017.int.mgc.com-Physical Memory:
+  Total size: 24.0 G
+  Free space: 1.0 G
+  Percent used: 96 %
+ 
+ Trigger Time: Sunday, July 20, 2025 1:47 AM"
+INC6012978,,20/07/2025 01:46,,Volume is Critical: brprwmgt015.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,24/07/2025 00:00,"Node: brprwmgt015.int.mgc.com
+ Volume brprwmgt015.int.mgc.com-Physical Memory:
+  Total size: 24.0 G
+  Free space: 915 M
+  Percent used: 96 %
+ 
+ Trigger Time: Sunday, July 20, 2025 1:46 AM"
+INC6012668,,18/07/2025 00:33,,Volume is Critical: brprwsan005.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,27/07/2025 00:00,"Node: brprwsan005.int.mgc.com
+ Volume brprwsan005.int.mgc.com-Physical Memory:
+  Total size: 32.0 G
+  Free space: 883 M
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, July 18, 2025 12:33 AM"
+INC6012370,,17/07/2025 01:59,,Volume is Critical: brprwmgt016.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,21/07/2025 00:00,"Node: brprwmgt016.int.mgc.com
+ Volume brprwmgt016.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 198 M
+  Percent used: 95 %
+ 
+ Trigger Time: Thursday, July 17, 2025 1:59 AM"
+INC6012109,,16/07/2025 04:38,,Volume is Critical: BRPRWSQL304-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,20/07/2025 00:00,"Node: BRPRWSQL304
+ Volume BRPRWSQL304-Physical Memory:
+  Total size: 16.0 G
+  Free space: 655 M
+  Percent used: 96 %
+ 
+ Trigger Time: Wednesday, July 16, 2025 4:38 AM"
+INC6012108,,16/07/2025 04:33,,Volume is Critical: BRPRWSQL312-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,20/07/2025 00:00,"Node: BRPRWSQL312
+ Volume BRPRWSQL312-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.4 G
+  Percent used: 96 %
+ 
+ Trigger Time: Wednesday, July 16, 2025 4:33 AM"
+INC6012105,,16/07/2025 04:15,,Volume is Critical: brprwsql513-Physical Memory,Server,Performance,Closed,SE DBA SQL,SW User,3 - Low,3 - Low,21/07/2025 00:00,"Node: brprwsql513
+ Volume brprwsql513-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.2 G
+  Percent used: 96 %
+ 
+ Trigger Time: Wednesday, July 16, 2025 4:15 AM"
+INC6011425,,14/07/2025 02:23,,Volume is Critical: BRPRWSQL509-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,18/07/2025 00:00,"Node: BRPRWSQL509
+ Volume BRPRWSQL509-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.1 G
+  Percent used: 97 %
+ 
+ Trigger Time: Monday, July 14, 2025 2:23 AM"
+INC6011407,,13/07/2025 04:13,,Volume is Critical: brprwsql520a-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,17/07/2025 00:00,"Node: brprwsql520a
+ Volume brprwsql520a-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Sunday, July 13, 2025 4:13 AM"
+INC6010569,,08/07/2025 20:36,,Volume is Critical: brprwdsa101.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,14/07/2025 00:00,"Node: brprwdsa101.int.mgc.com
+ Volume brprwdsa101.int.mgc.com-Physical Memory:
+  Total size: 6.0 G
+  Free space: 290 M
+  Percent used: 95 %
+ 
+ Trigger Time: Tuesday, July 8, 2025 8:36 PM"
+INC6010538,,08/07/2025 14:56,,Volume is Critical: brprwsft002.int.mgc.com-Physical Memory,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,12/07/2025 0:00,"Node: BRPRWSFT002
+ Volume brprwsft002.int.mgc.com-Physical Memory:
+  Total size: 8.0 G
+  Free space: 370 M
+  Percent used: 95 %
+ 
+ Trigger Time: Tuesday, July 8, 2025 2:56 PM"
+INC6010296,,08/07/2025 7:32,,Volume is Critical: brprwsft002.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,12/07/2025 0:00,"Node: brprwsft002.int.mgc.com
+ Volume brprwsft002.int.mgc.com-Physical Memory:
+  Total size: 8.0 G
+  Free space: 404 M
+  Percent used: 95 %
+ 
+ Trigger Time: Tuesday, July 8, 2025 7:32 AM"
+INC6010194,,07/07/2025 14:45,,Volume is Critical: brprwsql513-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,11/07/2025 0:00,"Node: brprwsql513
+ Volume brprwsql513-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.4 G
+  Percent used: 96 %
+ 
+ Trigger Time: Monday, July 7, 2025 2:45 PM"
+INC6010021,,07/07/2025 9:34,,Volume is Critical: BRPRWSQL312-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,11/07/2025 0:00,"Node: BRPRWSQL312
+ Volume BRPRWSQL312-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.5 G
+  Percent used: 95 %
+ 
+ Trigger Time: Monday, July 7, 2025 9:34 AM"
+INC6009873,,05/07/2025 10:58,,Volume is Critical: brprwsql508.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,09/07/2025 0:00,"Node: brprwsql508.int.mgc.com
+ Volume brprwsql508.int.mgc.com-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Saturday, July 5, 2025 10:58 AM"
+INC6009866,,05/07/2025 5:23,08/07/2025 10:00,Volume is Critical: BRPRWSQL509-Physical Memory,Server,Performance,Closed,SE DBA SQL,SW User,3 - Low,3 - Low,14/07/2025 00:00,"Node: BRPRWSQL509
+ Volume BRPRWSQL509-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.5 G
+  Percent used: 95 %
+ 
+ Trigger Time: Saturday, July 5, 2025 5:23 AM"
+INC6009860,,04/07/2025 20:09,,Volume is Critical: BRPRWSQL322-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/07/2025 0:00,"Node: BRPRWSQL322
+ Volume BRPRWSQL322-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Friday, July 4, 2025 8:09 PM"
+INC6009859,,04/07/2025 13:32,,Volume is Critical: BRPRWSQL301-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/07/2025 0:00,"Node: BRPRWSQL301
+ Volume BRPRWSQL301-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.5 G
+  Percent used: 95 %
+ 
+ Trigger Time: Friday, July 4, 2025 1:32 PM"
+INC6009857,,04/07/2025 12:52,,Volume is Critical: BRPRWSQL305A-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/07/2025 0:00,"Node: BRPRWSQL305A
+ Volume BRPRWSQL305A-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Friday, July 4, 2025 12:52 PM"
+INC6009856,,04/07/2025 12:39,,Volume is Critical: brprwsql314b.int.mgc.com-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/07/2025 0:00,"Node: brprwsql314b.int.mgc.com
+ Volume brprwsql314b.int.mgc.com-Physical Memory:
+  Total size: 23.7 G
+  Free space: 1.0 G
+  Percent used: 96 %
+ 
+ Trigger Time: Friday, July 4, 2025 12:39 PM"
+INC6009855,,04/07/2025 11:29,,Volume is Critical: brprwnwa110-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/07/2025 0:00,"Node: brprwnwa110
+ Volume brprwnwa110-Physical Memory:
+  Total size: 48.0 G
+  Free space: 2.2 G
+  Percent used: 95 %
+ 
+ Trigger Time: Friday, July 4, 2025 11:29 AM"
+INC6009838,,04/07/2025 6:00,,Volume is Critical: brprwscv305a-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/07/2025 0:00,"Node: brprwscv305a
+ Volume brprwscv305a-Physical Memory:
+  Total size: 32.0 G
+  Free space: 1.6 G
+  Percent used: 95 %
+ 
+ Trigger Time: Friday, July 4, 2025 6:00 AM"
+INC6009835,,04/07/2025 3:54,,Volume is Critical: BRPRWHPP001-Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/07/2025 0:00,"Node: brprwhpp001
+ Volume BRPRWHPP001-Physical Memory:
+  Total size: 4.0 G
+  Free space: 178 M
+  Percent used: 96 %
+ 
+ Trigger Time: Friday, July 4, 2025 3:54 AM"
+INC6006090,,18/06/2025 07:30,,NOC - High Memory Utilization (non-VM's) BRPRWSCV401A,Server,Performance,Closed,SE DBA SQL,SW User,3 - Low,3 - Low,26/06/2025 00:00,"Device: BRPRWSCV401A
+ IP: 10.34.228.224
+ 
+ Available Memory: 4 %
+ 
+ Triggered:Wednesday, June 18, 2025 7:30 AM
+ 
+ Details URL: https://orion.int.mgc.com:443/Orion/NetPerfMon/NodeDetails.aspx?NetObject=N:2566"
+INC5989729,,12/04/2025 0:07,07/05/2025 9:00,Volume is Critical: BR-Branch-VPN-FW-Slot-1 Management Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,05/05/2025 8:25,"Node: BR-Branch-VPN-FW
+ Volume BR-Branch-VPN-FW-Slot-1 Management Memory:
+  Total size: 6.9 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Saturday, April 12, 2025 12:07 AM"
+INC5987537,,04/04/2025 2:38,,Volume is Critical: brprlgwc081.int.mgc.com-Physical memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:48,"Node: brprlgwc081.int.mgc.com
+ Volume brprlgwc081.int.mgc.com-Physical memory:
+  Total size: 39.0 G
+  Free space: 1.3 G
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, April 4, 2025 2:38 AM"
+INC5987534,,04/04/2025 1:40,,Volume is Critical: brprlgwc083.int.mgc.com-Cached memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/04/2025 0:01,"Node: brprlgwc083.int.mgc.com
+ Volume brprlgwc083.int.mgc.com-Cached memory:
+  Total size: 13.8 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Friday, April 4, 2025 1:40 AM"
+INC5987533,,04/04/2025 1:40,,Volume is Critical: brprlgwc083.int.mgc.com-Shared memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/04/2025 0:01,"Node: brprlgwc083.int.mgc.com
+ Volume brprlgwc083.int.mgc.com-Shared memory:
+  Total size: 712 K
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Friday, April 4, 2025 1:40 AM"
+INC5987532,,04/04/2025 1:40,,Volume is Critical: brprlgwc083.int.mgc.com-Physical memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/04/2025 0:01,"Node: brprlgwc083.int.mgc.com
+ Volume brprlgwc083.int.mgc.com-Physical memory:
+  Total size: 39.0 G
+  Free space: 1.0 G
+  Percent used: 97 %
+ 
+ Trigger Time: Friday, April 4, 2025 1:40 AM"
+INC5987531,,04/04/2025 1:28,,Volume is Critical: brprlgwc082.int.mgc.com-Physical memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:48,"Node: brprlgwc082.int.mgc.com
+ Volume brprlgwc082.int.mgc.com-Physical memory:
+  Total size: 39.0 G
+  Free space: 273 M
+  Percent used: 99 %
+ 
+ Trigger Time: Friday, April 4, 2025 1:28 AM"
+INC5987530,,04/04/2025 1:28,,Volume is Critical: brprlgwc082.int.mgc.com-Shared memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:48,"Node: brprlgwc082.int.mgc.com
+ Volume brprlgwc082.int.mgc.com-Shared memory:
+  Total size: 728 K
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Friday, April 4, 2025 1:28 AM"
+INC5987529,,04/04/2025 1:28,,Volume is Critical: brprlgwc082.int.mgc.com-Cached memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/04/2025 0:01,"Node: brprlgwc082.int.mgc.com
+ Volume brprlgwc082.int.mgc.com-Cached memory:
+  Total size: 11.6 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Friday, April 4, 2025 1:28 AM"
+INC5987516,,04/04/2025 0:08,,Volume is Critical: brprlgwc081.int.mgc.com-Cached memory,Server,,Closed,NOC,SW User,1 - High,1 - High,08/04/2025 0:01,"Node: brprlgwc081.int.mgc.com
+ Volume brprlgwc081.int.mgc.com-Cached memory:
+  Total size: 7.9 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Friday, April 4, 2025 12:08 AM"
+INC5987515,,04/04/2025 0:08,,Volume is Critical: brprlgwc081.int.mgc.com-Shared memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:49,"Node: brprlgwc081.int.mgc.com
+ Volume brprlgwc081.int.mgc.com-Shared memory:
+  Total size: 712 K
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Friday, April 4, 2025 12:08 AM"
+INC5975384,,19/02/2025 22:58,,Volume is Critical: LSANCA-FLR3-SW-Shared memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:50,"Node: LSANCA-FLR3-SW
+ Volume LSANCA-FLR3-SW-Shared memory:
+  Total size: 28 M
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Wednesday, February 19, 2025 10:58 PM"
+INC5975382,,19/02/2025 22:29,,Volume is Critical: LSANCA-FLR2-SW-Shared memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,23/02/2025 00:01,"Node: LSANCA-FLR2-SW
+ Volume LSANCA-FLR2-SW-Shared memory:
+  Total size: 43 M
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Wednesday, February 19, 2025 10:29 PM"
+INC5975381,,19/02/2025 22:29,,Volume is Critical: LSANCA-FLR2-SW-Cached memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:49,"Node: LSANCA-FLR2-SW
+ Volume LSANCA-FLR2-SW-Cached memory:
+  Total size: 3.9 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Wednesday, February 19, 2025 10:29 PM"
+INC5955740,,04/12/2024 4:57,,Volume is Critical: brprptel010-Physical memory,Server,Performance,Closed,Telecom,SW User,1 - High,1 - High,27/12/2024 00:00,"Node: brprptel010
+ Volume brprptel010-Physical memory:
+  Total size: 7.6 G
+  Free space: 388 M
+  Percent used: 95 %
+ 
+ Trigger Time: Wednesday, December 4, 2024 4:57 AM"
+INC5954970,,01/12/2024 2:26,,Volume is Critical: brprptel010-Physical memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/12/2024 7:20,"Node: brprptel010
+ Volume brprptel010-Physical memory:
+  Total size: 7.6 G
+  Free space: 388 M
+  Percent used: 95 %
+ 
+ Trigger Time: Sunday, December 1, 2024 2:26 AM"
+INC5951826,,16/11/2024 08:16,,Volume is Critical: brprlmst101.int.mgc.com-Cached memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:49,"Node: brprlmst101.int.mgc.com
+ Volume brprlmst101.int.mgc.com-Cached memory:
+  Total size: 19.8 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Saturday, November 16, 2024 8:16 AM"
+INC5951825,,16/11/2024 08:16,,Volume is Critical: brprlmst101.int.mgc.com-Shared memory,Server,,Closed,NOC,SW User,1 - High,1 - High,20/11/2024 00:00,"Node: brprlmst101.int.mgc.com
+ Volume brprlmst101.int.mgc.com-Shared memory:
+  Total size: 97 M
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Saturday, November 16, 2024 8:16 AM"
+INC5939537,,08/10/2024 13:41,,Volume is Critical: brprwnwa112.int.mgc.com -Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,12/10/2024 0:01,"Node: brprwnwa112.int.mgc.com
+ Volume brprwnwa112.int.mgc.com -Physical Memory:
+  Total size: 8.0 G
+  Free space: 323 M
+  Percent used: 96 %
+ 
+ Trigger Time: Tuesday, October 8, 2024 1:41 PM"
+INC5934600,,19/09/2024 06:26,30/09/2024 11:00,Volume is Critical: BRPRWIVN001.int.mgc.com-Physical Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/10/2024 0:00,"Node: BRPRWIVN001.int.mgc.com
+ Volume BRPRWIVN001.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 89 M
+  Percent used: 98 %
+ 
+ Trigger Time: Thursday, September 19, 2024 6:26 AM"
+INC5930033,,29/08/2024 16:59,,Volume is Critical: brprwnwa112.int.mgc.com -Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/09/2024 0:01,"Node: brprwnwa112.int.mgc.com
+ Volume brprwnwa112.int.mgc.com -Physical Memory:
+  Total size: 8.0 G
+  Free space: 248 M
+  Percent used: 97 %
+ 
+ Trigger Time: Thursday, August 29, 2024 4:59 PM"
+INC5927991,,25/08/2024 16:15,,Volume is Critical: brprwnwa112.int.mgc.com -Physical Memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:50,"Node: brprwnwa112.int.mgc.com
+ Volume brprwnwa112.int.mgc.com -Physical Memory:
+  Total size: 8.0 G
+  Free space: 314 M
+  Percent used: 96 %
+ 
+ Trigger Time: Sunday, August 25, 2024 4:15 PM"
+INC5927656,,22/08/2024 22:46,,There is less than 5% available free space on volume BRPRWIVN001.int.mgc.com-Physical Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,26/08/2024 00:02,"Node: BRPRWIVN001.int.mgc.com
+ Volume BRPRWIVN001.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 27 M
+  Percent used: 99 %
+ 
+ Trigger Time: Thursday, August 22, 2024 10:46 PM"
+INC5924431,,11/08/2024 4:46,12/08/2024 11:00,Volume is Critical: LV-MDF-SW1-Physical memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,16/08/2024 00:01,"Node: LV-MDF-SW1
+ Volume LV-MDF-SW1-Physical memory:
+  Total size: 7.8 G
+  Free space: 399 M
+  Percent used: 95 %
+ 
+ Trigger Time: Sunday, August 11, 2024 4:45 AM"
+INC5924430,,11/08/2024 4:45,,Volume is Critical: LV-MDF-SW1-Virtual memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,16/08/2024 00:01,"Node: LV-MDF-SW1
+ Volume LV-MDF-SW1-Virtual memory:
+  Total size: 7.8 G
+  Free space: 399 M
+  Percent used: 95 %
+ 
+ Trigger Time: Sunday, August 11, 2024 4:45 AM"
+INC5917729,,18/07/2024 08:03,,Volume is Critical: BRPRWIVN001.int.mgc.com-Physical Memory,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:48,"Node: BRPRWIVN001.int.mgc.com
+ Volume BRPRWIVN001.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 161 M
+  Percent used: 96 %
+ 
+ Trigger Time: Thursday, July 18, 2024 8:03 AM"
+INC5907169,,05/06/2024 22:35,,Volume is Critical: LSANCA-CORE-SW-Shared memory,Server,,Closed,NOC,SW User,1 - High,1 - High,10/06/2024 0:01,"Node: LSANCA-CORE-SW
+ Volume LSANCA-CORE-SW-Shared memory:
+  Total size: 114 M
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Wednesday, June 5, 2024 10:35 PM"
+INC5907168,,05/06/2024 22:35,,Volume is Critical: LSANCA-CORE-SW-Cached memory,Server,,Closed,NOC,SW User,1 - High,1 - High,10/06/2024 0:01,"Node: LSANCA-CORE-SW
+ Volume LSANCA-CORE-SW-Cached memory:
+  Total size: 4.0 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Wednesday, June 5, 2024 10:35 PM"
+INC5902995,,20/05/2024 21:41,,Volume is Critical: brpslgwc011.int.mgc.com-Cached memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 21:04,"Node: brpslgwc011.int.mgc.com
+ Volume brpslgwc011.int.mgc.com-Cached memory:
+  Total size: 3.7 G
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Monday, May 20, 2024 9:41 PM"
+INC5902994,,20/05/2024 21:41,,Volume is Critical: brpslgwc011.int.mgc.com-Shared memory,Server,,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:49,"Node: brpslgwc011.int.mgc.com
+ Volume brpslgwc011.int.mgc.com-Shared memory:
+  Total size: 708 K
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Monday, May 20, 2024 9:41 PM"
+INC5885208,,20/03/2024 23:21,,Volume is Critical: BRPRWIVN001.int.mgc.com-Physical Memory,Server,Monitoring/Alert,Closed,NOC,SW User,1 - High,1 - High,25/03/2024 00:01,"Node: BRPRWIVN001.int.mgc.com
+ Volume BRPRWIVN001.int.mgc.com-Physical Memory:
+  Total size: 4.0 G
+  Free space: 63 M
+  Percent used: 98 %
+ 
+ Trigger Time: Wednesday, March 20, 2024 11:21 PM"
+INC5884472,,18/03/2024 13:56,,High Memory Utilization (non-VM's) brprwvas021.int.mgc.com,Server,Performance,Closed,SE Windows,SW User,2 - Medium,2 - Medium,22/03/2024 00:01,"Device: brprwvas021.int.mgc.com
+ IP: 10.6.214.161
+ 
+ Available Memory: 1 %
+ 
+ Triggered:Monday, March 18, 2024 1:56 PM
+ 
+ Details URL: https://orion.int.mgc.com:443/Orion/NetPerfMon/NodeDetails.aspx?NetObject=N:1985"
+INC5867851,,22/02/2024 12:39,,High Memory Utilization (non-VM's) brprwasa001.int.mgc.com,Server,Performance,Closed,NOC,SW User,2 - Medium,2 - Medium,23/02/2024 09:40,
+INC5863652,,18/02/2024 06:23,,Volume is Critical: brprwnwa113.int.mgc.com-Physical Memory,Server,Monitoring/Alert,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:48,"Node: brprwnwa113.int.mgc.com
+ Volume brprwnwa113.int.mgc.com-Physical Memory:
+  Total size: 48.0 G
+  Free space: 1.8 G
+  Percent used: 96 %
+ 
+ Trigger Time: Sunday, February 18, 2024 6:23 AM"
+INC5842916,,29/01/2024 02:11,29/01/2024 17:30,High Memory Utilization (non-VM's) BRPRWNET001,Server,Performance,Closed,NOC,SW User,2 - Medium,2 - Medium,02/02/2024 0:00,"Device: BRPRWNET001
+ 
+ IP: 10.32.50.12
+ 
+ 
+ 
+ Triggered: Monday, January 29, 2024 2:01 PM"
+INC5839417,,24/01/2024 11:04,,Volume is Critical: foprptel012.int.mgc.com-Shared memory,Server,Monitoring/Alert,Closed,NOC,SW User,1 - High,1 - High,02/05/2025 20:48,"Node: foprptel012.int.mgc.com
+ Volume foprptel012.int.mgc.com-Shared memory:
+  Total size: 18 M
+  Free space: 0 
+  Percent used: 100 %
+ 
+ Trigger Time: Wednesday, January 24, 2024 11:04 AM"

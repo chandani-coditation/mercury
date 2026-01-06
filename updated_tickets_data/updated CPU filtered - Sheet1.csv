@@ -1,0 +1,628 @@
+number,problem_id,opened_at,u_next_action_due_date,short_description,cmdb_ci,category,state,assignment_group,opened_by,impact,urgency,sys_updated_on,description,u_reopen_count,close_notes,u_comment_log
+INC6053863,,22/12/2025 08:11,,NOC - High CPU Load brprdc004,Server,Performance,Resolved,NOC,SW User,1 - High,1 - High,22/12/2025 08:52,"NOC - High CPU Load
+ Device: brprdc004
+ IP: 10.6.206.118
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Monday, December 22, 2025 8:11 AM",,Alert reset - issue detected as resolved by Orion.,
+INC6053862,,22/12/2025 08:11,,NOC - High CPU Load brprdc006,Server,Performance,Resolved,NOC,SW User,1 - High,1 - High,22/12/2025 08:47,"NOC - High CPU Load
+ Device: brprdc006
+ IP: 10.6.206.120
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Monday, December 22, 2025 8:11 AM",,Alert reset - issue detected as resolved by Orion.,
+INC6053754,,19/12/2025 16:50,,NOC - High CPU Load ads-5439124-28.apc02.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,23/12/2025 00:00,"NOC - High CPU Load
+ Device: ads-5439124-28.apc02.com
+ IP: 172.28.0.52
+ 
+ Current CPU: 98 % 
+ 
+ Trigger Time: Friday, December 19, 2025 4:50 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6050682,,08/12/2025 8:44,,NOC - High CPU Load ads-5439124-20.apc02.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,12/12/2025 0:00,"NOC - High CPU Load
+ Device: ads-5439124-20.apc02.com
+ IP: 172.28.0.44
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Monday, December 8, 2025 8:44 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6050149,,04/12/2025 11:30,,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,08/12/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Thursday, December 4, 2025 11:30 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6049410,,02/12/2025 8:12,,NOC - High CPU Load brprdc005,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,06/12/2025 0:00,"NOC - High CPU Load
+ Device: brprdc005
+ IP: 10.6.206.119
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Tuesday, December 2, 2025 8:12 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6049409,,02/12/2025 8:10,,NOC - High CPU Load brprdc006,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,06/12/2025 0:00,"NOC - High CPU Load
+ Device: brprdc006
+ IP: 10.6.206.120
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Tuesday, December 2, 2025 8:10 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6049307,,01/12/2025 15:29,,NOC - High CPU Load ads-5439124-28.apc02.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,07/12/2025 0:00,"NOC - High CPU Load
+ Device: ads-5439124-28.apc02.com
+ IP: 172.28.0.52
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Monday, December 1, 2025 3:29 PM",1,Alert reset - issue detected as resolved by Orion.,"2025-12-03 16:58:41 - Mogili Shashi Kumar (Contractor) (Send a note to the customer)
+ Alert reset - issue detected as resolved by Orion."
+INC6049000,,30/11/2025 10:36,,NOC - High CPU Load brprdmsdpr09,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/12/2025 0:00,"NOC - High CPU Load
+ Device: brprdmsdpr09
+ IP: 10.6.120.28
+ 
+ Current CPU: 98 % 
+ 
+ Trigger Time: Sunday, November 30, 2025 10:36 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6048999,,30/11/2025 04:46,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/12/2025 0:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Sunday, November 30, 2025 4:46 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6048017,,23/11/2025 04:54,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,27/11/2025 00:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Sunday, November 23, 2025 4:54 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6047363,,19/11/2025 18:22,,NOC - High CPU Load brprlinf112.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,23/11/2025 00:01,"NOC - High CPU Load
+ Device: brprlinf112.int.mgc.com
+ IP: 10.34.197.217
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, November 19, 2025 6:22 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6047337,,19/11/2025 16:10,,NOC - High CPU Load ads-5439124-20.apc02.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,23/11/2025 00:01,"NOC - High CPU Load
+ Device: ads-5439124-20.apc02.com
+ IP: 172.28.0.44
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Wednesday, November 19, 2025 4:10 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6045478,,16/11/2025 04:54,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,20/11/2025 00:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Sunday, November 16, 2025 4:54 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6043606,,11/11/2025 8:14,,NOC - High CPU Load brprdc005,Server,Performance,Closed,SE Windows,SW User,1 - High,1 - High,16/11/2025 00:00,"NOC - High CPU Load
+ Device: brprdc005
+ IP: 10.6.206.119
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Tuesday, November 11, 2025 8:14 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6043036,,09/11/2025 4:54,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,13/11/2025 00:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Sunday, November 9, 2025 4:54 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6043007,,08/11/2025 8:25,,NOC - High CPU Load brprptss010,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,12/11/2025 0:00,"NOC - High CPU Load
+ Device: brprptss010
+ IP: 10.32.38.120
+ 
+ Current CPU: 98 % 
+ 
+ Trigger Time: Saturday, November 8, 2025 8:25 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6041811,,05/11/2025 12:09,,NOC - High CPU Load brprdc004,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,10/11/2025 0:00,"NOC - High CPU Load
+ Device: brprdc004
+ IP: 10.6.206.118
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Wednesday, November 5, 2025 12:09 PM",1,Alert reset - issue detected as resolved by Orion.,
+INC6040405,,02/11/2025 4:53,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,06/11/2025 0:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Sunday, November 2, 2025 4:53 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6038992,,28/10/2025 08:12,,NOC - High CPU Load brprdc006,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,01/11/2025 0:00,"NOC - High CPU Load
+ Device: brprdc006
+ IP: 10.6.206.120
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Tuesday, October 28, 2025 8:12 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6038553,,26/10/2025 07:43,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,30/10/2025 00:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Sunday, October 26, 2025 7:43 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6038532,,25/10/2025 15:27,,NOC - High CPU Load ONTRCA-MGMT-CS01,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,31/10/2025 00:00,"NOC - High CPU Load
+ Device: ONTRCA-MGMT-CS01
+ IP: 10.82.57.200
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Saturday, October 25, 2025 3:27 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6036929,,20/10/2025 05:56,,NOC - High CPU Load brprlmst102.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,24/10/2025 00:00,"NOC - High CPU Load
+ Device: brprlmst102.int.mgc.com
+ IP: 10.34.196.98
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Monday, October 20, 2025 5:56 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6036883,,19/10/2025 04:56,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,23/10/2025 00:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Sunday, October 19, 2025 4:56 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6034975,,12/10/2025 4:56,,NOC - High CPU Load foprlcdb111,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,16/10/2025 00:00,"NOC - High CPU Load
+ Device: foprlcdb111
+ IP: 10.50.236.36
+ 
+ Current CPU: 98 % 
+ 
+ Trigger Time: Sunday, October 12, 2025 4:56 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6034466,,09/10/2025 11:19,,NOC - High CPU Load plstorage.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,13/10/2025 00:00,"NOC - High CPU Load
+ Device: plstorage.int.mgc.com
+ IP: 10.32.38.68
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Thursday, October 9, 2025 11:19 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6034048,,08/10/2025 8:09,,NOC - High CPU Load brprdc004,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,12/10/2025 0:00,"NOC - High CPU Load
+ Device: brprdc004
+ IP: 10.6.206.118
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Wednesday, October 8, 2025 8:09 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6033798,,07/10/2025 9:55,,NOC - High CPU Load brprdc005,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,11/10/2025 0:00,"NOC - High CPU Load
+ Device: brprdc005
+ IP: 10.6.206.119
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Tuesday, October 7, 2025 9:55 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6033380,,06/10/2025 5:56,,NOC - High CPU Load brprlmst102.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,10/10/2025 0:00,"NOC - High CPU Load
+ Device: brprlmst102.int.mgc.com
+ IP: 10.34.196.98
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Monday, October 6, 2025 5:56 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6032982,,05/10/2025 4:55,,NOC - High CPU Load foprlcdb111.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,09/10/2025 0:00,"NOC - High CPU Load
+ Device: foprlcdb111.int.mgc.com
+ IP: 10.50.236.36
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Sunday, October 5, 2025 4:55 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6031176,,29/09/2025 05:56,,NOC - High CPU Load brprlmst102.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,03/10/2025 0:00,"NOC - High CPU Load
+ Device: brprlmst102.int.mgc.com
+ IP: 10.34.196.98
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Monday, September 29, 2025 5:56 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6031133,,28/09/2025 18:21,,NOC - High CPU Load brprlinf112.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/10/2025 0:00,"NOC - High CPU Load
+ Device: brprlinf112.int.mgc.com
+ IP: 10.34.197.217
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Sunday, September 28, 2025 6:21 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6030386,,25/09/2025 01:29,,NOC - High CPU Load WAIC-FS01.waic.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,29/09/2025 00:00,"NOC - High CPU Load
+ Device: WAIC-FS01.waic.com
+ IP: 10.10.11.44
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Thursday, September 25, 2025 1:29 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6030213,,24/09/2025 09:58,,NOC - High CPU Load brprlhps003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,28/09/2025 00:00,"NOC - High CPU Load
+ Device: brprlhps003.int.mgc.com
+ IP: 10.34.196.64
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, September 24, 2025 9:58 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6029822,,23/09/2025 04:05,,NOC - High CPU Load AIS-IRVNCA-RT-A,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,27/09/2025 00:00,"NOC - High CPU Load
+ Device: AIS-IRVNCA-RT-A
+ IP: 10.10.21.7
+ 
+ Current CPU: 80 % 
+ 
+ Trigger Time: Tuesday, September 23, 2025 4:05 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6029672,,22/09/2025 11:57,,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,28/09/2025 00:00,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Monday, September 22, 2025 11:57 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6029274,,19/09/2025 17:36,,NOC - High CPU Load brprptss010,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,23/09/2025 00:00,"NOC - High CPU Load
+ Device: brprptss010
+ IP: 10.32.38.120
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Friday, September 19, 2025 5:36 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6028816,,18/09/2025 11:11,,NOC - High CPU Load brprdc004,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,28/09/2025 00:00,"NOC - High CPU Load
+ Device: brprdc004
+ IP: 10.6.206.118
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Thursday, September 18, 2025 11:11 AM",3,Alert reset - issue detected as resolved by Orion.,
+INC6028681,,18/09/2025 04:20,,NOC - High CPU Load plstorage.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,22/09/2025 00:00,"NOC - High CPU Load
+ Device: plstorage.int.mgc.com
+ IP: 10.32.38.68
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Thursday, September 18, 2025 4:20 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6027685,,13/09/2025 05:16,,NOC - High CPU Load brprlodb111.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,17/09/2025 00:00,"NOC - High CPU Load
+ Device: brprlodb111.int.mgc.com
+ IP: 10.34.227.111
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Saturday, September 13, 2025 5:16 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6027419,,12/09/2025 8:12,,NOC - High CPU Load brprdc005,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,16/09/2025 00:00,"NOC - High CPU Load
+ Device: brprdc005
+ IP: 10.6.206.119
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Friday, September 12, 2025 8:12 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6025355,,04/09/2025 11:43,,NOC - High CPU Load brprlhps003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,08/09/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps003.int.mgc.com
+ IP: 10.34.196.64
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Thursday, September 4, 2025 11:43 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6025353,,04/09/2025 11:42,,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,09/09/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Thursday, September 4, 2025 11:42 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6023526,,30/08/2025 00:16,,NOC - High CPU Load brprldkw112.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/09/2025 0:00,"NOC - High CPU Load
+ Device: brprldkw112.int.mgc.com
+ IP: 10.34.164.42
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Saturday, August 30, 2025 12:16 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6023296,,29/08/2025 09:08,,NOC - High CPU Load brprlhps003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/09/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps003.int.mgc.com
+ IP: 10.34.196.64
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Friday, August 29, 2025 9:08 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6023295,,29/08/2025 09:07,,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/09/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Friday, August 29, 2025 9:07 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6022761,,28/08/2025 02:23,,NOC - High CPU Load brprlweb312.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,01/09/2025 0:00,"NOC - High CPU Load
+ Device: brprlweb312.int.mgc.com
+ IP: 10.34.68.81
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Thursday, August 28, 2025 2:23 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6022723,PRB0057452,28/08/2025 00:20,,NOC - High CPU Load brprlkfk061,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,01/09/2025 0:00,"NOC - High CPU Load
+ Device: brprlkfk061
+ IP: 10.34.196.113
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Thursday, August 28, 2025 12:20 AM",0,"Incident resolved based on closure of problem PRB0057452 - Change Extension Request - CHG0152288 with notes:
+ Joshua Jordan has recreated a new certificate again and that has been applied to all servers in Kafka PROD cluster . All the Kafka servers are up and running.",
+INC6022436,,27/08/2025 02:26,,NOC - High CPU Load brprlaim223,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,31/08/2025 00:00,"NOC - High CPU Load
+ Device: brprlaim223
+ IP: 10.34.196.218
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Wednesday, August 27, 2025 2:26 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6022419,,26/08/2025 22:50,,NOC - High CPU Load lvprwnbu001,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,01/09/2025 0:00,"NOC - High CPU Load
+ Device: lvprwnbu001
+ IP: 10.48.52.31
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, August 26, 2025 10:50 PM",2,Alert reset - issue detected as resolved by Orion.,
+INC6022376,,26/08/2025 15:14,,NOC - High CPU Load brprlrst022,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,30/08/2025 00:00,"NOC - High CPU Load
+ Device: brprlrst022
+ IP: 10.34.196.47
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, August 26, 2025 3:14 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6021656,PRB0057433,24/08/2025 16:15,,NOC - High CPU Load brprlweb072.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,28/08/2025 00:00,"NOC - High CPU Load
+ Device: brprlweb072.int.mgc.com
+ IP: 10.34.70.22
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Sunday, August 24, 2025 4:15 PM",0,"Incident resolved based on closure of problem PRB0057433 - Node Down alerts for brprlweb072/brprlweb073/brprljmp012 with notes:
+ Devices are up for 13 hours 43 minutes. Dave and Thi confirmed that everything is good on their end.",
+INC6021503,,22/08/2025 12:02,,NOC - High CPU Load WAIC-FS01.waic.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,26/08/2025 00:00,"NOC - High CPU Load
+ Device: WAIC-FS01.waic.com
+ IP: 10.10.11.44
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Friday, August 22, 2025 12:02 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6020671,,19/08/2025 15:05,,NOC - High CPU Load brprdc006,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,23/08/2025 00:00,"NOC - High CPU Load
+ Device: brprdc006
+ IP: 10.6.206.120
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, August 19, 2025 3:05 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6019280,,13/08/2025 09:56,,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,17/08/2025 00:01,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, August 13, 2025 9:56 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6019174,,13/08/2025 06:11,,NOC - High CPU Load brprlhps003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,17/08/2025 00:01,"NOC - High CPU Load
+ Device: brprlhps003.int.mgc.com
+ IP: 10.34.196.64
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, August 13, 2025 6:11 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6018785,PRB0057393,12/08/2025 10:15,,NOC - High CPU Load brprlgwc043.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,16/08/2025 00:00,"NOC - High CPU Load
+ Device: brprlgwc043.int.mgc.com
+ IP: 10.34.165.98
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Tuesday, August 12, 2025 10:15 AM",0,"Incident resolved based on closure of problem PRB0057393 - AgentCenter & Claim Center Slowness with notes:
+ AgentCenter and ClaimCenter have been restored to normal performance. We apologize for any inconvenience this may have caused. If you continue to experience any difficulties related to this issue, please contact the IT Service Center at ext. 26558 or via Web Employee Self Service (WESS) at http://servicecenter.",
+INC6018158,,10/08/2025 2:43,,NOC - High CPU Load brprlrst020,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,17/08/2025 00:00,"NOC - High CPU Load
+ Device: brprlrst020
+ IP: 10.34.196.44
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Sunday, August 10, 2025 2:43 AM",3,Alert reset - issue detected as resolved by Orion.,
+INC6017758,,08/08/2025 5:12,,NOC - High CPU Load brprlmgt021.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,12/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlmgt021.int.mgc.com
+ IP: 10.34.245.31
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Friday, August 8, 2025 5:12 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6017545,,07/08/2025 10:59,07/08/2025 13:00,NOC - High CPU Load brprlrst022,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,11/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlrst022
+ IP: 10.34.196.47
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Thursday, August 7, 2025 10:59 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6017531,,07/08/2025 10:42,,NOC - High CPU Load brprdc005,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,11/08/2025 0:00,"NOC - High CPU Load
+ Device: brprdc005
+ IP: 10.6.206.119
+ 
+ Current CPU: 98 % 
+ 
+ Trigger Time: Thursday, August 7, 2025 10:42 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6017162,,06/08/2025 9:46,11/08/2025 13:00,NOC - High CPU Load brprlhps003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,12/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps003.int.mgc.com
+ IP: 10.34.196.64
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, August 6, 2025 9:46 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6017161,,06/08/2025 9:46,11/08/2025 13:00,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,12/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, August 6, 2025 9:46 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6017026,,05/08/2025 15:01,,NOC - High CPU Load brprdc004,Server,Performance,Closed,Network Applications,SW User,1 - High,1 - High,09/08/2025 0:00,"NOC - High CPU Load
+ Device: brprdc004
+ IP: 10.6.206.118
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Tuesday, August 5, 2025 3:01 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6015701,,31/07/2025 03:28,,NOC - High CPU Load brprlrst020,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlrst020
+ IP: 10.34.196.44
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Thursday, July 31, 2025 3:28 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6015459,,30/07/2025 09:55,,NOC - High CPU Load brprlhps003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps003.int.mgc.com
+ IP: 10.34.196.64
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, July 30, 2025 9:55 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6015454,,30/07/2025 09:50,,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, July 30, 2025 9:50 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6015080,,29/07/2025 02:45,,NOC - High CPU Load brprdmsdpr09,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,02/08/2025 0:00,"NOC - High CPU Load
+ Device: brprdmsdpr09
+ IP: 10.6.120.28
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Tuesday, July 29, 2025 2:45 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6014746,,27/07/2025 16:18,,NOC - High CPU Load brprlm1b143,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,31/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlm1b143
+ IP: 10.34.164.165
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Sunday, July 27, 2025 4:18 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6014745,,27/07/2025 16:16,,NOC - High CPU Load brprlp3e004.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,31/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlp3e004.int.mgc.com
+ IP: 10.34.167.27
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Sunday, July 27, 2025 4:16 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6014744,,27/07/2025 16:16,,NOC - High CPU Load brprlldp112.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,04/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlldp112.int.mgc.com
+ IP: 10.34.196.138
+ 
+ Current CPU: 95 % 
+ 
+ Trigger Time: Sunday, July 27, 2025 4:16 PM",3,Alert reset - issue detected as resolved by Orion.,
+INC6014743,,27/07/2025 16:16,,NOC - High CPU Load brprlsfn003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,31/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlsfn003.int.mgc.com
+ IP: 10.34.164.123
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Sunday, July 27, 2025 4:16 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6014701,,26/07/2025 05:16,,NOC - High CPU Load brprlodb111.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,01/08/2025 0:00,"NOC - High CPU Load
+ Device: brprlodb111.int.mgc.com
+ IP: 10.34.227.111
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Saturday, July 26, 2025 5:16 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6013845,,23/07/2025 12:31,,NOC - High CPU Load brprlhps002.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,28/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlhps002.int.mgc.com
+ IP: 10.34.196.63
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, July 23, 2025 12:31 PM",1,Alert reset - issue detected as resolved by Orion.,
+INC6013843,,23/07/2025 12:30,,NOC - High CPU Load brprlhps003.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,28/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlhps003.int.mgc.com
+ IP: 10.34.196.64
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, July 23, 2025 12:29 PM",1,Alert reset - issue detected as resolved by Orion.,
+INC6013388,,22/07/2025 04:50,,NOC - High CPU Load brprlcdm012.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,26/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlcdm012.int.mgc.com
+ IP: 10.34.196.186
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, July 22, 2025 4:50 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6013387,,22/07/2025 04:45,,NOC - High CPU Load brprlcdm013.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,26/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlcdm013.int.mgc.com
+ IP: 10.34.196.187
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, July 22, 2025 4:45 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6013385,,22/07/2025 04:22,,NOC - High CPU Load brprlp3e004.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,26/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlp3e004.int.mgc.com
+ IP: 10.34.167.27
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Tuesday, July 22, 2025 4:22 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6013384,,22/07/2025 04:20,,NOC - High CPU Load brprlweb214.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,26/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlweb214.int.mgc.com
+ IP: 10.34.68.74
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, July 22, 2025 4:20 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6013383,,22/07/2025 04:05,,NOC - High CPU Load brprltpr112.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,26/07/2025 00:00,"NOC - High CPU Load
+ Device: brprltpr112.int.mgc.com
+ IP: 10.34.164.78
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, July 22, 2025 4:05 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6013055,,21/07/2025 05:26,,NOC - High CPU Load brprlmst102.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,30/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlmst102.int.mgc.com
+ IP: 10.34.196.98
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Monday, July 21, 2025 5:26 AM",2,Alert reset - issue detected as resolved by Orion.,
+INC6012671,,18/07/2025 02:19,,NOC - High CPU Load brprltpr111.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,22/07/2025 00:00,"NOC - High CPU Load
+ Device: brprltpr111.int.mgc.com
+ IP: 10.34.164.77
+ 
+ Current CPU: 99 % 
+ 
+ Trigger Time: Friday, July 18, 2025 2:19 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6012117,,16/07/2025 06:43,,NOC - High CPU Load plstorage.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,20/07/2025 00:00,"NOC - High CPU Load
+ Device: plstorage.int.mgc.com
+ IP: 10.32.38.68
+ 
+ Current CPU: 96 % 
+ 
+ Trigger Time: Wednesday, July 16, 2025 6:43 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6012091,,16/07/2025 02:21,,NOC - High CPU Load brprlrst020,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,20/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlrst020
+ IP: 10.34.196.44
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, July 16, 2025 2:21 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6012090,,16/07/2025 02:18,,NOC - High CPU Load brprldkw111.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,20/07/2025 00:00,"NOC - High CPU Load
+ Device: brprldkw111.int.mgc.com
+ IP: 10.34.164.41
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Wednesday, July 16, 2025 2:18 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6011746,,15/07/2025 02:18,,NOC - High CPU Load brprlcrs011,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,21/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlcrs011
+ IP: 10.34.196.76
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Tuesday, July 15, 2025 2:18 AM",1,Alert reset - issue detected as resolved by Orion.,
+INC6011411,,13/07/2025 15:44,,NOC - High CPU Load brprpdfs001,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,17/07/2025 00:00,"NOC - High CPU Load
+ Device: brprpdfs001
+ IP: 10.6.121.66
+ 
+ Current CPU: 100 % 
+ 
+ Trigger Time: Sunday, July 13, 2025 3:44 PM",0,Alert reset - issue detected as resolved by Orion.,
+INC6011404,,13/07/2025 02:19,,NOC - High CPU Load brprltpr111.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,17/07/2025 00:00,"NOC - High CPU Load
+ Device: brprltpr111.int.mgc.com
+ IP: 10.34.164.77
+ 
+ Current CPU: 97 % 
+ 
+ Trigger Time: Sunday, July 13, 2025 2:19 AM",0,Alert reset - issue detected as resolved by Orion.,
+INC6011403,,13/07/2025 02:19,,NOC - High CPU Load brprlweb073.int.mgc.com,Server,Performance,Closed,NOC,SW User,1 - High,1 - High,17/07/2025 00:00,"NOC - High CPU Load
+ Device: brprlweb073.int.mgc.com
+ IP: 10.34.70.23
+ 
+ Current CPU: 98 % 
+ 
+ Trigger Time: Sunday, July 13, 2025 2:19 AM",0,Alert reset - issue detected as resolved by Orion.,
