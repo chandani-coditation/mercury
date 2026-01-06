@@ -62,7 +62,7 @@ class HybridSearchQueryBuilder:
         """
         return f"""
             CASE 
-                WHEN %s IS NULL THEN 0.0
+                WHEN COALESCE(%s, '') = '' THEN 0.0
                 WHEN LOWER({metadata_alias}) = LOWER(%s) THEN {HybridSearchQueryBuilder.SERVICE_EXACT_MATCH_BOOST}
                 WHEN LOWER({metadata_alias}) LIKE LOWER(%s) THEN {HybridSearchQueryBuilder.SERVICE_PARTIAL_MATCH_BOOST}
                 ELSE 0.0
@@ -85,10 +85,10 @@ class HybridSearchQueryBuilder:
 
         return f"""
             CASE 
-                WHEN %s::text IS NULL THEN 0.0{null_boost_clause}
-                WHEN LOWER({metadata_alias}) = LOWER(%s::text)
+                WHEN COALESCE(%s, '') = '' THEN 0.0{null_boost_clause}
+                WHEN LOWER({metadata_alias}) = LOWER(%s)
                     THEN {HybridSearchQueryBuilder.COMPONENT_EXACT_MATCH_BOOST}
-                WHEN LOWER({metadata_alias}) LIKE LOWER(%s::text)
+                WHEN LOWER({metadata_alias}) LIKE LOWER(%s)
                     THEN {HybridSearchQueryBuilder.COMPONENT_PARTIAL_MATCH_BOOST}
                 ELSE 0.0
             END
@@ -104,12 +104,12 @@ class HybridSearchQueryBuilder:
         """
         return f"""
             CASE 
-                WHEN %s::text IS NULL THEN 0.0
-                WHEN LOWER({service_alias}) = LOWER(%s::text)
-                    OR LOWER({affected_service_alias}) = LOWER(%s::text)
+                WHEN COALESCE(%s, '') = '' THEN 0.0
+                WHEN LOWER({service_alias}) = LOWER(%s)
+                    OR LOWER({affected_service_alias}) = LOWER(%s)
                     THEN {HybridSearchQueryBuilder.SERVICE_EXACT_MATCH_BOOST}
-                WHEN LOWER({service_alias}) LIKE LOWER(%s::text)
-                    OR LOWER({affected_service_alias}) LIKE LOWER(%s::text)
+                WHEN LOWER({service_alias}) LIKE LOWER(%s)
+                    OR LOWER({affected_service_alias}) LIKE LOWER(%s)
                     THEN {HybridSearchQueryBuilder.SERVICE_PARTIAL_MATCH_BOOST}
                 ELSE 0.0
             END
@@ -136,16 +136,21 @@ class HybridSearchQueryBuilder:
         
         Returns:
             List of 6 parameters for soft filter boosts
+        
+        Note: For PostgreSQL type inference, None values are kept as None for IS NULL checks,
+        but converted to empty strings for text comparisons to avoid IndeterminateDatatype errors.
         """
         params = []
         # Service params (3 params)
+        # Keep None for IS NULL check (no type cast needed in SQL)
         params.append(service_val)  # IS NULL check
-        params.append(service_val if service_val else None)  # Exact match
-        params.append(f"%{service_val}%" if service_val else None)  # Partial match
+        # Use empty string instead of None for text comparisons to avoid type inference issues
+        params.append(service_val if service_val else "")  # Exact match
+        params.append(f"%{service_val}%" if service_val else "")  # Partial match
         # Component params (3 params)
         params.append(component_val)  # IS NULL check
-        params.append(component_val if component_val else None)  # Exact match
-        params.append(f"%{component_val}%" if component_val else None)  # Partial match
+        params.append(component_val if component_val else "")  # Exact match
+        params.append(f"%{component_val}%" if component_val else "")  # Partial match
         return params
 
     @staticmethod
@@ -164,18 +169,23 @@ class HybridSearchQueryBuilder:
         
         Returns:
             List of 8 parameters for dual service soft filter boosts
+        
+        Note: For PostgreSQL type inference, None values are kept as None for IS NULL checks,
+        but converted to empty strings for text comparisons to avoid IndeterminateDatatype errors.
         """
         params = []
         # Service params (5 params: check, exact x2, partial x2)
+        # Keep None for IS NULL check (no type cast needed in SQL)
         params.append(service_val)  # IS NULL check
-        params.append(service_val if service_val else None)  # Exact match (service field)
-        params.append(service_val if service_val else None)  # Exact match (affected_service field)
-        params.append(f"%{service_val}%" if service_val else None)  # Partial match (service field)
-        params.append(f"%{service_val}%" if service_val else None)  # Partial match (affected_service field)
+        # Use empty string instead of None for text comparisons to avoid type inference issues
+        params.append(service_val if service_val else "")  # Exact match (service field)
+        params.append(service_val if service_val else "")  # Exact match (affected_service field)
+        params.append(f"%{service_val}%" if service_val else "")  # Partial match (service field)
+        params.append(f"%{service_val}%" if service_val else "")  # Partial match (affected_service field)
         # Component params (3 params)
         params.append(component_val)  # IS NULL check
-        params.append(component_val if component_val else None)  # Exact match
-        params.append(f"%{component_val}%" if component_val else None)  # Partial match
+        params.append(component_val if component_val else "")  # Exact match
+        params.append(f"%{component_val}%" if component_val else "")  # Partial match
         return params
 
     @staticmethod
