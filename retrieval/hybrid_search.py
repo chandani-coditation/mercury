@@ -659,7 +659,8 @@ def triage_retrieval(
         )  # 10-17: Service (dual) and component boost params
         # Final limit
         sig_params.append(limit)  # 18: final limit
-
+        print("incident_sig_query: ", incident_sig_query)
+        print("sig_params: ", sig_params)
         # Execute incident signatures query
         cur.execute(incident_sig_query, sig_params)
         incident_sig_rows = cur.fetchall()
