@@ -96,7 +96,8 @@
     "_note": "This mapping is used for intelligent service resolution when the service is ambiguous (e.g., 'Server').",
     "CPU": "Infrastructure",
     "Memory": "Infrastructure",
-    "Disk": "Storage"
+    "Disk": "Storage",
+    "Database": "Database"
   },
   
   "failure_type_to_component_mapping": {

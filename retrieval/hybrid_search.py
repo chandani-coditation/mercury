@@ -814,18 +814,15 @@ def triage_retrieval(
         """
 
         # Build params for runbook metadata query with soft filter boosts
-        # Query params: query_text, soft filter boosts (SELECT), soft filter boosts (ORDER BY), limit
+        # Query params: query_text, soft filter boosts (SELECT only), limit
+        # Note: ORDER BY doesn't use parameters - it just references the calculated columns
         runbook_params_extended = [query_text]  # 1: fulltext search
-        # Add soft filter boost params for SELECT (6 params)
-        runbook_params_extended.extend(
-            HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
-        )
-        # Add soft filter boost params for ORDER BY (6 params, duplicated)
+        # Add soft filter boost params for SELECT only (6 params: 3 for service, 3 for component)
         runbook_params_extended.extend(
             HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
         )
         # Final limit
-        runbook_params_extended.append(limit)  # 14: limit
+        runbook_params_extended.append(limit)  # 8: limit
         cur.execute(runbook_meta_query, runbook_params_extended)
         runbook_rows = cur.fetchall()
 

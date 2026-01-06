@@ -377,8 +377,34 @@ def insert_runbook_with_steps(
     cur = conn.cursor()
 
     try:
+        # Check if runbook with same title already exists (deduplication)
+        cur.execute(
+            """
+            SELECT id FROM documents 
+            WHERE doc_type = 'runbook' AND LOWER(TRIM(title)) = LOWER(TRIM(%s))
+            LIMIT 1
+            """,
+            (title,),
+        )
+        existing_doc = cur.fetchone()
+        
+        if existing_doc:
+            # Delete existing runbook and its chunks/steps
+            existing_doc_id = existing_doc["id"]
+            logger = get_logger(__name__)
+            logger.info(f"Found existing runbook with title '{title}' (id={existing_doc_id}). Replacing it.")
+            
+            # Delete chunks first (CASCADE will handle runbook_steps if they exist)
+            cur.execute("DELETE FROM chunks WHERE document_id = %s", (existing_doc_id,))
+            # Delete the document
+            cur.execute("DELETE FROM documents WHERE id = %s", (existing_doc_id,))
+            # Use existing doc_id for replacement
+            doc_id = existing_doc_id
+        else:
+            # New runbook - generate new ID
+            doc_id = uuid.uuid4()
+        
         # Insert runbook metadata document
-        doc_id = uuid.uuid4()
         cur.execute(
             """
             INSERT INTO documents (id, doc_type, service, component, title, content, tags, last_reviewed_at)
@@ -590,8 +616,8 @@ def insert_runbook_with_steps(
                             step_text,
                         ),
                     )
-                    # Commit chunk creation
-                    conn.commit()
+                    # Don't commit here - commit all steps and chunks together at the end
+                    # This ensures atomicity: either all steps are stored or none
                     logger = get_logger(__name__)
                     logger.debug(f"Created chunk for runbook step {step.step_id}")
                 except Exception as chunk_error:
@@ -600,10 +626,9 @@ def insert_runbook_with_steps(
                     logger.error(
                         f"Failed to create chunk for runbook step {step.step_id}: {chunk_error}"
                     )
-                    # Re-raise to ensure we know about the failure
-                    raise RuntimeError(
-                        f"Chunk creation failed for runbook step {step.step_id}: {chunk_error}"
-                    ) from chunk_error
+                    # Don't re-raise - log and continue with other steps
+                    # Chunk creation failure shouldn't prevent step storage
+                    continue
 
                 # Log successful insertion
                 try:

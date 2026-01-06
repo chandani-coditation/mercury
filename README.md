@@ -55,15 +55,49 @@ curl http://localhost:8001/api/v1/health
 
 ---
 
-## 2. Ingest runbooks and historical data (optional but recommended)
+## 2. Database Setup
+
+The PostgreSQL database is automatically initialized when the Docker container starts. The schema is loaded from `db/schema.sql`.
+
+**IMPORTANT: All database operations use Docker PostgreSQL only.**
+- Scripts connect via `docker exec` to the `noc-ai-postgres` container
+- Never uses local PostgreSQL instance
+- Database credentials are read from `.env` file
+
+**Database Configuration (in `.env`):**
+- `POSTGRES_HOST=localhost` (for Docker port mapping)
+- `POSTGRES_PORT=5432`
+- `POSTGRES_DB=noc_ai` (default)
+- `POSTGRES_USER=noc_ai` (default)
+- `POSTGRES_PASSWORD=noc_ai_password` (set your password)
+
+**Verify database setup:**
+```bash
+# Using Python script (uses Docker exec, reads from .env)
+python scripts/db/verify_db.py
+
+# Or directly via Docker
+docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "SELECT COUNT(*) FROM documents;"
+```
+
+## 3. Ingest runbooks and historical data (optional but recommended)
 
 With the backend up, you can ingest runbooks from the `runbooks/` folder:
 
 ```bash
+# Make sure .env file is configured with correct database credentials
 python scripts/data/ingest_runbooks.py --dir runbooks
+python scripts/data/ingest_servicenow_tickets.py --dir tickets_data
 ```
 
-Similarly, if you have historical tickets/logs configured, use the other ingest scripts under `scripts/data/`.
+**Database Management:**
+```bash
+# Clean up all ingested data (for fresh re-ingestion)
+python scripts/db/cleanup_db.py --yes
+
+# Verify ingestion quality
+python scripts/db/verify_db.py
+```
 
 **Note**: 
 - Service/component values are automatically normalized during ingestion using `config/service_component_mapping.json`. This ensures consistency between runbooks and incidents, improving retrieval accuracy.
@@ -72,7 +106,7 @@ Similarly, if you have historical tickets/logs configured, use the other ingest 
 
 ---
 
-## 3. Start the frontend UI
+## 4. Start the frontend UI
 
 From the `ui` directory:
 
@@ -88,7 +122,7 @@ The UI expects the backend `ai-service` to be reachable at `http://localhost:800
 
 ---
 
-## 4. Understanding Agent Output
+## 5. Understanding Agent Output
 
 Both triage and resolution agents provide clear status indicators in their responses:
 
@@ -143,7 +177,7 @@ Both triage and resolution agents provide clear status indicators in their respo
 
 ---
 
-## 5. Using the UI
+## 6. Using the UI
 
 1. Open `http://localhost:5173` in your browser.
 2. The **New Ticket** form is pre-filled with a sample alert that should match an ingested database runbook.
@@ -162,7 +196,7 @@ The right-hand **Results** panel shows interactive, user-friendly views for:
 
 ---
 
-## 5. Running tests (optional)
+## 7. Running tests (optional)
 
 Backend tests are written with `pytest`. From the repo root:
 

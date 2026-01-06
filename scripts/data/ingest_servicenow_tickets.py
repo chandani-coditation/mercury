@@ -12,9 +12,11 @@ import argparse
 import csv
 import json
 import sys
+import time
+import random
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -178,7 +180,7 @@ def ingest_incident(
         response = requests.post(
             f"{ingestion_url}/ingest/incident",
             json=incident.model_dump(mode="json", exclude_none=True),
-            timeout=30,
+            timeout=60,  # Increased timeout for embedding generation
         )
         response.raise_for_status()
         result = response.json()
@@ -193,67 +195,188 @@ def ingest_incident(
         return False, None
 
 
+def split_incidents_for_testing(
+    incidents: List[IngestIncident], test_percentage: float = 0.1
+) -> Tuple[List[IngestIncident], List[IngestIncident]]:
+    """Split incidents into ingestion set (90%) and test set (10%).
+    
+    Args:
+        incidents: List of incidents to split
+        test_percentage: Percentage to reserve for testing (default: 0.1 = 10%)
+    
+    Returns:
+        Tuple of (incidents_to_ingest, incidents_for_testing)
+    """
+    if not incidents:
+        return [], []
+    
+    # Shuffle for random selection
+    shuffled = incidents.copy()
+    random.seed(42)  # Fixed seed for reproducibility
+    random.shuffle(shuffled)
+    
+    # Calculate split point
+    total = len(shuffled)
+    test_count = max(1, int(total * test_percentage))  # At least 1 for testing
+    
+    test_incidents = shuffled[:test_count]
+    ingest_incidents = shuffled[test_count:]
+    
+    return ingest_incidents, test_incidents
+
+
+def save_test_incidents_to_file(
+    incidents: List[IngestIncident], output_file: Path
+) -> None:
+    """Save test incidents to a CSV file (always replaces the file).
+    
+    Args:
+        incidents: List of incidents to save
+        output_file: Path to output CSV file
+    """
+    if not incidents:
+        return
+    
+    # Ensure output directory exists
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Get field names from first incident
+    first_incident = incidents[0]
+    fieldnames = list(first_incident.model_dump(mode="json", exclude_none=True).keys())
+    
+    # Write to CSV (always replace, not append)
+    with open(output_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        for incident in incidents:
+            # Convert to dict, handling datetime serialization
+            incident_dict = incident.model_dump(mode="json", exclude_none=True)
+            # Convert datetime to ISO format string for CSV
+            if "timestamp" in incident_dict and incident_dict["timestamp"]:
+                if isinstance(incident_dict["timestamp"], datetime):
+                    incident_dict["timestamp"] = incident_dict["timestamp"].isoformat()
+            writer.writerow(incident_dict)
+    
+    logger.info(f"Saved {len(incidents)} test incidents to {output_file}")
+
+
 def ingest_csv_file(
-    file_path: Path, field_mappings: Dict, severity_mapping: Dict, ingestion_url: str
-) -> tuple[int, int]:
-    """Ingest all rows from a CSV file."""
-    print(f"\n Processing: {file_path.name}")
+    file_path: Path, field_mappings: Dict, severity_mapping: Dict, ingestion_url: str,
+    test_percentage: float = 0.1, test_output_file: Optional[Path] = None
+) -> tuple[int, int, List[IngestIncident]]:
+    """Ingest all rows from a CSV file with improved progress reporting.
+    
+    Args:
+        file_path: Path to CSV file
+        field_mappings: Field mapping configuration
+        severity_mapping: Severity mapping configuration
+        ingestion_url: Ingestion service URL
+        test_percentage: Percentage of incidents to reserve for testing (default: 0.1 = 10%)
+        test_output_file: Optional path to save test incidents (default: tickets_data/test_incidents.csv)
+    """
+    print(f"\n{'='*70}")
+    print(f"Processing: {file_path.name}")
+    print(f"{'='*70}")
     logger.info(f"Processing CSV file: {file_path}")
 
     success_count = 0
     error_count = 0
+    start_time = time.time()
 
     try:
+        # First pass: Read all rows and parse incidents
+        print("  Reading and parsing CSV file...")
+        incidents = []
         with open(file_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            total_rows = sum(1 for _ in reader)  # Count total rows
-            f.seek(0)  # Reset file pointer
-            reader = csv.DictReader(f)  # Recreate reader
-
-            print(f"  Found {total_rows} ticket(s) to process\n")
-            logger.info(f"  Found {total_rows} ticket(s) to process")
-
-            for row_num, row in enumerate(reader, start=2):  # Start at 2 (row 1 is header)
+            for row_num, row in enumerate(reader, start=2):
                 try:
                     incident = map_csv_row_to_incident(row, field_mappings, severity_mapping)
-                    incident_id = incident.incident_id or f"row_{row_num}"
-                    title_preview = (
-                        (incident.title[:50] + "...")
-                        if len(incident.title) > 50
-                        else incident.title
-                    )
-
-                    # Print progress to console
-                    print(
-                        f"  [{row_num-1}/{total_rows}] Ingesting ticket {incident_id}: {title_preview}"
-                    )
-                    logger.info(
-                        f"  [{row_num-1}/{total_rows}] Ingesting ticket {incident_id}: {title_preview}"
-                    )
-
-                    success, signature_id = ingest_incident(incident, ingestion_url)
-
-                    if success:
-                        success_count += 1
-                        print(f"     Successfully ingested (signature_id: {signature_id})")
-                        logger.info(f"     Successfully ingested (signature_id: {signature_id})")
-                    else:
-                        error_count += 1
-                        print(f"     Failed to ingest ticket {incident_id}")
-                        logger.error(f"     Failed to ingest ticket {incident_id}")
-
+                    incidents.append(incident)
                 except Exception as e:
                     error_count += 1
-                    error_msg = f"  Error processing row {row_num} in {file_path.name}: {str(e)}"
-                    print(f"     {error_msg}")
+                    error_msg = f"  Error parsing row {row_num}: {str(e)}"
+                    print(f"     ⚠️  {error_msg}")
                     logger.error(error_msg)
                     continue
+
+        total_rows = len(incidents)
+        print(f"  ✓ Parsed {total_rows} ticket(s) successfully\n")
+        logger.info(f"  Parsed {total_rows} ticket(s) successfully")
+
+        if total_rows == 0:
+            print("  ⚠️  No valid tickets to ingest")
+            return 0, error_count, []
+        
+        # Split incidents: 90% for ingestion, 10% for testing
+        test_incidents = []
+        if test_percentage > 0:
+            ingest_incidents, test_incidents = split_incidents_for_testing(incidents, test_percentage)
+            
+            # Save test incidents to file if output file specified (for single file mode)
+            if test_output_file:
+                save_test_incidents_to_file(test_incidents, test_output_file)
+                print(f"  📝 Reserved {len(test_incidents)} ticket(s) for testing → {test_output_file.name}")
+            else:
+                print(f"  📝 Reserved {len(test_incidents)} ticket(s) for testing")
+            print(f"  📥 Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)\n")
+            logger.info(f"Reserved {len(test_incidents)} incidents for testing, ingesting {len(ingest_incidents)}")
+            
+            incidents = ingest_incidents  # Use only the ingestion set
+
+        # Second pass: Ingest incidents (individual requests with progress)
+        print(f"  Ingesting {total_rows} ticket(s)...")
+        print(f"  Progress: [{' ' * 50}] 0%", end="", flush=True)
+        
+        for idx, incident in enumerate(incidents, 1):
+            # Calculate progress percentage
+            progress = int((idx / total_rows) * 100)
+            filled = int(progress / 2)  # 50 chars = 100%
+            
+            # Estimate time remaining
+            elapsed = time.time() - start_time
+            if idx > 1:
+                avg_time_per_incident = elapsed / (idx - 1)
+                remaining = avg_time_per_incident * (total_rows - idx + 1)
+                if remaining > 60:
+                    eta_str = f" (ETA: {int(remaining/60)}m {int(remaining%60)}s)"
+                else:
+                    eta_str = f" (ETA: {int(remaining)}s)"
+            else:
+                eta_str = ""
+            
+            # Update progress bar
+            incident_id = incident.incident_id or f"row_{idx}"
+            title_preview = (
+                (incident.title[:40] + "...")
+                if len(incident.title) > 40
+                else incident.title
+            )
+            print(f"\r  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}% - {title_preview}{eta_str}", end="", flush=True)
+            
+            success, _ = ingest_incident(incident, ingestion_url)
+            if success:
+                success_count += 1
+            else:
+                error_count += 1
+                # Show error on new line but keep progress bar
+                print(f"\n     ⚠️  Failed: {incident_id}")
+                print(f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%", end="", flush=True)
+        
+        print(f"\r  Progress: [{'=' * 50}] 100% - Complete!                    ")
+
+        elapsed_time = time.time() - start_time
+        print(f"\n  ✓ Completed in {elapsed_time:.1f}s")
+        print(f"  ✓ Success: {success_count}, Errors: {error_count}")
+        if success_count > 0:
+            print(f"  ✓ Average: {elapsed_time/success_count:.2f}s per ticket")
 
     except Exception as e:
         logger.error(f"Error reading CSV file {file_path}: {str(e)}")
         raise
 
-    return success_count, error_count
+    return success_count, error_count, test_incidents
 
 
 def main():
@@ -268,6 +391,23 @@ def main():
         type=str,
         default=INGESTION_SERVICE_URL,
         help=f"Ingestion service URL (default: {INGESTION_SERVICE_URL})",
+    )
+    parser.add_argument(
+        "--test-percentage",
+        type=float,
+        default=0.1,
+        help="Percentage of incidents to reserve for testing (default: 0.1 = 10%%)",
+    )
+    parser.add_argument(
+        "--test-output-file",
+        type=str,
+        default=None,
+        help="Path to save test incidents CSV (default: <input_dir>/test_incidents.csv)",
+    )
+    parser.add_argument(
+        "--no-test-split",
+        action="store_true",
+        help="Disable test split (ingest 100%% of data)",
     )
 
     args = parser.parse_args()
@@ -297,6 +437,7 @@ def main():
 
     total_success = 0
     total_errors = 0
+    all_test_incidents = []  # Accumulate test incidents from all files
 
     if args.file:
         # Process single file
@@ -306,11 +447,16 @@ def main():
             logger.error(f"File not found: {file_path}")
             sys.exit(1)
 
-        success, errors = ingest_csv_file(
-            file_path, servicenow_mappings, severity_mapping, args.ingestion_url
+        test_output = Path(args.test_output_file) if args.test_output_file else file_path.parent / "test_incidents.csv"
+        success, errors, test_incidents = ingest_csv_file(
+            file_path, servicenow_mappings, severity_mapping, args.ingestion_url,
+            test_percentage=0 if args.no_test_split else args.test_percentage,
+            test_output_file=None  # Don't save per-file, accumulate instead
         )
         total_success += success
         total_errors += errors
+        if test_incidents:
+            all_test_incidents.extend(test_incidents)
 
     else:
         # Process directory
@@ -330,11 +476,22 @@ def main():
         logger.info(f"Found {len(csv_files)} CSV file(s)")
 
         for csv_file in csv_files:
-            success, errors = ingest_csv_file(
-                csv_file, servicenow_mappings, severity_mapping, args.ingestion_url
+            success, errors, test_incidents = ingest_csv_file(
+                csv_file, servicenow_mappings, severity_mapping, args.ingestion_url,
+                test_percentage=0 if args.no_test_split else args.test_percentage,
+                test_output_file=None  # Don't save per-file, accumulate instead
             )
             total_success += success
             total_errors += errors
+            if test_incidents:
+                all_test_incidents.extend(test_incidents)
+        
+        # Save all accumulated test incidents to a single file (always replace)
+        if all_test_incidents and not args.no_test_split:
+            test_output = Path(args.test_output_file) if args.test_output_file else dir_path / "test_incidents.csv"
+            save_test_incidents_to_file(all_test_incidents, test_output)
+            print(f"\n📝 Saved {len(all_test_incidents)} test incidents to {test_output.name}")
+            logger.info(f"Saved {len(all_test_incidents)} test incidents to {test_output}")
 
     print(f"\n{'='*70}")
     print(f"Ingestion Summary:")
@@ -347,87 +504,14 @@ def main():
     logger.info(f"   Errors: {total_errors} ticket(s)")
     logger.info(f"{'='*70}")
 
-    # Verify embeddings were created
+    # Verify embeddings were created (skip if using Docker - use verify_db.py instead)
     if total_success > 0:
-        print("\n Verifying embeddings in database...")
-        logger.info("\nVerifying embeddings in database...")
-        try:
-            from db.connection import get_db_connection
-
-            conn = get_db_connection()
-            cur = conn.cursor()
-
-            # Count incident signatures (stored in dedicated table)
-            cur.execute(
-                """
-                SELECT COUNT(*) as sig_count 
-                FROM incident_signatures
-            """
-            )
-            sig_result = cur.fetchone()
-            sig_count = sig_result["sig_count"] if isinstance(sig_result, dict) else sig_result[0]
-
-            # Count incident signatures with embeddings
-            cur.execute(
-                """
-                SELECT COUNT(*) as embed_count 
-                FROM incident_signatures 
-                WHERE embedding IS NOT NULL
-            """
-            )
-            embed_result = cur.fetchone()
-            embed_count = (
-                embed_result["embed_count"] if isinstance(embed_result, dict) else embed_result[0]
-            )
-
-            # Get embedding dimension sample
-            cur.execute(
-                """
-                SELECT embedding::text as embedding_text
-                FROM incident_signatures 
-                WHERE embedding IS NOT NULL
-                LIMIT 1
-            """
-            )
-            sample = cur.fetchone()
-            embedding_dim = None
-            if sample:
-                embedding_text = sample["embedding_text"] if isinstance(sample, dict) else sample[0]
-                if embedding_text:
-                    embedding_dim = embedding_text.count(",") + 1
-
-            conn.close()
-
-            print(f"\nDatabase Verification:")
-            print(f"   Incident signatures stored: {sig_count}")
-            print(f"   Signatures with embeddings: {embed_count}/{sig_count}")
-            logger.info(f"\nDatabase Verification:")
-            logger.info(f"   Incident signatures stored: {sig_count}")
-            logger.info(f"   Signatures with embeddings: {embed_count}/{sig_count}")
-
-            if embedding_dim:
-                print(f"   Embedding dimension: {embedding_dim}")
-                logger.info(f"   Embedding dimension: {embedding_dim}")
-
-            if embed_count == sig_count and sig_count > 0:
-                print(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings!")
-                logger.info(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings!")
-            elif embed_count < sig_count:
-                print(
-                    f"\n    WARNING: {sig_count - embed_count} signatures are missing embeddings!"
-                )
-                logger.warning(
-                    f"\n    WARNING: {sig_count - embed_count} signatures are missing embeddings!"
-                )
-            else:
-                print(f"\n    WARNING: No incident signatures found in database!")
-                logger.warning(f"\n    WARNING: No incident signatures found in database!")
-
-        except Exception as e:
-            print(f"    Could not verify embeddings: {str(e)}")
-            print(f"     You can manually verify using: python scripts/db/verify_db.py")
-            logger.warning(f"    Could not verify embeddings: {str(e)}")
-            logger.warning(f"     You can manually verify using: python scripts/db/verify_db.py")
+        print("\n" + "="*70)
+        print("Verification")
+        print("="*70)
+        print("  Note: For detailed verification, run: python scripts/db/verify_db.py")
+        print("  (Skipping direct database connection to use Docker PostgreSQL only)")
+        logger.info("Skipping direct database verification (use verify_db.py for Docker PostgreSQL)")
 
     if total_errors > 0:
         print(f"\n  Completed with {total_errors} error(s). Check logs for details.")

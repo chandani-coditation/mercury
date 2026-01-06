@@ -67,6 +67,13 @@ logs/
 .env.local
 .env.*.local
 
+# Data files (should not be in git)
+tickets_data/*.csv
+updated_tickets_data/
+*.db
+*.sqlite
+*.sqlite3
+
 # node modules
 node_modules/
 ui/node_modules/
