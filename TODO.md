@@ -36,9 +36,43 @@
 
 ---
 
+### 4. Centralize SQL Query Patterns
+**Status**: 🟡 Medium  
+**Impact**: Code duplication, maintenance risk, inconsistent scoring logic  
+**Location**: `retrieval/hybrid_search.py`, `retrieval/resolution_retrieval.py`
+
+**Problem**:
+- 3 complex queries (100+ lines each) with similar patterns
+- RRF scoring, soft filter boosts, and parameter building duplicated
+- Changes to scoring logic require updates in multiple places
+- Risk of bugs from parameter ordering mistakes
+
+**Solution**: Create Query Builder pattern to centralize common components:
+- Extract RRF score calculation formulas
+- Extract soft filter boost CASE statements (service/component matching)
+- Standardize parameter building utilities
+- Add query validation helpers
+
+**Tasks**:
+- [ ] Create `retrieval/query_builders.py` with shared query components
+- [ ] Extract RRF score formula (used in 2 queries)
+- [ ] Extract soft filter boost cases (used in all 3 queries)
+- [ ] Standardize parameter building logic
+- [ ] Refactor `hybrid_search()` query to use builder
+- [ ] Refactor `triage_retrieval()` incident signatures query
+- [ ] Refactor `triage_retrieval()` runbook metadata query
+- [ ] Add unit tests for scoring formulas
+
+**Files to Modify**:
+- `retrieval/hybrid_search.py` (refactor queries)
+- `retrieval/query_builders.py` (new file - shared components)
+- `tests/` (add query builder tests)
+
+---
+
 ## 🟢 Low Priority / Enhancements
 
-### 4. Embedding Caching
+### 5. Embedding Caching
 **Status**: 🟢 Low  
 **Impact**: Redundant API calls, slower ingestion  
 **Location**: `ingestion/embeddings.py`
@@ -59,7 +93,7 @@
 
 ---
 
-### 5. Performance Tests for Retrieval
+### 6. Performance Tests for Retrieval
 **Status**: 🟢 Low  
 **Tasks**:
 - [ ] Benchmark retrieval performance with large datasets
@@ -69,7 +103,7 @@
 
 ---
 
-### 6. Document Retrieval Configuration
+### 7. Document Retrieval Configuration
 **Status**: 🟢 Low  
 **Tasks**:
 - [ ] Document RRF parameters
@@ -81,7 +115,7 @@
 
 ## 💡 Long-term Enhancements
 
-### 7. Auto-updating Technical Terms Dictionary
+### 8. Auto-updating Technical Terms Dictionary
 **Status**: 🔵 Future  
 **Problem**: Current `technical_terms.json` is static and requires manual updates  
 **Solution**: Pattern-based learning from ingested historical data:
@@ -104,7 +138,7 @@
 
 ---
 
-### 8. LLM-based Query Rewriting
+### 9. LLM-based Query Rewriting
 **Status**: 🔵 Future  
 **Description**: Use LLM to rewrite queries for better retrieval
 - Extract intent and expand queries semantically
@@ -112,7 +146,7 @@
 
 ---
 
-### 9. Embedding Fine-tuning
+### 10. Embedding Fine-tuning
 **Status**: 🔵 Future  
 **Description**: Fine-tune embeddings on domain-specific data
 - Better semantic understanding of NOC terminology
@@ -120,7 +154,7 @@
 
 ---
 
-### 10. Hybrid Retrieval with Reranking
+### 11. Hybrid Retrieval with Reranking
 **Status**: 🔵 Future  
 **Description**: Use cross-encoder for reranking
 - More accurate but slower
@@ -134,17 +168,18 @@
 1. 🟡 MMR Testing and Documentation (#1)
 2. 🟡 Integration Tests for Service/Component Filtering (#2)
 3. 🟡 Document Service/Component Standardization (#3)
+4. 🟡 Centralize SQL Query Patterns (#4)
 
 **Low Priority**:
-4. 🟢 Embedding Caching (#4)
-5. 🟢 Performance Tests for Retrieval (#5)
-6. 🟢 Document Retrieval Configuration (#6)
+5. 🟢 Embedding Caching (#5)
+6. 🟢 Performance Tests for Retrieval (#6)
+7. 🟢 Document Retrieval Configuration (#7)
 
 **Future Enhancements**:
-7. 🔵 Auto-updating Technical Terms Dictionary (#7)
-8. 🔵 LLM-based Query Rewriting (#8)
-9. 🔵 Embedding Fine-tuning (#9)
-10. 🔵 Hybrid Retrieval with Reranking (#10)
+8. 🔵 Auto-updating Technical Terms Dictionary (#8)
+9. 🔵 LLM-based Query Rewriting (#9)
+10. 🔵 Embedding Fine-tuning (#10)
+11. 🔵 Hybrid Retrieval with Reranking (#11)
 
 ---
 

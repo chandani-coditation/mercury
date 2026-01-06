@@ -1,0 +1,33 @@
+[
+  {
+    "name": "MATCHES_KB__Database_Alerts_High_Disk",
+    "description": "Database disk usage on primary SQL server has exceeded 90% for the last 20 minutes. Multiple I/O wait alerts observed on the database volume.",
+    "labels": {
+      "service": "Database",
+      "component": "Alerts",
+      "environment": "production",
+      "severity": "high",
+      "alertname": "DatabaseDiskUsageHigh"
+    },
+    "fingerprint": "sample-match-1",
+    "summary": "High disk usage on primary database server impacting performance."
+  },
+  {
+    "name": "NO_MATCH_IN_KB__Unknown_Service_Weird_Error",
+    "description": "Service xyz-unknown is reporting intermittent foobar-1234 protocol violations with error code Z9. No prior tickets or runbooks are expected for this synthetic service.",
+    "labels": {
+      "service": "xyz-unknown",
+      "component": "foobar-1234",
+      "environment": "production",
+      "severity": "critical",
+      "alertname": "UnknownFoobarProtocolViolation"
+    },
+    "fingerprint": "sample-no-match-1",
+    "summary": "Critical unknown error from synthetic xyz-unknown service."
+  }
+]
+
+
+
+
+
