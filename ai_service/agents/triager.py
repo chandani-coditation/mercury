@@ -316,8 +316,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info(
         f"Starting triage: query_text='{query_text[:150]}...', "
-        f"service={service_val}, component={component_val}, "
-        f"key_phrases={key_phrases[:3] if key_phrases else []}"
+        f"service={service_val}, component={component_val} "
     )
 
     # Get retrieval config for triage
@@ -337,7 +336,8 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             # For now, use triage_retrieval and note that MMR can be applied to results if needed
             logger.debug(f"MMR requested but triage_retrieval doesn't support MMR yet. Using standard retrieval.")
         
-        rrf_k = retrieval_config.get("rrf_k", 60)
+        # rrf_k = retrieval_config.get("rrf_k", 60)
+        rrf_k = retrieval_cfg.get("rrf_k", 60)
         triage_evidence = triage_retrieval(
             query_text=query_text,
             service=service_val,

@@ -76,26 +76,20 @@ class HybridSearchQueryBuilder:
     ) -> str:
         """
         Returns component match boost CASE statement.
-        
-        Args:
-            metadata_alias: SQL expression to access component field in metadata
-            allow_null_boost: If True, gives small boost when component is NULL/empty
-                             (used for incident signatures)
-        
-        Returns:
-            SQL CASE statement for component match boost
         """
         null_boost_clause = ""
         if allow_null_boost:
             null_boost_clause = f"""
                 WHEN {metadata_alias} = '' THEN {HybridSearchQueryBuilder.COMPONENT_NULL_BOOST}
             """
-        
+
         return f"""
             CASE 
-                WHEN %s IS NULL THEN 0.0{null_boost_clause}
-                WHEN LOWER({metadata_alias}) = LOWER(%s) THEN {HybridSearchQueryBuilder.COMPONENT_EXACT_MATCH_BOOST}
-                WHEN LOWER({metadata_alias}) LIKE LOWER(%s) THEN {HybridSearchQueryBuilder.COMPONENT_PARTIAL_MATCH_BOOST}
+                WHEN %s::text IS NULL THEN 0.0{null_boost_clause}
+                WHEN LOWER({metadata_alias}) = LOWER(%s::text)
+                    THEN {HybridSearchQueryBuilder.COMPONENT_EXACT_MATCH_BOOST}
+                WHEN LOWER({metadata_alias}) LIKE LOWER(%s::text)
+                    THEN {HybridSearchQueryBuilder.COMPONENT_PARTIAL_MATCH_BOOST}
                 ELSE 0.0
             END
         """
@@ -107,23 +101,16 @@ class HybridSearchQueryBuilder:
     ) -> str:
         """
         Returns service match boost CASE statement that checks both service and affected_service.
-        
-        Used for incident signatures which have both fields.
-        
-        Args:
-            service_alias: SQL expression for service field
-            affected_service_alias: SQL expression for affected_service field
-        
-        Returns:
-            SQL CASE statement for dual service match boost
         """
         return f"""
             CASE 
-                WHEN %s IS NULL THEN 0.0
-                WHEN LOWER({service_alias}) = LOWER(%s) 
-                     OR LOWER({affected_service_alias}) = LOWER(%s) THEN {HybridSearchQueryBuilder.SERVICE_EXACT_MATCH_BOOST}
-                WHEN LOWER({service_alias}) LIKE LOWER(%s)
-                     OR LOWER({affected_service_alias}) LIKE LOWER(%s) THEN {HybridSearchQueryBuilder.SERVICE_PARTIAL_MATCH_BOOST}
+                WHEN %s::text IS NULL THEN 0.0
+                WHEN LOWER({service_alias}) = LOWER(%s::text)
+                    OR LOWER({affected_service_alias}) = LOWER(%s::text)
+                    THEN {HybridSearchQueryBuilder.SERVICE_EXACT_MATCH_BOOST}
+                WHEN LOWER({service_alias}) LIKE LOWER(%s::text)
+                    OR LOWER({affected_service_alias}) LIKE LOWER(%s::text)
+                    THEN {HybridSearchQueryBuilder.SERVICE_PARTIAL_MATCH_BOOST}
                 ELSE 0.0
             END
         """

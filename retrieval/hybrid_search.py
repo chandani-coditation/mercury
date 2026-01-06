@@ -788,26 +788,28 @@ def triage_retrieval(
         runbook_params.append(limit)  # For LIMIT
 
         runbook_meta_query = f"""
-        SELECT 
-            d.id as document_id,
-            d.doc_type,
-            d.service,
-            d.component,
-            d.title,
-            d.tags,
-            d.last_reviewed_at,
-            -- Use document title/content for full-text search
-            ts_rank(to_tsvector('english', COALESCE(d.title, '') || ' ' || COALESCE(d.content, '')), 
-                    plainto_tsquery('english', %s)) as relevance_score,
-            -- PHASE 1: Soft filter boosts for service/component matching
-            {HybridSearchQueryBuilder.build_service_boost_case("COALESCE(d.service, '')")} as service_match_boost,
-            {HybridSearchQueryBuilder.build_component_boost_case("COALESCE(d.component, '')")} as component_match_boost
-        FROM documents d
-        WHERE d.doc_type = 'runbook'
-        ORDER BY (relevance_score + 
-                  {HybridSearchQueryBuilder.build_service_boost_case("COALESCE(d.service, '')")} +
-                  {HybridSearchQueryBuilder.build_component_boost_case("COALESCE(d.component, '')")}) DESC, 
-                 d.last_reviewed_at DESC NULLS LAST
+        SELECT *
+        FROM (
+            SELECT 
+                d.id AS document_id,
+                d.doc_type,
+                d.service,
+                d.component,
+                d.title,
+                d.tags,
+                d.last_reviewed_at,
+                ts_rank(
+                    to_tsvector('english', COALESCE(d.title, '') || ' ' || COALESCE(d.content, '')),
+                    plainto_tsquery('english', %s)
+                ) AS relevance_score,
+                {HybridSearchQueryBuilder.build_service_boost_case("COALESCE(d.service, '')")} AS service_match_boost,
+                {HybridSearchQueryBuilder.build_component_boost_case("COALESCE(d.component, '')")} AS component_match_boost
+            FROM documents d
+            WHERE d.doc_type = 'runbook'
+        ) ranked
+        ORDER BY
+            (relevance_score + service_match_boost + component_match_boost) DESC,
+            last_reviewed_at DESC NULLS LAST
         LIMIT %s
         """
 

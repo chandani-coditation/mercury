@@ -410,16 +410,17 @@ def insert_runbook_with_steps(
 
             # Create a single fallback step from the full content
             if content and content.strip():
+                # Load max length from config (graceful degradation if config missing)
+                try:
+                    from ingestion.normalizers import INGESTION_CONFIG
+                    max_action_length = INGESTION_CONFIG.get("formatting", {}).get("max_fallback_action_length", 2000)
+                except Exception:
+                    max_action_length = 2000  # Fallback to default
+
                 fallback_step = RunbookStep(
                     step_id=f"{tags.get('runbook_id', 'RB-UNKNOWN')}-S1",
                     runbook_id=tags.get("runbook_id", "RB-UNKNOWN"),
                     condition="Runbook applies",
-                    # Load max length from config (graceful degradation if config missing)
-                    try:
-                        from ingestion.normalizers import INGESTION_CONFIG
-                        max_action_length = INGESTION_CONFIG.get("formatting", {}).get("max_fallback_action_length", 2000)
-                    except Exception:
-                        max_action_length = 2000  # Fallback to default
                     action=content.strip()[:max_action_length],  # Limit from config
                     expected_outcome=None,
                     rollback=None,
