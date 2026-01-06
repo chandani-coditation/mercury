@@ -1,0 +1,60 @@
+{
+  "_comment": "Service/Component Mapping Configuration",
+  "_description": "Maps various service/component values to standardized canonical values. Used during ingestion to ensure consistency between runbooks and incidents.",
+  "_phase2_update": "This mapping ensures that alerts and runbooks use consistent service/component values, improving retrieval accuracy.",
+  
+  "service_aliases": {
+    "_description": "Maps various service name variations to canonical service names",
+    "High Disk Alert": "Storage",
+    "High Disk": "Storage",
+    "Disk Alert": "Storage",
+    "Storage Alert": "Storage",
+    "High CPU Alert": "Infrastructure",
+    "High CPU": "Infrastructure",
+    "CPU Alert": "Infrastructure",
+    "High Memory Alert": "Infrastructure",
+    "High Memory": "Infrastructure",
+    "Memory Alert": "Infrastructure",
+    "Database-SQL": "Database",
+    "Database SQL": "Database",
+    "SQL Database": "Database",
+    "DB": "Database",
+    "Network Alert": "Network",
+    "Network": "Network"
+  },
+  
+  "component_aliases": {
+    "_description": "Maps various component name variations to canonical component names",
+    "High Disk Alerts": "Disk",
+    "High Disk Alert": "Disk",
+    "Disk Alerts": "Disk",
+    "Disk": "Disk",
+    "High CPU Alerts": "CPU",
+    "High CPU Alert": "CPU",
+    "CPU Alerts": "CPU",
+    "CPU": "CPU",
+    "High Memory Alerts": "Memory",
+    "High Memory Alert": "Memory",
+    "Memory Alerts": "Memory",
+    "Memory": "Memory",
+    "Alerts": null,
+    "_note": "null values mean the component should be removed/ignored"
+  },
+  
+  "service_component_combinations": {
+    "_description": "Special mappings for common service+component combinations",
+    "Storage + High Disk Alerts": {
+      "service": "Storage",
+      "component": "Disk"
+    },
+    "Infrastructure + High CPU Alerts": {
+      "service": "Infrastructure",
+      "component": "CPU"
+    },
+    "Infrastructure + High Memory Alerts": {
+      "service": "Infrastructure",
+      "component": "Memory"
+    }
+  }
+}
+

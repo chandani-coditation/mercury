@@ -6,6 +6,14 @@ This project is a NOC triage and resolution assistant. It:
 - Exposes an AI backend (`ai-service`) for triage and resolution
 - Provides a small React UI to submit new tickets and inspect results
 
+### Key Features
+
+- **Hybrid Search**: Combines vector similarity and full-text search using RRF (Reciprocal Rank Fusion)
+- **Soft Filtering**: Service/component fields are used as relevance boosters, not hard filters, ensuring both triage and resolution agents work even with metadata mismatches
+- **Service/Component Standardization**: Automatic normalization during ingestion ensures consistency between runbooks and incidents
+- **Enhanced Confidence Calculation**: Confidence scores reflect both evidence quality and service/component match quality
+- **Graceful Degradation**: Both agents work even when no historical evidence exists (with appropriate confidence levels)
+
 ---
 
 ## Prerequisites
@@ -51,6 +59,8 @@ python scripts/data/ingest_runbooks.py --dir runbooks
 ```
 
 Similarly, if you have historical tickets/logs configured, use the other ingest scripts under `scripts/data/`.
+
+**Note**: Service/component values are automatically normalized during ingestion using `config/service_component_mapping.json`. This ensures consistency between runbooks and incidents, improving retrieval accuracy.
 
 ---
 
@@ -98,4 +108,5 @@ pytest
 ```
 
 There are also helper scripts under `tests/` (e.g. `test_approve_and_resolve.sh`) to exercise the API end-to-end.
+
 

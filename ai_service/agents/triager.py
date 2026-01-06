@@ -482,19 +482,92 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Update triage_output with matched_evidence
         triage_output["matched_evidence"] = matched_evidence
 
-        # Calculate confidence based on number of matches
-        if triage_output.get("confidence", 0) == 0 and incident_signatures:
-            # Calculate confidence based on number of matches and scores
+        # PHASE 3: Enhanced confidence calculation - reflects match quality
+        # Base confidence from evidence count + service/component match boosts
+        base_confidence = triage_output.get("confidence", 0.0)
+        
+        if base_confidence == 0 and incident_signatures:
+            # Calculate base confidence based on number of matches
             num_matches = len(incident_signatures)
             if num_matches >= 3:
-                triage_output["confidence"] = 0.9
+                base_confidence = 0.9
             elif num_matches >= 2:
-                triage_output["confidence"] = 0.8
+                base_confidence = 0.8
             elif num_matches >= 1:
-                triage_output["confidence"] = 0.7
+                base_confidence = 0.7
             logger.info(
-                f"Adjusted confidence from 0 to {triage_output['confidence']} based on {num_matches} signature matches"
+                f"Base confidence calculated: {base_confidence} based on {num_matches} signature matches"
             )
+        
+        # PHASE 3: Calculate service/component match quality from retrieval results
+        # Use service_match_boost and component_match_boost from retrieval if available
+        # Otherwise, calculate from alert vs signature metadata
+        confidence_boost = 0.0
+        service_match_quality = "none"  # none, partial, exact
+        component_match_quality = "none"
+        
+        # Try to get match boosts from retrieval results (more accurate)
+        if incident_signatures:
+            top_sig = incident_signatures[0]
+            sig_service_boost = top_sig.get("service_match_boost", 0.0)
+            sig_component_boost = top_sig.get("component_match_boost", 0.0)
+            
+            # Convert boost values to match quality for logging
+            if sig_service_boost >= 0.15:
+                service_match_quality = "exact"
+                confidence_boost += 0.1
+            elif sig_service_boost >= 0.10:
+                service_match_quality = "partial"
+                confidence_boost += 0.05
+            
+            if sig_component_boost >= 0.10:
+                component_match_quality = "exact"
+                confidence_boost += 0.05
+            elif sig_component_boost >= 0.05:
+                component_match_quality = "partial"
+                confidence_boost += 0.02
+        else:
+            # Fallback: Calculate from alert vs signature metadata if no retrieval boosts
+            alert_service = alert.get("labels", {}).get("service") if isinstance(alert.get("labels"), dict) else None
+            alert_component = alert.get("labels", {}).get("component") if isinstance(alert.get("labels"), dict) else None
+            
+            if runbook_metadata and (alert_service or alert_component):
+                # Check match quality from top runbook
+                top_rb = runbook_metadata[0]
+                rb_service = top_rb.get("service")
+                rb_component = top_rb.get("component")
+                
+                # Check service match
+                if alert_service and rb_service:
+                    alert_service_lower = str(alert_service).lower()
+                    rb_service_lower = str(rb_service).lower()
+                    if alert_service_lower == rb_service_lower:
+                        service_match_quality = "exact"
+                        confidence_boost += 0.1
+                    elif alert_service_lower in rb_service_lower or rb_service_lower in alert_service_lower:
+                        service_match_quality = "partial"
+                        confidence_boost += 0.05
+                
+                # Check component match
+                if alert_component and rb_component:
+                    alert_component_lower = str(alert_component).lower()
+                    rb_component_lower = str(rb_component).lower()
+                    if alert_component_lower == rb_component_lower:
+                        component_match_quality = "exact"
+                        confidence_boost += 0.05
+                    elif alert_component_lower in rb_component_lower or rb_component_lower in alert_component_lower:
+                        component_match_quality = "partial"
+                        confidence_boost += 0.02
+        
+        # Calculate final confidence (cap at 1.0)
+        final_confidence = min(base_confidence + confidence_boost, 1.0)
+        triage_output["confidence"] = final_confidence
+        
+        logger.info(
+            f"Enhanced confidence calculation: base={base_confidence:.2f}, "
+            f"service_match={service_match_quality}, component_match={component_match_quality}, "
+            f"boost={confidence_boost:.2f}, final={final_confidence:.2f}"
+        )
 
         # Generate likely_cause from evidence if LLM didn't provide it
         if (
@@ -761,6 +834,20 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         urgency = labels.get("urgency", "3 - Low")
         severity = derive_severity_from_impact_urgency(impact, urgency)
 
+        # PHASE 3: Enhanced confidence for no evidence case
+        # Even without evidence, we can provide low confidence (0.0-0.3) based on alert description
+        # This allows graceful degradation instead of hard failure
+        no_evidence_confidence = 0.0
+        
+        # If we have some runbook metadata, give small confidence boost
+        if runbook_metadata:
+            no_evidence_confidence = 0.2  # Low confidence but not zero
+            logger.info(f"No incident signatures found, but {len(runbook_metadata)} runbook(s) matched - confidence set to 0.2")
+        else:
+            # No evidence at all - very low confidence
+            no_evidence_confidence = 0.0
+            logger.info("No evidence found - confidence set to 0.0")
+        
         triage_output = {
             "incident_signature": {
                 "failure_type": "UNKNOWN_FAILURE",
@@ -775,7 +862,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 ],
             },
             "severity": severity,
-            "confidence": 0.0,
+            "confidence": no_evidence_confidence,
             "policy": "REVIEW",
         }
 

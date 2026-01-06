@@ -1,13 +1,27 @@
 {
   "_comment": "Retrieval Configuration",
   "_description": "Hybrid search settings for context retrieval (vector + full-text search)",
+  "_phase1_update": "Service/component filters are now soft (relevance boosters), not hard WHERE filters. This allows semantic search to find relevant content even with mismatches.",
   
   "triage": {
     "method": "hybrid_search",
     "limit": 5,
     "vector_weight": 0.7,
     "fulltext_weight": 0.3,
-    "filters": ["service", "component"],
+    "filters": [],
+    "_note": "Hard filters removed in Phase 1 - service/component now used as soft filters (relevance boosters)",
+    "soft_filters": {
+      "service": {
+        "enabled": true,
+        "exact_match_boost": 0.15,
+        "partial_match_boost": 0.10
+      },
+      "component": {
+        "enabled": true,
+        "exact_match_boost": 0.10,
+        "partial_match_boost": 0.05
+      }
+    },
     "prefer_types": ["runbook", "incident", "log"],
     "max_per_type": {
       "runbook": 5
@@ -18,7 +32,20 @@
     "limit": 10,
     "vector_weight": 0.6,
     "fulltext_weight": 0.4,
-    "filters": ["service", "component"],
+    "filters": [],
+    "_note": "Hard filters removed in Phase 1 - service/component now used as soft filters (relevance boosters)",
+    "soft_filters": {
+      "service": {
+        "enabled": true,
+        "exact_match_boost": 0.15,
+        "partial_match_boost": 0.10
+      },
+      "component": {
+        "enabled": true,
+        "exact_match_boost": 0.10,
+        "partial_match_boost": 0.05
+      }
+    },
     "prefer_types": ["runbook", "log", "past_incident", "sop"]
   }
 }

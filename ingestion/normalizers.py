@@ -17,6 +17,18 @@ from ingestion.models import (
     IncidentSignature,
 )
 
+# Try to load service/component mapping config
+try:
+    project_root = Path(__file__).parent.parent
+    mapping_path = project_root / "config" / "service_component_mapping.json"
+    if mapping_path.exists():
+        with open(mapping_path, "r") as f:
+            SERVICE_COMPONENT_MAPPING = json.load(f)
+    else:
+        SERVICE_COMPONENT_MAPPING = {}
+except Exception:
+    SERVICE_COMPONENT_MAPPING = {}
+
 # Optional JSON schema validation
 try:
     import jsonschema
@@ -97,10 +109,13 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
     # Remove None values
     tags = {k: v for k, v in tags.items() if v is not None}
 
+    # PHASE 2: Normalize service/component using mapping configuration
+    normalized_service, normalized_component = normalize_service_component(service, component)
+    
     return IngestDocument(
         doc_type="alert",
-        service=service,
-        component=component,
+        service=normalized_service,
+        component=normalized_component,
         title=f"Alert: {alert.title}",
         content=content,
         tags=tags,
@@ -108,7 +123,12 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
     )
 
 
-def extract_runbook_steps(runbook: IngestRunbook, runbook_id: str) -> List[RunbookStep]:
+def extract_runbook_steps(
+    runbook: IngestRunbook, 
+    runbook_id: str,
+    normalized_service: Optional[str] = None,
+    normalized_component: Optional[str] = None
+) -> List[RunbookStep]:
     """
     Extract atomic runbook steps from runbook content.
 
@@ -209,8 +229,8 @@ def extract_runbook_steps(runbook: IngestRunbook, runbook_id: str) -> List[Runbo
                     expected_outcome=expected_outcome,
                     rollback=rollback,
                     risk_level=risk_level,
-                    service=runbook.service,
-                    component=runbook.component,
+                    service=normalized_service or runbook.service,
+                    component=normalized_component or runbook.component,
                 )
             )
     else:
@@ -346,8 +366,8 @@ def extract_runbook_steps(runbook: IngestRunbook, runbook_id: str) -> List[Runbo
                     expected_outcome=None,
                     rollback=rollback,
                     risk_level=None,
-                    service=runbook.service,
-                    component=runbook.component,
+                    service=normalized_service or runbook.service,
+                    component=normalized_component or runbook.component,
                 )
             )
 
@@ -364,8 +384,8 @@ def extract_runbook_steps(runbook: IngestRunbook, runbook_id: str) -> List[Runbo
                 expected_outcome=None,
                 rollback=None,
                 risk_level=None,
-                service=runbook.service,
-                component=runbook.component,
+                service=normalized_service or runbook.service,
+                component=normalized_component or runbook.component,
             )
         )
         try:
@@ -391,6 +411,60 @@ def extract_runbook_steps(runbook: IngestRunbook, runbook_id: str) -> List[Runbo
         pass
 
     return steps
+
+
+def normalize_service_component(service: Optional[str], component: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Normalize service/component values using mapping configuration.
+    
+    PHASE 2: Standardizes service/component values during ingestion to ensure consistency
+    between runbooks and incidents. Uses aliases from service_component_mapping.json.
+    
+    Args:
+        service: Raw service value (may be None)
+        component: Raw component value (may be None)
+    
+    Returns:
+        Tuple of (normalized_service, normalized_component)
+        - If mapping exists, returns canonical value
+        - If no mapping, returns original value (or None)
+        - If component maps to null, returns None for component
+    """
+    if not SERVICE_COMPONENT_MAPPING:
+        # No mapping config available, return as-is
+        return service, component
+    
+    service_aliases = SERVICE_COMPONENT_MAPPING.get("service_aliases", {})
+    component_aliases = SERVICE_COMPONENT_MAPPING.get("component_aliases", {})
+    
+    normalized_service = service
+    normalized_component = component
+    
+    # Normalize service
+    if service and service in service_aliases:
+        normalized_service = service_aliases[service]
+    elif service:
+        # Try case-insensitive match
+        service_lower = service.lower()
+        for alias, canonical in service_aliases.items():
+            if alias.lower() == service_lower:
+                normalized_service = canonical
+                break
+    
+    # Normalize component
+    if component and component in component_aliases:
+        mapped_value = component_aliases[component]
+        # If mapped to null, remove component
+        normalized_component = None if mapped_value is None else mapped_value
+    elif component:
+        # Try case-insensitive match
+        component_lower = component.lower()
+        for alias, canonical in component_aliases.items():
+            if alias.lower() == component_lower:
+                normalized_component = None if canonical is None else canonical
+                break
+    
+    return normalized_service, normalized_component
 
 
 def _extract_service_component(
@@ -468,6 +542,9 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
 
     # Step 5: Extract service/component (deterministic parsing)
     service, component = _extract_service_component(incident, failure_type)
+    
+    # PHASE 2: Normalize service/component using mapping configuration
+    service, component = normalize_service_component(service, component)
 
     # Resolution refs will be populated later when linking to runbook steps
     resolution_refs = None
@@ -587,8 +664,13 @@ def normalize_runbook(
         # Generate a runbook_id if not provided
         runbook_id = f"RB-{uuid.uuid4().hex[:8].upper()}"
 
-    # Extract atomic steps
-    steps = extract_runbook_steps(runbook, runbook_id)
+    # PHASE 2: Normalize service/component FIRST, then use normalized values for steps
+    normalized_service, normalized_component = normalize_service_component(
+        runbook.service, runbook.component
+    )
+    
+    # Extract atomic steps (will use normalized service/component)
+    steps = extract_runbook_steps(runbook, runbook_id, normalized_service, normalized_component)
 
     # Build metadata content (for document table - not for embedding)
     # This is just metadata, not the actual steps
@@ -600,13 +682,13 @@ def normalize_runbook(
 
     # Note: Steps are NOT included in content - they are stored separately as chunks
     content = "\n\n".join(content_parts)
-
+    
     # Build comprehensive tags (mandatory fields from specification)
     tags = {
         "type": "runbook",
         "runbook_id": runbook_id,
-        "service": runbook.service,
-        "component": runbook.component,
+        "service": normalized_service,  # Use normalized service
+        "component": normalized_component,  # Use normalized component
         "env": None,  # Environment (can be extracted from metadata if available)
         "risk": None,  # Risk level (can be extracted from content if available)
         "last_reviewed_at": None,  # Can be extracted from metadata if available
@@ -630,8 +712,8 @@ def normalize_runbook(
 
     doc = IngestDocument(
         doc_type="runbook",
-        service=runbook.service,
-        component=runbook.component,
+        service=normalized_service,
+        component=normalized_component,
         title=runbook.title,
         content=content,  # Metadata only - steps stored separately
         tags=tags,

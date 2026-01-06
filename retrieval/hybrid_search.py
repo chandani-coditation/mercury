@@ -62,22 +62,11 @@ def hybrid_search(
         service_val = service if service and str(service).strip() else None
         component_val = component if component and str(component).strip() else None
 
-        # Build filter conditions with case-insensitive partial matching
-        # This allows matching "database" with "Database-SQL", "Database", etc.
-        filters = []
-        filter_params = []
-
-        if service_val:
-            # Case-insensitive partial match: "database" matches "Database-SQL", "Database", etc.
-            filters.append("COALESCE(LOWER(c.metadata->>'service'), '') LIKE LOWER(%s::text)")
-            filter_params.append(f"%{service_val}%")
-
-        if component_val:
-            # Case-insensitive partial match: "sql-server" matches "sql-server", "SQL Server", etc.
-            filters.append("COALESCE(LOWER(c.metadata->>'component'), '') LIKE LOWER(%s::text)")
-            filter_params.append(f"%{component_val}%")
-
-        filter_clause = " AND " + " AND ".join(filters) if filters else ""
+        # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
+        # Service/component are now used as score boosters in ORDER BY, not WHERE filters
+        # This allows semantic search to find relevant content even with mismatches
+        # Match quality will be calculated in the final ORDER BY clause
+        filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
 
         # Hybrid search query using RRF
         # Vector search: cosine similarity
@@ -136,7 +125,22 @@ def hybrid_search(
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
                 -- RRF: 1/(k + rank) where k=60 is standard
                 (1.0 / (60.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
-                (1.0 / (60.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score
+                (1.0 / (60.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
+                -- PHASE 1: Soft filter boosts for service/component matching
+                -- Service match boost: exact match = 0.15, partial match = 0.10, no match = 0.0
+                CASE 
+                    WHEN %s IS NULL THEN 0.0
+                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) = LOWER(%s) THEN 0.15
+                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) LIKE LOWER(%s) THEN 0.10
+                    ELSE 0.0
+                END as service_match_boost,
+                -- Component match boost: exact match = 0.10, partial match = 0.05, no match = 0.0
+                CASE 
+                    WHEN %s IS NULL THEN 0.0
+                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) = LOWER(%s) THEN 0.10
+                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) LIKE LOWER(%s) THEN 0.05
+                    ELSE 0.0
+                END as component_match_boost
             FROM vector_results v
             FULL OUTER JOIN fulltext_results f ON v.id = f.id
         )
@@ -150,15 +154,19 @@ def hybrid_search(
             doc_type,
             vector_score,
             fulltext_score,
-            rrf_score
+            rrf_score,
+            service_match_boost,
+            component_match_boost,
+            -- Final score: RRF + service boost + component boost
+            rrf_score + service_match_boost + component_match_boost as final_score
         FROM combined_results
         WHERE rrf_score > 0
-        ORDER BY rrf_score DESC
+        ORDER BY final_score DESC
         LIMIT %s
         """
 
         # Build params list matching the query placeholders in order
-        # Query placeholders in order (when no filters):
+        # Query placeholders in order (PHASE 1: no hard filters, but soft filter boosts):
         # 1: embedding (vector_score)
         # 2: embedding (vector_rank)
         # 3: embedding (ORDER BY)
@@ -168,16 +176,13 @@ def hybrid_search(
         # 7: text (WHERE)
         # 8: text (ORDER BY)
         # 9: limit (fulltext_results)
-        # 10: final limit
+        # 10-15: Service/component match boost params (service_val check, service_val exact, service_val partial, component_val check, component_val exact, component_val partial)
+        # 16: final limit
         exec_params = []
 
         # Vector results params
         exec_params.append(query_embedding_str)  # 1: vector_score embedding
         exec_params.append(query_embedding_str)  # 2: vector_rank embedding
-        # Filters for vector_results (if any) - these come BEFORE ORDER BY
-        # Use filter_params which already have the LIKE patterns
-        for param in filter_params:
-            exec_params.append(param)
         exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
         exec_params.append(limit * 2)  # 4: vector_results limit
 
@@ -185,26 +190,33 @@ def hybrid_search(
         exec_params.append(query_text)  # 5: fulltext_score text
         exec_params.append(query_text)  # 6: fulltext_rank text
         exec_params.append(query_text)  # 7: WHERE text
-        # Filters for fulltext_results (if any) - these come BEFORE ORDER BY
-        # Use same filter_params again (each filter appears twice in query)
-        for param in filter_params:
-            exec_params.append(param)
         exec_params.append(query_text)  # 8: ORDER BY text
         exec_params.append(limit * 2)  # 9: fulltext_results limit
 
-        # Final
-        exec_params.append(limit)  # 10: final limit
+        # Soft filter boost params (for service/component match detection)
+        # Service match boost params
+        exec_params.append(service_val)  # 10: service_val check (IS NULL)
+        exec_params.append(service_val if service_val else None)  # 11: service_val exact match
+        exec_params.append(f"%{service_val}%" if service_val else None)  # 12: service_val partial match
+        
+        # Component match boost params
+        exec_params.append(component_val)  # 13: component_val check (IS NULL)
+        exec_params.append(component_val if component_val else None)  # 14: component_val exact match
+        exec_params.append(f"%{component_val}%" if component_val else None)  # 15: component_val partial match
+
+        # Final limit
+        exec_params.append(limit)  # 16: final limit
 
         # CRITICAL: Verify we have exactly the right number of parameters
-        # Base: 10 params (no filters)
-        # Each filter adds 2 params (one in vector_results, one in fulltext_results)
-        expected_params = 10 + (2 * len(filter_params))
+        # Base: 16 params (9 for search + 6 for soft filter boosts + 1 for final limit)
+        expected_params = 16
 
         if len(exec_params) != expected_params:
             raise ValueError(
                 f"Parameter count mismatch: expected {expected_params} params "
                 f"but built {len(exec_params)} params. "
-                f"Service: {repr(service_val)}, Component: {repr(component_val)}"
+                f"Service: {repr(service_val)}, Component: {repr(component_val)}. "
+                f"This is a bug in the query parameter building logic."
             )
 
         # Debug: verify parameter count and log BEFORE execute
@@ -285,6 +297,9 @@ def hybrid_search(
                         float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
                     ),
                     "rrf_score": float(row["rrf_score"]),
+                    "service_match_boost": float(row.get("service_match_boost", 0.0)) if "service_match_boost" in row else 0.0,
+                    "component_match_boost": float(row.get("component_match_boost", 0.0)) if "component_match_boost" in row else 0.0,
+                    "final_score": float(row.get("final_score", row["rrf_score"])) if "final_score" in row else float(row["rrf_score"]),
                 }
             )
 
@@ -406,57 +421,10 @@ def triage_retrieval(
         service_val = service if service and str(service).strip() else None
         component_val = component if component and str(component).strip() else None
 
-        # Build filter conditions for incident_signatures table
-        # Use more flexible matching - service/component are hints, not strict filters
-        filters = []
-        filter_params = []
-
-        if service_val:
-            # More flexible: match service or affected_service, case-insensitive
-            # Also allow partial matches (e.g., "Database" matches "Database-SQL")
-            filters.append(
-                """
-                (COALESCE(LOWER(s.service), '') LIKE LOWER(%s::text)
-                 OR COALESCE(LOWER(s.affected_service), '') LIKE LOWER(%s::text)
-                 OR COALESCE(LOWER(s.service), '') LIKE LOWER(%s::text)
-                 OR COALESCE(LOWER(s.affected_service), '') LIKE LOWER(%s::text))
-            """
-            )
-            # Add multiple variations for better matching
-            service_lower = service_val.lower()
-            filter_params.extend(
-                [
-                    f"%{service_lower}%",  # service contains
-                    f"%{service_lower}%",  # affected_service contains
-                    f"{service_lower}%",  # service starts with
-                    f"{service_lower}%",  # affected_service starts with
-                ]
-            )
-
-        # Component filter: Make it completely optional
-        # Strategy: If signature has no component (NULL/empty), it matches ANY alert component
-        # This is critical for storage signatures which have component=NULL
-        # We only apply component filter if signature actually has a component value
-        # This allows:
-        # - Alerts with component='Storage' to match signatures with component=NULL (most important)
-        # - Alerts with component='Storage' to match signatures with component='Storage' or 'Disk' etc.
-        # - Service match is still required (handled by service filter above)
-        #
-        # Logic: Only filter by component if signature HAS a component value
-        # If signature component is NULL/empty, don't filter by component at all
-        # This is more permissive than the previous OR logic
-        if component_val:
-            # Only filter if signature has a component - if NULL, don't filter
-            filters.append(
-                """
-                (COALESCE(s.component, '') = '' 
-                 OR COALESCE(LOWER(s.component), '') LIKE LOWER(%s::text))
-            """
-            )
-            component_lower = component_val.lower()
-            filter_params.append(f"%{component_lower}%")
-
-        filter_clause = " AND " + " AND ".join(filters) if filters else ""
+        # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
+        # Service/component are now used as score boosters in ORDER BY, not WHERE filters
+        # This allows semantic search to find relevant incident signatures even with mismatches
+        filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
 
         # Retrieve incident signatures directly from incident_signatures table
         # (No need for chunks table - embeddings and tsvector are already in incident_signatures)
@@ -553,7 +521,27 @@ def triage_retrieval(
                 COALESCE(v.vector_rank, 999) as vector_rank,
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
                 (1.0 / (60.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
-                (1.0 / (60.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score
+                (1.0 / (60.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
+                -- PHASE 1: Soft filter boosts for service/component matching
+                -- Service match boost: exact match = 0.15, partial match = 0.10, no match = 0.0
+                -- Check both service and affected_service fields
+                CASE 
+                    WHEN %s IS NULL THEN 0.0
+                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) = LOWER(%s) 
+                         OR LOWER(COALESCE(v.metadata->>'affected_service', f.metadata->>'affected_service', '')) = LOWER(%s) THEN 0.15
+                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) LIKE LOWER(%s)
+                         OR LOWER(COALESCE(v.metadata->>'affected_service', f.metadata->>'affected_service', '')) LIKE LOWER(%s) THEN 0.10
+                    ELSE 0.0
+                END as service_match_boost,
+                -- Component match boost: exact match = 0.10, partial match = 0.05, no match = 0.0
+                -- If signature component is NULL, don't penalize (allow match)
+                CASE 
+                    WHEN %s IS NULL THEN 0.0
+                    WHEN COALESCE(v.metadata->>'component', f.metadata->>'component', '') = '' THEN 0.05  -- NULL component gets small boost
+                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) = LOWER(%s) THEN 0.10
+                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) LIKE LOWER(%s) THEN 0.05
+                    ELSE 0.0
+                END as component_match_boost
             FROM vector_results v
             FULL OUTER JOIN fulltext_results f ON v.id = f.id
         )
@@ -567,38 +555,48 @@ def triage_retrieval(
             doc_type,
             vector_score,
             fulltext_score,
-            rrf_score
+            rrf_score,
+            service_match_boost,
+            component_match_boost,
+            -- Final score: RRF + service boost + component boost
+            rrf_score + service_match_boost + component_match_boost as final_score
         FROM combined_results
         WHERE rrf_score > 0
-        ORDER BY rrf_score DESC
+        ORDER BY final_score DESC
         LIMIT %s
         """
 
         # Build params for incident signatures
-        # Query parameter order (filter_clause is inserted AFTER WHERE and BEFORE ORDER BY):
-        # Vector CTE: $1=score, $2=rank, $3...$N=filter_params, $N+1=ORDER BY, $N+2=limit
-        # Fulltext CTE: $N+3=score, $N+4=rank, $N+5=WHERE, $N+6...$M=filter_params, $M+1=ORDER BY, $M+2=limit
-        # Final: $M+3=final limit
+        # Query parameter order (PHASE 1: no hard filters, but soft filter boosts):
+        # Vector CTE: $1=score, $2=rank, $3=ORDER BY, $4=limit
+        # Fulltext CTE: $5=score, $6=rank, $7=WHERE, $8=ORDER BY, $9=limit
+        # Soft filter boosts: $10-15 (service check, service exact x2, service partial x2, component check, component exact, component partial)
+        # Final: $16=final limit
         sig_params = []
         # Vector CTE
         sig_params.append(query_embedding_str)  # 1: vector_score
         sig_params.append(query_embedding_str)  # 2: vector_rank
-        sig_params.extend(
-            filter_params
-        )  # 3...N: filter params (service + component) - inserted AFTER WHERE
-        sig_params.append(query_embedding_str)  # N+1: vector ORDER BY
-        sig_params.append(limit)  # N+2: vector limit
+        sig_params.append(query_embedding_str)  # 3: vector ORDER BY
+        sig_params.append(limit)  # 4: vector limit
         # Fulltext CTE
-        sig_params.append(str(query_text))  # N+3: fulltext_score
-        sig_params.append(str(query_text))  # N+4: fulltext_rank
-        sig_params.append(str(query_text))  # N+5: fulltext WHERE
-        sig_params.extend(
-            filter_params
-        )  # N+6...M: filter params (service + component) - inserted AFTER WHERE
-        sig_params.append(str(query_text))  # M+1: fulltext ORDER BY
-        sig_params.append(limit)  # M+2: fulltext limit
-        # Final
-        sig_params.append(limit)  # M+3: final limit
+        sig_params.append(str(query_text))  # 5: fulltext_score
+        sig_params.append(str(query_text))  # 6: fulltext_rank
+        sig_params.append(str(query_text))  # 7: fulltext WHERE
+        sig_params.append(str(query_text))  # 8: fulltext ORDER BY
+        sig_params.append(limit)  # 9: fulltext limit
+        # Soft filter boost params (for service/component match detection)
+        # Service match boost params (check both service and affected_service)
+        sig_params.append(service_val)  # 10: service_val check (IS NULL)
+        sig_params.append(service_val if service_val else None)  # 11: service_val exact match (service field)
+        sig_params.append(service_val if service_val else None)  # 12: service_val exact match (affected_service field)
+        sig_params.append(f"%{service_val}%" if service_val else None)  # 13: service_val partial match (service field)
+        sig_params.append(f"%{service_val}%" if service_val else None)  # 14: service_val partial match (affected_service field)
+        # Component match boost params
+        sig_params.append(component_val)  # 15: component_val check (IS NULL)
+        sig_params.append(component_val if component_val else None)  # 16: component_val exact match
+        sig_params.append(f"%{component_val}%" if component_val else None)  # 17: component_val partial match
+        # Final limit
+        sig_params.append(limit)  # 18: final limit
 
         # Execute incident signatures query
         cur.execute(incident_sig_query, sig_params)
@@ -695,6 +693,8 @@ def triage_retrieval(
                     if desc_parts:
                         enhanced_content = row[3] + "\n\n" + "\n".join(desc_parts)
 
+                # Handle tuple result - check if we have soft filter boost columns
+                row_len = len(row)
                 incident_signatures.append(
                     {
                         "chunk_id": str(row[0]),
@@ -707,27 +707,21 @@ def triage_retrieval(
                         "vector_score": float(row[7]) if row[7] else 0.0,
                         "fulltext_score": float(row[8]) if row[8] else 0.0,
                         "rrf_score": float(row[9]) if row[9] else 0.0,
+                        "service_match_boost": float(row[10]) if row_len > 10 and row[10] else 0.0,
+                        "component_match_boost": float(row[11]) if row_len > 11 and row[11] else 0.0,
+                        "final_score": float(row[12]) if row_len > 12 and row[12] else float(row[9]) if row[9] else 0.0,
                     }
                 )
 
         # Retrieve runbook metadata (documents only, NOT steps)
         # Runbook metadata is in documents table, not chunks
-        runbook_filters = []
+        # PHASE 1: No hard filters - use soft filter boosts in ORDER BY
         runbook_params = [query_text]  # For full-text search
 
-        # Service filter: match if service contains the value (flexible matching)
-        if service_val:
-            runbook_filters.append("COALESCE(LOWER(d.service), '') LIKE LOWER(%s::text)")
-            runbook_params.append(f"%{service_val}%")
-
-        # Component filter: For triage, we prioritize service match over component match
-        # Component is optional - if provided, we'll boost relevance but not exclude
-        # This allows "Database" service alerts to match "Database Alerts" runbooks
-        # even if component is "Database" vs "Alerts"
-        # For now, skip component filter for runbook metadata - service + fulltext is sufficient
-        # Component matching can be handled by relevance scoring
-
-        runbook_filter_clause = " AND " + " AND ".join(runbook_filters) if runbook_filters else ""
+        # PHASE 1: Soft Filters - Remove hard WHERE filters for runbook metadata
+        # Service/component are now used as relevance boosters, not WHERE filters
+        # This allows semantic search to find relevant runbooks even with mismatches
+        runbook_filter_clause = ""  # No hard filters - all results included, ranked by relevance
         runbook_params.append(limit)  # For LIMIT
 
         runbook_meta_query = f"""
@@ -741,15 +735,55 @@ def triage_retrieval(
             d.last_reviewed_at,
             -- Use document title/content for full-text search
             ts_rank(to_tsvector('english', COALESCE(d.title, '') || ' ' || COALESCE(d.content, '')), 
-                    plainto_tsquery('english', %s)) as relevance_score
+                    plainto_tsquery('english', %s)) as relevance_score,
+            -- PHASE 1: Soft filter boosts for service/component matching
+            CASE 
+                WHEN %s IS NULL THEN 0.0
+                WHEN LOWER(COALESCE(d.service, '')) = LOWER(%s) THEN 0.15
+                WHEN LOWER(COALESCE(d.service, '')) LIKE LOWER(%s) THEN 0.10
+                ELSE 0.0
+            END as service_match_boost,
+            CASE 
+                WHEN %s IS NULL THEN 0.0
+                WHEN LOWER(COALESCE(d.component, '')) = LOWER(%s) THEN 0.10
+                WHEN LOWER(COALESCE(d.component, '')) LIKE LOWER(%s) THEN 0.05
+                ELSE 0.0
+            END as component_match_boost
         FROM documents d
         WHERE d.doc_type = 'runbook'
-        {runbook_filter_clause}
-        ORDER BY relevance_score DESC, d.last_reviewed_at DESC NULLS LAST
+        ORDER BY (relevance_score + 
+                  CASE WHEN %s IS NULL THEN 0.0
+                       WHEN LOWER(COALESCE(d.service, '')) = LOWER(%s) THEN 0.15
+                       WHEN LOWER(COALESCE(d.service, '')) LIKE LOWER(%s) THEN 0.10
+                       ELSE 0.0 END +
+                  CASE WHEN %s IS NULL THEN 0.0
+                       WHEN LOWER(COALESCE(d.component, '')) = LOWER(%s) THEN 0.10
+                       WHEN LOWER(COALESCE(d.component, '')) LIKE LOWER(%s) THEN 0.05
+                       ELSE 0.0 END) DESC, 
+                 d.last_reviewed_at DESC NULLS LAST
         LIMIT %s
         """
 
-        cur.execute(runbook_meta_query, runbook_params)
+        # Build params for runbook metadata query with soft filter boosts
+        # Query params: query_text, service_val check, service_val exact, service_val partial (x2 for ORDER BY),
+        #               component_val check, component_val exact, component_val partial (x2 for ORDER BY), limit
+        runbook_params_extended = [
+            query_text,  # 1: fulltext search
+            service_val,  # 2: service check (SELECT)
+            service_val if service_val else None,  # 3: service exact (SELECT)
+            f"%{service_val}%" if service_val else None,  # 4: service partial (SELECT)
+            component_val,  # 5: component check (SELECT)
+            component_val if component_val else None,  # 6: component exact (SELECT)
+            f"%{component_val}%" if component_val else None,  # 7: component partial (SELECT)
+            service_val,  # 8: service check (ORDER BY)
+            service_val if service_val else None,  # 9: service exact (ORDER BY)
+            f"%{service_val}%" if service_val else None,  # 10: service partial (ORDER BY)
+            component_val,  # 11: component check (ORDER BY)
+            component_val if component_val else None,  # 12: component exact (ORDER BY)
+            f"%{component_val}%" if component_val else None,  # 13: component partial (ORDER BY)
+            limit,  # 14: limit
+        ]
+        cur.execute(runbook_meta_query, runbook_params_extended)
         runbook_rows = cur.fetchall()
 
         runbook_metadata = []
@@ -770,6 +804,8 @@ def triage_retrieval(
                         "relevance_score": (
                             float(row["relevance_score"]) if row["relevance_score"] else 0.0
                         ),
+                        "service_match_boost": float(row.get("service_match_boost", 0.0)) if "service_match_boost" in row else 0.0,
+                        "component_match_boost": float(row.get("component_match_boost", 0.0)) if "component_match_boost" in row else 0.0,
                     }
                 )
             else:
@@ -784,6 +820,8 @@ def triage_retrieval(
                         "tags": tags,
                         "last_reviewed_at": row[6].isoformat() if row[6] else None,
                         "relevance_score": float(row[7]) if row[7] else 0.0,
+                        "service_match_boost": float(row[8]) if len(row) > 8 and row[8] else 0.0,
+                        "component_match_boost": float(row[9]) if len(row) > 9 and row[9] else 0.0,
                     }
                 )
 
