@@ -379,14 +379,14 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
     if not has_evidence:
         try:
-            from db.connection import get_db_connection
+            from db.connection import get_db_connection_context
 
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) as count FROM documents")
-            result = cur.fetchone()
-            doc_count = result["count"] if isinstance(result, dict) else result[0]
-            conn.close()
+            with get_db_connection_context() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) as count FROM documents")
+                result = cur.fetchone()
+                doc_count = result["count"] if isinstance(result, dict) else result[0]
+                cur.close()
         except Exception as e:
             logger.warning(f"Could not check document count: {e}")
             doc_count = None

@@ -6,7 +6,7 @@ from retrieval.query_builders import HybridSearchQueryBuilder
 import os
 import time
 from typing import List, Dict, Optional, Union
-from db.connection import get_db_connection
+from db.connection import get_db_connection_context
 from ingestion.embeddings import embed_text
 
 # Import logging (use ai_service logger if available, fallback to standard logging)
@@ -121,34 +121,35 @@ def hybrid_search(
     except ImportError:
         _track_metrics = False
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    # Use context manager to ensure connection is returned to pool
+    with get_db_connection_context() as conn:
+        cur = conn.cursor()
 
-    try:
-        # Generate query embedding
-        query_embedding = embed_text(query_text)
-        if query_embedding is None:
-            logger.error(f"Failed to generate query embedding. Cannot proceed with hybrid search.")
-            return []
-        # Convert to pgvector string format
-        query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+        try:
+            # Generate query embedding
+            query_embedding = embed_text(query_text)
+            if query_embedding is None:
+                logger.error(f"Failed to generate query embedding. Cannot proceed with hybrid search.")
+                return []
+            # Convert to pgvector string format
+            query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
-        # Normalize service and component (ensure None or non-empty strings)
-        service_val = service if service and str(service).strip() else None
-        component_val = component if component and str(component).strip() else None
+            # Normalize service and component (ensure None or non-empty strings)
+            service_val = service if service and str(service).strip() else None
+            component_val = component if component and str(component).strip() else None
 
-        # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
-        # Service/component are now used as score boosters in ORDER BY, not WHERE filters
-        # This allows semantic search to find relevant content even with mismatches
-        # Match quality will be calculated in the final ORDER BY clause
-        filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
+            # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
+            # Service/component are now used as score boosters in ORDER BY, not WHERE filters
+            # This allows semantic search to find relevant content even with mismatches
+            # Match quality will be calculated in the final ORDER BY clause
+            filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
 
-        # Hybrid search query using RRF
-        # Vector search: cosine similarity
-        # Full-text search: ts_rank
-        # RRF: 1/(k + rank) for each result set, then combine
+            # Hybrid search query using RRF
+            # Vector search: cosine similarity
+            # Full-text search: ts_rank
+            # RRF: 1/(k + rank) for each result set, then combine
 
-        query = f"""
+            query = f"""
         WITH vector_results AS (
             SELECT 
                 c.id,
@@ -227,159 +228,158 @@ def hybrid_search(
         LIMIT %s
         """
 
-        # Build params list matching the query placeholders in order
-        # Query placeholders in order (PHASE 1: no hard filters, but soft filter boosts):
-        # 1: embedding (vector_score)
-        # 2: embedding (vector_rank)
-        # 3: embedding (ORDER BY)
-        # 4: limit (vector_results)
-        # 5: text (fulltext_score)
-        # 6: text (fulltext_rank)
-        # 7: text (WHERE)
-        # 8: text (ORDER BY)
-        # 9: limit (fulltext_results)
-        # 10-15: Service/component match boost params (service_val check, service_val exact, service_val partial, component_val check, component_val exact, component_val partial)
-        # 16: final limit
-        exec_params = []
+            # Build params list matching the query placeholders in order
+            # Query placeholders in order (PHASE 1: no hard filters, but soft filter boosts):
+            # 1: embedding (vector_score)
+            # 2: embedding (vector_rank)
+            # 3: embedding (ORDER BY)
+            # 4: limit (vector_results)
+            # 5: text (fulltext_score)
+            # 6: text (fulltext_rank)
+            # 7: text (WHERE)
+            # 8: text (ORDER BY)
+            # 9: limit (fulltext_results)
+            # 10-15: Service/component match boost params (service_val check, service_val exact, service_val partial, component_val check, component_val exact, component_val partial)
+            # 16: final limit
+            exec_params = []
 
-        # Calculate RRF candidate limit (higher multiplier for better fusion results)
-        candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
-        
-        # Vector results params
-        exec_params.append(query_embedding_str)  # 1: vector_score embedding
-        exec_params.append(query_embedding_str)  # 2: vector_rank embedding
-        exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
-        exec_params.append(candidate_limit)  # 4: vector_results limit (improved multiplier)
-
-        # Fulltext results params
-        exec_params.append(query_text)  # 5: fulltext_score text
-        exec_params.append(query_text)  # 6: fulltext_rank text
-        exec_params.append(query_text)  # 7: WHERE text
-        exec_params.append(query_text)  # 8: ORDER BY text
-        exec_params.append(candidate_limit)  # 9: fulltext_results limit (improved multiplier)
-
-        # Soft filter boost params (using centralized builder)
-        exec_params.extend(
-            HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
-        )  # 10-15: Service and component boost params
-
-        # Final limit
-        exec_params.append(limit)  # 16: final limit
-
-        # CRITICAL: Verify we have exactly the right number of parameters
-        # Base: 16 params (9 for search + 6 for soft filter boosts + 1 for final limit)
-        expected_params = 16
-
-        if len(exec_params) != expected_params:
-            raise ValueError(
-                f"Parameter count mismatch: expected {expected_params} params "
-                f"but built {len(exec_params)} params. "
-                f"Service: {repr(service_val)}, Component: {repr(component_val)}. "
-                f"This is a bug in the query parameter building logic."
-            )
-
-        # Validate parameter count using centralized validator
-        is_valid, error_msg = HybridSearchQueryBuilder.validate_parameter_count(
-            query, exec_params, expected_count=16
-        )
-        if not is_valid:
-            logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
-            logger.error(
-                f"Service: {repr(service_val)}, Component: {repr(component_val)}. "
-                f"Params: {[str(p)[:50] if isinstance(p, str) else str(p) for p in exec_params]}"
-            )
-            raise ValueError(error_msg)
-        
-        # Log using standardized logger (DEBUG level for diagnostic info)
-        logger.debug(
-            f"HYBRID_SEARCH: params={len(exec_params)}, candidate_limit={candidate_limit}, "
-            f"service={repr(service_val)}, component={repr(component_val)}"
-        )
-
-        try:
-            cur.execute(query, exec_params)
-        except Exception as e:
-            logger.error(f"HYBRID_SEARCH SQL ERROR: {e}")
-            logger.error(f"Query placeholders: {query.count('%s')}, Params: {len(exec_params)}")
-            logger.error(f"Service: {repr(service_val)}, Component: {repr(component_val)}")
-            raise
-
-        results = cur.fetchall()
-
-        duration = time.time() - start_time
-        logger.debug(f"Hybrid search completed: found {len(results)} results in {duration:.3f}s")
-
-        # Diagnostic: log top fused hits to verify RRF/MMR behavior
-        top_preview = []
-        for row in results[:3]:
-            top_preview.append(
-                {
-                    "doc_id": str(row["document_id"]),
-                    "doc_type": row["doc_type"],
-                    "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
-                    "fulltext_score": (
-                        float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
-                    ),
-                    "rrf_score": float(row["rrf_score"]),
-                    "title": (row["doc_title"] or "")[:80],
-                }
-            )
-        logger.info(
-            "HYBRID_SEARCH TOP RESULTS: "
-            f"count={len(results)}, duration_sec={duration:.3f}, "
-            f"service={repr(service_val)}, component={repr(component_val)}, "
-            f"vector_weight={vector_weight}, fulltext_weight={fulltext_weight}, "
-            f"preview={top_preview}"
-        )
-
-        # Convert to list of dicts
-        chunks = []
-        for row in results:
-            # Safe metadata access - ensure it's a dict (psycopg with dict_row should always return dicts)
-            metadata = row.get("metadata") if isinstance(row, dict) else {}
-            if not isinstance(metadata, dict):
-                logger.warning(f"Metadata is not a dict, converting: {type(metadata)}")
-                metadata = {}
+            # Calculate RRF candidate limit (higher multiplier for better fusion results)
+            candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
             
-            chunks.append(
-                {
-                    "chunk_id": str(row.get("id", "")),
-                    "document_id": str(row.get("document_id", "")),
-                    "chunk_index": row.get("chunk_index", 0),
-                    "content": row.get("content", ""),
-                    "metadata": metadata,
-                    "doc_title": row.get("doc_title", ""),
-                    "doc_type": row.get("doc_type", ""),
-                    "vector_score": float(row.get("vector_score", 0.0)) if row.get("vector_score") else 0.0,
-                    "fulltext_score": float(row.get("fulltext_score", 0.0)) if row.get("fulltext_score") else 0.0,
-                    "rrf_score": float(row.get("rrf_score", 0.0)),
-                    "service_match_boost": float(row.get("service_match_boost", 0.0)),
-                    "component_match_boost": float(row.get("component_match_boost", 0.0)),
-                    "final_score": float(row.get("final_score", row.get("rrf_score", 0.0))),
-                }
+            # Vector results params
+            exec_params.append(query_embedding_str)  # 1: vector_score embedding
+            exec_params.append(query_embedding_str)  # 2: vector_rank embedding
+            exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
+            exec_params.append(candidate_limit)  # 4: vector_results limit (improved multiplier)
+
+            # Fulltext results params
+            exec_params.append(query_text)  # 5: fulltext_score text
+            exec_params.append(query_text)  # 6: fulltext_rank text
+            exec_params.append(query_text)  # 7: WHERE text
+            exec_params.append(query_text)  # 8: ORDER BY text
+            exec_params.append(candidate_limit)  # 9: fulltext_results limit (improved multiplier)
+
+            # Soft filter boost params (using centralized builder)
+            exec_params.extend(
+                HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
+            )  # 10-15: Service and component boost params
+
+            # Final limit
+            exec_params.append(limit)  # 16: final limit
+
+            # CRITICAL: Verify we have exactly the right number of parameters
+            # Base: 16 params (9 for search + 6 for soft filter boosts + 1 for final limit)
+            expected_params = 16
+
+            if len(exec_params) != expected_params:
+                raise ValueError(
+                    f"Parameter count mismatch: expected {expected_params} params "
+                    f"but built {len(exec_params)} params. "
+                    f"Service: {repr(service_val)}, Component: {repr(component_val)}. "
+                    f"This is a bug in the query parameter building logic."
+                )
+
+            # Validate parameter count using centralized validator
+            is_valid, error_msg = HybridSearchQueryBuilder.validate_parameter_count(
+                query, exec_params, expected_count=16
+            )
+            if not is_valid:
+                logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
+                logger.error(
+                    f"Service: {repr(service_val)}, Component: {repr(component_val)}. "
+                    f"Params: {[str(p)[:50] if isinstance(p, str) else str(p) for p in exec_params]}"
+                )
+                raise ValueError(error_msg)
+            
+            # Log using standardized logger (DEBUG level for diagnostic info)
+            logger.debug(
+                f"HYBRID_SEARCH: params={len(exec_params)}, candidate_limit={candidate_limit}, "
+                f"service={repr(service_val)}, component={repr(component_val)}"
             )
 
-        # TASK #7: Record retrieval metrics
-        if _track_metrics:
-            retrieval_time_ms = (time.time() - start_time) * 1000
             try:
-                record_retrieval(
-                    results=chunks,
-                    retrieval_type="hybrid_search",
-                    service=service,
-                    component=component,
-                    query_service=service,
-                    query_component=component,
-                    retrieval_time_ms=retrieval_time_ms,
-                )
+                cur.execute(query, exec_params)
             except Exception as e:
-                logger.debug(f"Failed to record retrieval metrics: {e}")
+                logger.error(f"HYBRID_SEARCH SQL ERROR: {e}")
+                logger.error(f"Query placeholders: {query.count('%s')}, Params: {len(exec_params)}")
+                logger.error(f"Service: {repr(service_val)}, Component: {repr(component_val)}")
+                raise
 
-        return chunks
+            results = cur.fetchall()
 
-    finally:
-        cur.close()
-        conn.close()
+            duration = time.time() - start_time
+            logger.debug(f"Hybrid search completed: found {len(results)} results in {duration:.3f}s")
+
+            # Diagnostic: log top fused hits to verify RRF/MMR behavior
+            top_preview = []
+            for row in results[:3]:
+                top_preview.append(
+                    {
+                        "doc_id": str(row["document_id"]),
+                        "doc_type": row["doc_type"],
+                        "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
+                        "fulltext_score": (
+                            float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
+                        ),
+                        "rrf_score": float(row["rrf_score"]),
+                        "title": (row["doc_title"] or "")[:80],
+                    }
+                )
+            logger.info(
+                "HYBRID_SEARCH TOP RESULTS: "
+                f"count={len(results)}, duration_sec={duration:.3f}, "
+                f"service={repr(service_val)}, component={repr(component_val)}, "
+                f"vector_weight={vector_weight}, fulltext_weight={fulltext_weight}, "
+                f"preview={top_preview}"
+            )
+
+            # Convert to list of dicts
+            chunks = []
+            for row in results:
+                # Safe metadata access - ensure it's a dict (psycopg with dict_row should always return dicts)
+                metadata = row.get("metadata") if isinstance(row, dict) else {}
+                if not isinstance(metadata, dict):
+                    logger.warning(f"Metadata is not a dict, converting: {type(metadata)}")
+                    metadata = {}
+                
+                chunks.append(
+                    {
+                        "chunk_id": str(row.get("id", "")),
+                        "document_id": str(row.get("document_id", "")),
+                        "chunk_index": row.get("chunk_index", 0),
+                        "content": row.get("content", ""),
+                        "metadata": metadata,
+                        "doc_title": row.get("doc_title", ""),
+                        "doc_type": row.get("doc_type", ""),
+                        "vector_score": float(row.get("vector_score", 0.0)) if row.get("vector_score") else 0.0,
+                        "fulltext_score": float(row.get("fulltext_score", 0.0)) if row.get("fulltext_score") else 0.0,
+                        "rrf_score": float(row.get("rrf_score", 0.0)),
+                        "service_match_boost": float(row.get("service_match_boost", 0.0)),
+                        "component_match_boost": float(row.get("component_match_boost", 0.0)),
+                        "final_score": float(row.get("final_score", row.get("rrf_score", 0.0))),
+                    }
+                )
+
+            # TASK #7: Record retrieval metrics
+            if _track_metrics:
+                retrieval_time_ms = (time.time() - start_time) * 1000
+                try:
+                    record_retrieval(
+                        results=chunks,
+                        retrieval_type="hybrid_search",
+                        service=service,
+                        component=component,
+                        query_service=service,
+                        query_component=component,
+                        retrieval_time_ms=retrieval_time_ms,
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record retrieval metrics: {e}")
+
+            return chunks
+
+        finally:
+            cur.close()
 
 
 def mmr_search(
@@ -493,33 +493,34 @@ def triage_retrieval(
     except ImportError:
         _track_metrics = False
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    # Use context manager to ensure connection is returned to pool
+    with get_db_connection_context() as conn:
+        cur = conn.cursor()
 
-    try:
-        # Generate query embedding
-        query_embedding = embed_text(query_text)
-        if query_embedding is None:
-            logger.error(f"Failed to generate query embedding for triage retrieval. Cannot proceed.")
-            return {"incident_signatures": [], "runbook_metadata": []}
-        query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+        try:
+            # Generate query embedding
+            query_embedding = embed_text(query_text)
+            if query_embedding is None:
+                logger.error(f"Failed to generate query embedding for triage retrieval. Cannot proceed.")
+                return {"incident_signatures": [], "runbook_metadata": []}
+            query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
-        # Normalize service and component
-        service_val = service if service and str(service).strip() else None
-        component_val = component if component and str(component).strip() else None
+            # Normalize service and component
+            service_val = service if service and str(service).strip() else None
+            component_val = component if component and str(component).strip() else None
 
-        # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
-        # Service/component are now used as score boosters in ORDER BY, not WHERE filters
-        # This allows semantic search to find relevant incident signatures even with mismatches
-        filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
+            # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
+            # Service/component are now used as score boosters in ORDER BY, not WHERE filters
+            # This allows semantic search to find relevant incident signatures even with mismatches
+            filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
 
-        # Retrieve incident signatures directly from incident_signatures table
-        # (No need for chunks table - embeddings and tsvector are already in incident_signatures)
-        # Parameter order:
-        # Vector: $1 (score), $2 (rank), $3 (ORDER BY), $4 (limit), [filters for vector]
-        # Fulltext: $5 (score), $6 (rank), $7 (WHERE), $8 (ORDER BY), $9 (limit), [filters for fulltext]
-        # Final: $last (final limit)
-        incident_sig_query = f"""
+            # Retrieve incident signatures directly from incident_signatures table
+            # (No need for chunks table - embeddings and tsvector are already in incident_signatures)
+            # Parameter order:
+            # Vector: $1 (score), $2 (rank), $3 (ORDER BY), $4 (limit), [filters for vector]
+            # Fulltext: $5 (score), $6 (rank), $7 (WHERE), $8 (ORDER BY), $9 (limit), [filters for fulltext]
+            # Final: $last (final limit)
+            incident_sig_query = f"""
         WITH vector_results AS (
             SELECT 
                 s.id,
@@ -634,267 +635,266 @@ def triage_retrieval(
         FROM combined_results
         WHERE rrf_score > 0
         ORDER BY final_score DESC
-        LIMIT %s
-        """
+            LIMIT %s
+            """
 
-        # Calculate RRF candidate limit (higher multiplier for better fusion results)
-        candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
-        
-        # Build params for incident signatures
-        sig_params = []
-        # Vector CTE
-        sig_params.append(query_embedding_str)  # 1: vector_score
-        sig_params.append(query_embedding_str)  # 2: vector_rank
-        sig_params.append(query_embedding_str)  # 3: vector ORDER BY
-        sig_params.append(candidate_limit)  # 4: vector limit (improved multiplier)
-        # Fulltext CTE
-        sig_params.append(str(query_text))  # 5: fulltext_score
-        sig_params.append(str(query_text))  # 6: fulltext_rank
-        sig_params.append(str(query_text))  # 7: fulltext WHERE
-        sig_params.append(str(query_text))  # 8: fulltext ORDER BY
-        sig_params.append(candidate_limit)  # 9: fulltext limit (improved multiplier)
-        # Soft filter boost params (using centralized builder for dual service matching)
-        sig_params.extend(
-            HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(service_val, component_val)
-        )  # 10-17: Service (dual) and component boost params
-        # Final limit
-        sig_params.append(limit)  # 18: final limit
-        print("incident_sig_query: ", incident_sig_query)
-        print("sig_params: ", sig_params)
-        # Execute incident signatures query
-        cur.execute(incident_sig_query, sig_params)
-        incident_sig_rows = cur.fetchall()
+            # Calculate RRF candidate limit (higher multiplier for better fusion results)
+            candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
+            
+            # Build params for incident signatures
+            sig_params = []
+            # Vector CTE
+            sig_params.append(query_embedding_str)  # 1: vector_score
+            sig_params.append(query_embedding_str)  # 2: vector_rank
+            sig_params.append(query_embedding_str)  # 3: vector ORDER BY
+            sig_params.append(candidate_limit)  # 4: vector limit (improved multiplier)
+            # Fulltext CTE
+            sig_params.append(str(query_text))  # 5: fulltext_score
+            sig_params.append(str(query_text))  # 6: fulltext_rank
+            sig_params.append(str(query_text))  # 7: fulltext WHERE
+            sig_params.append(str(query_text))  # 8: fulltext ORDER BY
+            sig_params.append(candidate_limit)  # 9: fulltext limit (improved multiplier)
+            # Soft filter boost params (using centralized builder for dual service matching)
+            sig_params.extend(
+                HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(service_val, component_val)
+            )  # 10-17: Service (dual) and component boost params
+            # Final limit
+            sig_params.append(limit)  # 18: final limit
+            print("incident_sig_query: ", incident_sig_query)
+            print("sig_params: ", sig_params)
+            # Execute incident signatures query
+            cur.execute(incident_sig_query, sig_params)
+            incident_sig_rows = cur.fetchall()
 
-        # Collect all source_incident_ids to fetch descriptions
-        all_source_incident_ids = []
-        for row in incident_sig_rows:
-            if isinstance(row, dict):
-                metadata = row.get("metadata", {})
-            else:
-                metadata = row[4] if isinstance(row[4], dict) else {}
-            source_ids = metadata.get("source_incident_ids", [])
-            if source_ids:
-                all_source_incident_ids.extend(source_ids)
-
-        # Fetch original incident descriptions
-        incident_descriptions = {}
-        if all_source_incident_ids:
-            unique_incident_ids = list(set(all_source_incident_ids))
-            try:
-                incident_descriptions = get_incident_descriptions(unique_incident_ids)
-            except Exception as e:
-                logger.warning(f"Failed to fetch incident descriptions: {e}")
-
-        incident_signatures = []
-        for row in incident_sig_rows:
-            if isinstance(row, dict):
-                metadata = row["metadata"] if isinstance(row["metadata"], dict) else {}
+            # Collect all source_incident_ids to fetch descriptions
+            all_source_incident_ids = []
+            for row in incident_sig_rows:
+                if isinstance(row, dict):
+                    metadata = row.get("metadata", {})
+                else:
+                    metadata = row[4] if isinstance(row[4], dict) else {}
                 source_ids = metadata.get("source_incident_ids", [])
+                if source_ids:
+                    all_source_incident_ids.extend(source_ids)
 
-                # Enhance content with original incident descriptions
-                enhanced_content = row["content"]
-                if source_ids and incident_descriptions:
-                    desc_parts = []
-                    for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
-                        if inc_id in incident_descriptions:
-                            desc = incident_descriptions[inc_id]
-                            if desc.get("title"):
-                                desc_parts.append(
-                                    f"Original Incident {inc_id} - Title: {desc['title']}"
-                                )
-                            if desc.get("description"):
-                                # Truncate description to 200 chars
-                                desc_text = desc["description"][:200] + (
-                                    "..." if len(desc["description"]) > 200 else ""
-                                )
-                                desc_parts.append(
-                                    f"Original Incident {inc_id} - Description: {desc_text}"
-                                )
-                    if desc_parts:
-                        enhanced_content = row["content"] + "\n\n" + "\n".join(desc_parts)
+            # Fetch original incident descriptions
+            incident_descriptions = {}
+            if all_source_incident_ids:
+                unique_incident_ids = list(set(all_source_incident_ids))
+                try:
+                    incident_descriptions = get_incident_descriptions(unique_incident_ids)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch incident descriptions: {e}")
 
-                incident_signatures.append(
-                    {
-                        "chunk_id": str(row["id"]),
-                        "document_id": str(row["document_id"]),
-                        "chunk_index": row["chunk_index"],
-                        "content": enhanced_content,
-                        "metadata": metadata,
-                        "doc_title": row["doc_title"],
-                        "doc_type": row["doc_type"],
-                        "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
-                        "fulltext_score": (
-                            float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
-                        ),
-                        "rrf_score": float(row["rrf_score"]) if row["rrf_score"] else 0.0,
-                    }
-                )
-            else:
-                # Handle tuple result
-                metadata = row[4] if isinstance(row[4], dict) else {}
-                source_ids = metadata.get("source_incident_ids", [])
+            incident_signatures = []
+            for row in incident_sig_rows:
+                if isinstance(row, dict):
+                    metadata = row["metadata"] if isinstance(row["metadata"], dict) else {}
+                    source_ids = metadata.get("source_incident_ids", [])
 
-                # Enhance content with original incident descriptions
-                enhanced_content = row[3]
-                if source_ids and incident_descriptions:
-                    desc_parts = []
-                    for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
-                        if inc_id in incident_descriptions:
-                            desc = incident_descriptions[inc_id]
-                            if desc.get("title"):
-                                desc_parts.append(
-                                    f"Original Incident {inc_id} - Title: {desc['title']}"
-                                )
-                            if desc.get("description"):
-                                # Truncate description to 200 chars
-                                desc_text = desc["description"][:200] + (
-                                    "..." if len(desc["description"]) > 200 else ""
-                                )
-                                desc_parts.append(
-                                    f"Original Incident {inc_id} - Description: {desc_text}"
-                                )
-                    if desc_parts:
-                        enhanced_content = row[3] + "\n\n" + "\n".join(desc_parts)
+                    # Enhance content with original incident descriptions
+                    enhanced_content = row["content"]
+                    if source_ids and incident_descriptions:
+                        desc_parts = []
+                        for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
+                            if inc_id in incident_descriptions:
+                                desc = incident_descriptions[inc_id]
+                                if desc.get("title"):
+                                    desc_parts.append(
+                                        f"Original Incident {inc_id} - Title: {desc['title']}"
+                                    )
+                                if desc.get("description"):
+                                    # Truncate description to 200 chars
+                                    desc_text = desc["description"][:200] + (
+                                        "..." if len(desc["description"]) > 200 else ""
+                                    )
+                                    desc_parts.append(
+                                        f"Original Incident {inc_id} - Description: {desc_text}"
+                                    )
+                        if desc_parts:
+                            enhanced_content = row["content"] + "\n\n" + "\n".join(desc_parts)
 
-                # Handle tuple result - check if we have soft filter boost columns
-                row_len = len(row)
-                incident_signatures.append(
-                    {
-                        "chunk_id": str(row[0]),
-                        "document_id": str(row[1]),
-                        "chunk_index": row[2],
-                        "content": enhanced_content,
-                        "metadata": metadata,
-                        "doc_title": row[5],
-                        "doc_type": row[6],
-                        "vector_score": float(row[7]) if row[7] else 0.0,
-                        "fulltext_score": float(row[8]) if row[8] else 0.0,
-                        "rrf_score": float(row[9]) if row[9] else 0.0,
-                        "service_match_boost": float(row[10]) if row_len > 10 and row[10] else 0.0,
-                        "component_match_boost": float(row[11]) if row_len > 11 and row[11] else 0.0,
-                        "final_score": float(row[12]) if row_len > 12 and row[12] else float(row[9]) if row[9] else 0.0,
-                    }
-                )
+                    incident_signatures.append(
+                        {
+                            "chunk_id": str(row["id"]),
+                            "document_id": str(row["document_id"]),
+                            "chunk_index": row["chunk_index"],
+                            "content": enhanced_content,
+                            "metadata": metadata,
+                            "doc_title": row["doc_title"],
+                            "doc_type": row["doc_type"],
+                            "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
+                            "fulltext_score": (
+                                float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
+                            ),
+                            "rrf_score": float(row["rrf_score"]) if row["rrf_score"] else 0.0,
+                        }
+                    )
+                else:
+                    # Handle tuple result
+                    metadata = row[4] if isinstance(row[4], dict) else {}
+                    source_ids = metadata.get("source_incident_ids", [])
 
-        # Retrieve runbook metadata (documents only, NOT steps)
-        # Runbook metadata is in documents table, not chunks
-        # PHASE 1: No hard filters - use soft filter boosts in ORDER BY
-        runbook_params = [query_text]  # For full-text search
+                    # Enhance content with original incident descriptions
+                    enhanced_content = row[3]
+                    if source_ids and incident_descriptions:
+                        desc_parts = []
+                        for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
+                            if inc_id in incident_descriptions:
+                                desc = incident_descriptions[inc_id]
+                                if desc.get("title"):
+                                    desc_parts.append(
+                                        f"Original Incident {inc_id} - Title: {desc['title']}"
+                                    )
+                                if desc.get("description"):
+                                    # Truncate description to 200 chars
+                                    desc_text = desc["description"][:200] + (
+                                        "..." if len(desc["description"]) > 200 else ""
+                                    )
+                                    desc_parts.append(
+                                        f"Original Incident {inc_id} - Description: {desc_text}"
+                                    )
+                        if desc_parts:
+                            enhanced_content = row[3] + "\n\n" + "\n".join(desc_parts)
 
-        # PHASE 1: Soft Filters - Remove hard WHERE filters for runbook metadata
-        # Service/component are now used as relevance boosters, not WHERE filters
-        # This allows semantic search to find relevant runbooks even with mismatches
-        runbook_filter_clause = ""  # No hard filters - all results included, ranked by relevance
-        runbook_params.append(limit)  # For LIMIT
+                    # Handle tuple result - check if we have soft filter boost columns
+                    row_len = len(row)
+                    incident_signatures.append(
+                        {
+                            "chunk_id": str(row[0]),
+                            "document_id": str(row[1]),
+                            "chunk_index": row[2],
+                            "content": enhanced_content,
+                            "metadata": metadata,
+                            "doc_title": row[5],
+                            "doc_type": row[6],
+                            "vector_score": float(row[7]) if row[7] else 0.0,
+                            "fulltext_score": float(row[8]) if row[8] else 0.0,
+                            "rrf_score": float(row[9]) if row[9] else 0.0,
+                            "service_match_boost": float(row[10]) if row_len > 10 and row[10] else 0.0,
+                            "component_match_boost": float(row[11]) if row_len > 11 and row[11] else 0.0,
+                            "final_score": float(row[12]) if row_len > 12 and row[12] else float(row[9]) if row[9] else 0.0,
+                        }
+                    )
 
-        runbook_meta_query = f"""
-        SELECT *
-        FROM (
-            SELECT 
-                d.id AS document_id,
-                d.doc_type,
-                d.service,
-                d.component,
-                d.title,
-                d.tags,
-                d.last_reviewed_at,
-                ts_rank(
-                    to_tsvector('english', COALESCE(d.title, '') || ' ' || COALESCE(d.content, '')),
-                    plainto_tsquery('english', %s)
-                ) AS relevance_score,
-                {HybridSearchQueryBuilder.build_service_boost_case("COALESCE(d.service, '')")} AS service_match_boost,
-                {HybridSearchQueryBuilder.build_component_boost_case("COALESCE(d.component, '')")} AS component_match_boost
-            FROM documents d
-            WHERE d.doc_type = 'runbook'
-        ) ranked
-        ORDER BY
-            (relevance_score + service_match_boost + component_match_boost) DESC,
-            last_reviewed_at DESC NULLS LAST
-        LIMIT %s
-        """
+            # Retrieve runbook metadata (documents only, NOT steps)
+            # Runbook metadata is in documents table, not chunks
+            # PHASE 1: No hard filters - use soft filter boosts in ORDER BY
+            runbook_params = [query_text]  # For full-text search
 
-        # Build params for runbook metadata query with soft filter boosts
-        # Query params: query_text, soft filter boosts (SELECT only), limit
-        # Note: ORDER BY doesn't use parameters - it just references the calculated columns
-        runbook_params_extended = [query_text]  # 1: fulltext search
-        # Add soft filter boost params for SELECT only (6 params: 3 for service, 3 for component)
-        runbook_params_extended.extend(
-            HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
-        )
-        # Final limit
-        runbook_params_extended.append(limit)  # 8: limit
-        cur.execute(runbook_meta_query, runbook_params_extended)
-        runbook_rows = cur.fetchall()
+            # PHASE 1: Soft Filters - Remove hard WHERE filters for runbook metadata
+            # Service/component are now used as relevance boosters, not WHERE filters
+            # This allows semantic search to find relevant runbooks even with mismatches
+            runbook_filter_clause = ""  # No hard filters - all results included, ranked by relevance
+            runbook_params.append(limit)  # For LIMIT
 
-        runbook_metadata = []
-        for row in runbook_rows:
-            if isinstance(row, dict):
-                tags = row["tags"] if isinstance(row["tags"], dict) else {}
-                runbook_metadata.append(
-                    {
-                        "document_id": str(row["document_id"]),
-                        "doc_type": row["doc_type"],
-                        "service": row["service"],
-                        "component": row["component"],
-                        "title": row["title"],
-                        "tags": tags,
-                        "last_reviewed_at": (
-                            row["last_reviewed_at"].isoformat() if row["last_reviewed_at"] else None
-                        ),
-                        "relevance_score": (
-                            float(row["relevance_score"]) if row["relevance_score"] else 0.0
-                        ),
-                        "service_match_boost": float(row.get("service_match_boost", 0.0)) if "service_match_boost" in row else 0.0,
-                        "component_match_boost": float(row.get("component_match_boost", 0.0)) if "component_match_boost" in row else 0.0,
-                    }
-                )
-            else:
-                tags = row[5] if isinstance(row[5], dict) else {}
-                runbook_metadata.append(
-                    {
-                        "document_id": str(row[0]),
-                        "doc_type": row[1],
-                        "service": row[2],
-                        "component": row[3],
-                        "title": row[4],
-                        "tags": tags,
-                        "last_reviewed_at": row[6].isoformat() if row[6] else None,
-                        "relevance_score": float(row[7]) if row[7] else 0.0,
-                        "service_match_boost": float(row[8]) if len(row) > 8 and row[8] else 0.0,
-                        "component_match_boost": float(row[9]) if len(row) > 9 and row[9] else 0.0,
-                    }
-                )
+            runbook_meta_query = f"""
+            SELECT *
+            FROM (
+                SELECT 
+                    d.id AS document_id,
+                    d.doc_type,
+                    d.service,
+                    d.component,
+                    d.title,
+                    d.tags,
+                    d.last_reviewed_at,
+                    ts_rank(
+                        to_tsvector('english', COALESCE(d.title, '') || ' ' || COALESCE(d.content, '')),
+                        plainto_tsquery('english', %s)
+                    ) AS relevance_score,
+                    {HybridSearchQueryBuilder.build_service_boost_case("COALESCE(d.service, '')")} AS service_match_boost,
+                    {HybridSearchQueryBuilder.build_component_boost_case("COALESCE(d.component, '')")} AS component_match_boost
+                FROM documents d
+                WHERE d.doc_type = 'runbook'
+            ) ranked
+            ORDER BY
+                (relevance_score + service_match_boost + component_match_boost) DESC,
+                last_reviewed_at DESC NULLS LAST
+            LIMIT %s
+            """
 
-        logger.debug(
-            f"Triage retrieval completed: {len(incident_signatures)} signatures, "
-            f"{len(runbook_metadata)} runbook metadata"
-        )
+            # Build params for runbook metadata query with soft filter boosts
+            # Query params: query_text, soft filter boosts (SELECT only), limit
+            # Note: ORDER BY doesn't use parameters - it just references the calculated columns
+            runbook_params_extended = [query_text]  # 1: fulltext search
+            # Add soft filter boost params for SELECT only (6 params: 3 for service, 3 for component)
+            runbook_params_extended.extend(
+                HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
+            )
+            # Final limit
+            runbook_params_extended.append(limit)  # 8: limit
+            cur.execute(runbook_meta_query, runbook_params_extended)
+            runbook_rows = cur.fetchall()
 
-        result = {
-            "incident_signatures": incident_signatures,
-            "runbook_metadata": runbook_metadata,
-        }
-        
-        # TASK #7: Record retrieval metrics
-        if _track_metrics:
-            retrieval_time_ms = (time.time() - start_time) * 1000
-            try:
-                # Combine all results for metrics
-                all_results = incident_signatures + runbook_metadata
-                record_retrieval(
-                    results=all_results,
-                    retrieval_type="triage_retrieval",
-                    service=service,
-                    component=component,
-                    query_service=service,
-                    query_component=component,
-                    retrieval_time_ms=retrieval_time_ms,
-                )
-            except Exception as e:
-                logger.debug(f"Failed to record triage retrieval metrics: {e}")
-        
-        return result
+            runbook_metadata = []
+            for row in runbook_rows:
+                if isinstance(row, dict):
+                    tags = row["tags"] if isinstance(row["tags"], dict) else {}
+                    runbook_metadata.append(
+                        {
+                            "document_id": str(row["document_id"]),
+                            "doc_type": row["doc_type"],
+                            "service": row["service"],
+                            "component": row["component"],
+                            "title": row["title"],
+                            "tags": tags,
+                            "last_reviewed_at": (
+                                row["last_reviewed_at"].isoformat() if row["last_reviewed_at"] else None
+                            ),
+                            "relevance_score": (
+                                float(row["relevance_score"]) if row["relevance_score"] else 0.0
+                            ),
+                            "service_match_boost": float(row.get("service_match_boost", 0.0)) if "service_match_boost" in row else 0.0,
+                            "component_match_boost": float(row.get("component_match_boost", 0.0)) if "component_match_boost" in row else 0.0,
+                        }
+                    )
+                else:
+                    tags = row[5] if isinstance(row[5], dict) else {}
+                    runbook_metadata.append(
+                        {
+                            "document_id": str(row[0]),
+                            "doc_type": row[1],
+                            "service": row[2],
+                            "component": row[3],
+                            "title": row[4],
+                            "tags": tags,
+                            "last_reviewed_at": row[6].isoformat() if row[6] else None,
+                            "relevance_score": float(row[7]) if row[7] else 0.0,
+                            "service_match_boost": float(row[8]) if len(row) > 8 and row[8] else 0.0,
+                            "component_match_boost": float(row[9]) if len(row) > 9 and row[9] else 0.0,
+                        }
+                    )
 
-    finally:
-        cur.close()
-        conn.close()
+            logger.debug(
+                f"Triage retrieval completed: {len(incident_signatures)} signatures, "
+                f"{len(runbook_metadata)} runbook metadata"
+            )
+
+            result = {
+                "incident_signatures": incident_signatures,
+                "runbook_metadata": runbook_metadata,
+            }
+            
+            # TASK #7: Record retrieval metrics
+            if _track_metrics:
+                retrieval_time_ms = (time.time() - start_time) * 1000
+                try:
+                    # Combine all results for metrics
+                    all_results = incident_signatures + runbook_metadata
+                    record_retrieval(
+                        results=all_results,
+                        retrieval_type="triage_retrieval",
+                        service=service,
+                        component=component,
+                        query_service=service,
+                        query_component=component,
+                        retrieval_time_ms=retrieval_time_ms,
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to record triage retrieval metrics: {e}")
+            
+            return result
+
+        finally:
+            cur.close()

@@ -4,7 +4,7 @@ import uuid
 import json
 from datetime import datetime
 from typing import Optional, Dict, List
-from db.connection import get_db_connection, get_db_connection_context
+from db.connection import get_db_connection_context
 from ai_service.core import IncidentNotFoundError, DatabaseError, get_logger
 
 logger = get_logger(__name__)

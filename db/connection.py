@@ -109,11 +109,14 @@ def _create_direct_connection():
     )
 
 
-def get_db_connection():
+def _get_db_connection():
     """
-    Get a database connection from the pool.
+    Internal function to get a database connection from the pool.
     Falls back to direct connection if pool is not initialized.
     Includes retry logic for transient failures.
+    
+    NOTE: This function should NOT be used directly. Use get_db_connection_context() instead
+    to ensure connections are properly returned to the pool.
     """
     last_error = None
     for attempt in range(DB_CONN_RETRIES):
@@ -180,7 +183,7 @@ def get_db_connection_context():
     """
     conn = None
     try:
-        conn = get_db_connection()
+        conn = _get_db_connection()
         yield conn
     except Exception as e:
         logger.error(f"Database connection error: {e}", exc_info=True)
@@ -216,11 +219,6 @@ def get_db_connection_context():
                     conn = None
 
 
-def get_db_cursor():
-    """
-    Get a database cursor.
-    Note: Caller is responsible for closing connection if using pool.
-    For new code, prefer get_db_connection_context().
-    """
-    conn = get_db_connection()
-    return conn, conn.cursor()
+# Removed get_db_cursor() - use get_db_connection_context() instead
+# This function was removed to prevent connection leaks.
+# Always use: with get_db_connection_context() as conn: cur = conn.cursor()

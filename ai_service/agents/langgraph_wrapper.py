@@ -177,15 +177,15 @@ def create_triage_graph():
 
         # Check for evidence warning
         if len(context_chunks) == 0:
-            from db.connection import get_db_connection
+            from db.connection import get_db_connection_context
 
             try:
-                conn = get_db_connection()
-                cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) as count FROM documents")
-                result = cur.fetchone()
-                doc_count = result["count"] if isinstance(result, dict) else result[0]
-                conn.close()
+                with get_db_connection_context() as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT COUNT(*) as count FROM documents")
+                    result = cur.fetchone()
+                    doc_count = result["count"] if isinstance(result, dict) else result[0]
+                    cur.close()
 
                 if doc_count == 0:
                     state["evidence_warning"] = (
@@ -462,15 +462,15 @@ def create_resolution_graph():
 
         # Check for evidence warnings
         if len(context_chunks) == 0:
-            from db.connection import get_db_connection
+            from db.connection import get_db_connection_context
 
             try:
-                conn = get_db_connection()
-                cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) as count FROM documents")
-                result = cur.fetchone()
-                doc_count = result["count"] if isinstance(result, dict) else result[0]
-                conn.close()
+                with get_db_connection_context() as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT COUNT(*) as count FROM documents")
+                    result = cur.fetchone()
+                    doc_count = result["count"] if isinstance(result, dict) else result[0]
+                    cur.close()
 
                 if doc_count == 0:
                     state["resolution_evidence_warning"] = (

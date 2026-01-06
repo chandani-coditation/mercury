@@ -141,15 +141,15 @@ async def _resolution_agent_state_internal(
 
     resolution_warning = None
     if len(context_chunks) == 0:
-        from db.connection import get_db_connection  # lazy import to avoid cycles
+        from db.connection import get_db_connection_context  # lazy import to avoid cycles
 
         try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) as count FROM documents")
-            result = cur.fetchone()
-            doc_count = result["count"] if isinstance(result, dict) else result[0]
-            conn.close()
+            with get_db_connection_context() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) as count FROM documents")
+                result = cur.fetchone()
+                doc_count = result["count"] if isinstance(result, dict) else result[0]
+                cur.close()
 
             if doc_count == 0:
                 resolution_warning = (

@@ -4,7 +4,7 @@ import uuid
 import json
 from datetime import datetime
 from typing import List, Optional
-from db.connection import get_db_connection
+from db.connection import get_db_connection_context
 from ingestion.embeddings import (
     embed_text,
     embed_texts_batch,
@@ -67,175 +67,175 @@ def insert_document_and_chunks(
             "Content produced no chunks after chunking - content may be too short or invalid"
         )
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    # Use context manager to ensure connection is returned to pool
+    with get_db_connection_context() as conn:
+        cur = conn.cursor()
 
-    try:
-        # Insert document (only after all validations pass)
-        doc_id = uuid.uuid4()
-        cur.execute(
-            """
-            INSERT INTO documents (id, doc_type, service, component, title, content, tags, last_reviewed_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
-            """,
-            (
-                doc_id,
-                doc_type,
-                service,
-                component,
-                title,
-                content_trimmed,
-                json.dumps(tags) if tags else None,
-                last_reviewed_at,
-            ),
-        )
-
-        # Chunk the content (already validated above, but re-chunk for consistency)
-        chunks = chunk_text(content_trimmed)
-
-        # Validate chunks are not empty
-        empty_chunks = [i for i, chunk in enumerate(chunks) if not chunk or not chunk.strip()]
-        if empty_chunks:
-            raise ValueError(
-                f"Found {len(empty_chunks)} empty chunk(s) at indices: {empty_chunks[:5]}"
-            )
-
-        # Prepare chunks with headers for embedding
-        chunks_with_headers = []
-        from ingestion.embeddings import count_tokens, EMBEDDING_MODEL_LIMITS, DEFAULT_MODEL
-
-        embedding_model = DEFAULT_MODEL
-        max_tokens = EMBEDDING_MODEL_LIMITS.get(embedding_model, 8191)
-
-        # Format last_reviewed_at for header
-        last_reviewed_str = None
-        if last_reviewed_at:
-            if isinstance(last_reviewed_at, datetime):
-                last_reviewed_str = last_reviewed_at.strftime("%Y-%m-%d")
-            else:
-                last_reviewed_str = str(last_reviewed_at)
-
-        for chunk in chunks:
-            chunk_with_header = add_chunk_header(
-                chunk, doc_type, service, component, title, last_reviewed_str
-            )
-            # Validate token count after adding header
-            token_count = count_tokens(chunk_with_header, embedding_model)
-
-            # If chunk with header exceeds limit, split the chunk further
-            if token_count > max_tokens:
-                # Split chunk by lines to stay under limit
-                import tiktoken
-
-                encoding = tiktoken.get_encoding("cl100k_base")
-
-                # Calculate header token count once
-                header_only = add_chunk_header(
-                    "", doc_type, service, component, title, last_reviewed_str
-                )
-                header_tokens = count_tokens(header_only, embedding_model)
-                available_tokens = max_tokens - header_tokens - 100  # Safety margin
-
-                # Try splitting by lines first
-                lines = chunk.split("\n")
-                current_subchunk = []
-                current_tokens = 0
-
-                for line in lines:
-                    line_tokens = len(encoding.encode(line + "\n"))  # Include newline
-
-                    if current_tokens + line_tokens > available_tokens and current_subchunk:
-                        # Save current subchunk
-                        subchunk_text = "\n".join(current_subchunk)
-                        chunks_with_headers.append(
-                            add_chunk_header(
-                                subchunk_text,
-                                doc_type,
-                                service,
-                                component,
-                                title,
-                                last_reviewed_str,
-                            )
-                        )
-                        current_subchunk = [line]
-                        current_tokens = line_tokens
-                    else:
-                        current_subchunk.append(line)
-                        current_tokens += line_tokens
-
-                # Add final subchunk
-                if current_subchunk:
-                    subchunk_text = "\n".join(current_subchunk)
-                    chunks_with_headers.append(
-                        add_chunk_header(
-                            subchunk_text, doc_type, service, component, title, last_reviewed_str
-                        )
-                    )
-            else:
-                chunks_with_headers.append(chunk_with_header)
-
-        # Validate we have chunks to embed before generating embeddings
-        if not chunks_with_headers or len(chunks_with_headers) == 0:
-            raise ValueError(
-                "No chunks with headers to embed - cannot proceed with embedding generation"
-            )
-
-        # Generate embeddings in batches (much faster for large documents)
-        # Load batch size from config (graceful degradation if config missing)
-        from ingestion.embeddings import embed_texts_batch
         try:
-            from ingestion.normalizers import INGESTION_CONFIG
-            default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
-        except Exception:
-            default_batch_size = 50  # Fallback to default
-        batch_size = default_batch_size if len(chunks_with_headers) > 10 else len(chunks_with_headers)
-        embeddings = embed_texts_batch(
-            chunks_with_headers, model=embedding_model, batch_size=batch_size
-        )
-
-        # Validate embeddings were generated successfully
-        if not embeddings or len(embeddings) != len(chunks_with_headers):
-            raise ValueError(
-                f"Embedding generation failed: expected {len(chunks_with_headers)} embeddings, "
-                f"got {len(embeddings) if embeddings else 0}"
-            )
-
-        # Insert chunks with embeddings
-        metadata_dict = {
-            "doc_type": doc_type,
-            "service": service,
-            "component": component,
-            "title": title,
-        }
-        for idx, (chunk_with_header, embedding) in enumerate(zip(chunks_with_headers, embeddings)):
-            # Convert embedding to string format for pgvector: '[1,2,3,...]'
-            embedding_str = "[" + ",".join(map(str, embedding)) + "]"
-
-            # Create tsvector (Postgres will parse it)
+            # Insert document (only after all validations pass)
+            doc_id = uuid.uuid4()
             cur.execute(
                 """
-                INSERT INTO chunks (document_id, chunk_index, content, metadata, embedding, tsv)
-                VALUES (%s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
+                INSERT INTO documents (id, doc_type, service, component, title, content, tags, last_reviewed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
                 """,
                 (
                     doc_id,
-                    idx,
-                    chunk_with_header,
-                    json.dumps(metadata_dict),  # Convert dict to JSON string for JSONB
-                    embedding_str,  # pgvector string format
-                    create_tsvector(chunk_with_header),
+                    doc_type,
+                    service,
+                    component,
+                    title,
+                    content_trimmed,
+                    json.dumps(tags) if tags else None,
+                    last_reviewed_at,
                 ),
             )
 
-        conn.commit()
-        return str(doc_id)
+            # Chunk the content (already validated above, but re-chunk for consistency)
+            chunks = chunk_text(content_trimmed)
 
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        cur.close()
-        conn.close()
+            # Validate chunks are not empty
+            empty_chunks = [i for i, chunk in enumerate(chunks) if not chunk or not chunk.strip()]
+            if empty_chunks:
+                raise ValueError(
+                    f"Found {len(empty_chunks)} empty chunk(s) at indices: {empty_chunks[:5]}"
+                )
+
+            # Prepare chunks with headers for embedding
+            chunks_with_headers = []
+            from ingestion.embeddings import count_tokens, EMBEDDING_MODEL_LIMITS, DEFAULT_MODEL
+
+            embedding_model = DEFAULT_MODEL
+            max_tokens = EMBEDDING_MODEL_LIMITS.get(embedding_model, 8191)
+
+            # Format last_reviewed_at for header
+            last_reviewed_str = None
+            if last_reviewed_at:
+                if isinstance(last_reviewed_at, datetime):
+                    last_reviewed_str = last_reviewed_at.strftime("%Y-%m-%d")
+                else:
+                    last_reviewed_str = str(last_reviewed_at)
+
+            for chunk in chunks:
+                chunk_with_header = add_chunk_header(
+                    chunk, doc_type, service, component, title, last_reviewed_str
+                )
+                # Validate token count after adding header
+                token_count = count_tokens(chunk_with_header, embedding_model)
+
+                # If chunk with header exceeds limit, split the chunk further
+                if token_count > max_tokens:
+                    # Split chunk by lines to stay under limit
+                    import tiktoken
+
+                    encoding = tiktoken.get_encoding("cl100k_base")
+
+                    # Calculate header token count once
+                    header_only = add_chunk_header(
+                        "", doc_type, service, component, title, last_reviewed_str
+                    )
+                    header_tokens = count_tokens(header_only, embedding_model)
+                    available_tokens = max_tokens - header_tokens - 100  # Safety margin
+
+                    # Try splitting by lines first
+                    lines = chunk.split("\n")
+                    current_subchunk = []
+                    current_tokens = 0
+
+                    for line in lines:
+                        line_tokens = len(encoding.encode(line + "\n"))  # Include newline
+
+                        if current_tokens + line_tokens > available_tokens and current_subchunk:
+                            # Save current subchunk
+                            subchunk_text = "\n".join(current_subchunk)
+                            chunks_with_headers.append(
+                                add_chunk_header(
+                                    subchunk_text,
+                                    doc_type,
+                                    service,
+                                    component,
+                                    title,
+                                    last_reviewed_str,
+                                )
+                            )
+                            current_subchunk = [line]
+                            current_tokens = line_tokens
+                        else:
+                            current_subchunk.append(line)
+                            current_tokens += line_tokens
+
+                    # Add final subchunk
+                    if current_subchunk:
+                        subchunk_text = "\n".join(current_subchunk)
+                        chunks_with_headers.append(
+                            add_chunk_header(
+                                subchunk_text, doc_type, service, component, title, last_reviewed_str
+                            )
+                        )
+                else:
+                    chunks_with_headers.append(chunk_with_header)
+
+            # Validate we have chunks to embed before generating embeddings
+            if not chunks_with_headers or len(chunks_with_headers) == 0:
+                raise ValueError(
+                    "No chunks with headers to embed - cannot proceed with embedding generation"
+                )
+
+            # Generate embeddings in batches (much faster for large documents)
+            # Load batch size from config (graceful degradation if config missing)
+            from ingestion.embeddings import embed_texts_batch
+            try:
+                from ingestion.normalizers import INGESTION_CONFIG
+                default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
+            except Exception:
+                default_batch_size = 50  # Fallback to default
+            batch_size = default_batch_size if len(chunks_with_headers) > 10 else len(chunks_with_headers)
+            embeddings = embed_texts_batch(
+                chunks_with_headers, model=embedding_model, batch_size=batch_size
+            )
+
+            # Validate embeddings were generated successfully
+            if not embeddings or len(embeddings) != len(chunks_with_headers):
+                raise ValueError(
+                    f"Embedding generation failed: expected {len(chunks_with_headers)} embeddings, "
+                    f"got {len(embeddings) if embeddings else 0}"
+                )
+
+            # Insert chunks with embeddings
+            metadata_dict = {
+                "doc_type": doc_type,
+                "service": service,
+                "component": component,
+                "title": title,
+            }
+            for idx, (chunk_with_header, embedding) in enumerate(zip(chunks_with_headers, embeddings)):
+                # Convert embedding to string format for pgvector: '[1,2,3,...]'
+                embedding_str = "[" + ",".join(map(str, embedding)) + "]"
+
+                # Create tsvector (Postgres will parse it)
+                cur.execute(
+                    """
+                    INSERT INTO chunks (document_id, chunk_index, content, metadata, embedding, tsv)
+                    VALUES (%s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
+                    """,
+                    (
+                        doc_id,
+                        idx,
+                        chunk_with_header,
+                        json.dumps(metadata_dict),  # Convert dict to JSON string for JSONB
+                        embedding_str,  # pgvector string format
+                        create_tsvector(chunk_with_header),
+                    ),
+                )
+
+            conn.commit()
+            return str(doc_id)
+
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cur.close()
 
 
 def _create_runbook_step_embedding_text(step: RunbookStep, prerequisites: Optional[List[str]] = None) -> str:
@@ -373,398 +373,415 @@ def insert_runbook_with_steps(
     if not doc_type or not doc_type.strip():
         raise ValueError("Document type is required and cannot be empty")
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    # Use context manager to ensure connection is returned to pool
+    with get_db_connection_context() as conn:
+        cur = conn.cursor()
 
-    try:
-        # Check if runbook with same title already exists (deduplication)
-        cur.execute(
-            """
-            SELECT id FROM documents 
-            WHERE doc_type = 'runbook' AND LOWER(TRIM(title)) = LOWER(TRIM(%s))
-            LIMIT 1
-            """,
-            (title,),
-        )
-        existing_doc = cur.fetchone()
-        
-        if existing_doc:
-            # Delete existing runbook and its chunks/steps
-            existing_doc_id = existing_doc["id"]
-            logger = get_logger(__name__)
-            logger.info(f"Found existing runbook with title '{title}' (id={existing_doc_id}). Replacing it.")
+        try:
+            # Check if runbook with same title already exists (deduplication)
+            cur.execute(
+                """
+                SELECT id FROM documents 
+                WHERE doc_type = 'runbook' AND LOWER(TRIM(title)) = LOWER(TRIM(%s))
+                LIMIT 1
+                """,
+                (title,),
+            )
+            existing_doc = cur.fetchone()
             
-            # Delete chunks first (CASCADE will handle runbook_steps if they exist)
-            cur.execute("DELETE FROM chunks WHERE document_id = %s", (existing_doc_id,))
-            # Delete the document
-            cur.execute("DELETE FROM documents WHERE id = %s", (existing_doc_id,))
-            # Use existing doc_id for replacement
-            doc_id = existing_doc_id
-        else:
-            # New runbook - generate new ID
-            doc_id = uuid.uuid4()
-        
-        # Insert runbook metadata document
-        cur.execute(
-            """
-            INSERT INTO documents (id, doc_type, service, component, title, content, tags, last_reviewed_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
-            """,
-            (
-                doc_id,
-                doc_type,
-                service,
-                component,
-                title,
-                content or "",  # Metadata content can be empty
-                json.dumps(tags) if tags else None,
-                last_reviewed_at,
-            ),
-        )
-
-        if not steps:
-            # No steps extracted - create a fallback step from content
-            try:
-                from ai_service.core import get_logger
-
-                logger = get_logger(__name__)
-                logger.warning(
-                    f"No steps extracted for runbook {title}. Creating fallback step from content."
-                )
-            except:
-                pass
-
-            # Create a single fallback step from the full content
-            if content and content.strip():
-                # Load max length from config (graceful degradation if config missing)
+            if existing_doc:
+                # Delete existing runbook and its chunks/steps
+                existing_doc_id = existing_doc["id"]
                 try:
-                    from ingestion.normalizers import INGESTION_CONFIG
-                    max_action_length = INGESTION_CONFIG.get("formatting", {}).get("max_fallback_action_length", 2000)
-                except Exception:
-                    max_action_length = 2000  # Fallback to default
-
-                fallback_step = RunbookStep(
-                    step_id=f"{tags.get('runbook_id', 'RB-UNKNOWN')}-S1",
-                    runbook_id=tags.get("runbook_id", "RB-UNKNOWN"),
-                    condition="Runbook applies",
-                    action=content.strip()[:max_action_length],  # Limit from config
-                    expected_outcome=None,
-                    rollback=None,
-                    risk_level=None,
-                    service=service,
-                    component=component,
-                )
-                steps = [fallback_step]
+                    from ai_service.core import get_logger
+                    logger = get_logger(__name__)
+                    logger.info(f"Found existing runbook with title '{title}' (id={existing_doc_id}). Replacing it.")
+                except:
+                    pass
+                
+                # Delete chunks first (CASCADE will handle runbook_steps if they exist)
+                cur.execute("DELETE FROM chunks WHERE document_id = %s", (existing_doc_id,))
+                # Delete the document
+                cur.execute("DELETE FROM documents WHERE id = %s", (existing_doc_id,))
+                # Use existing doc_id for replacement
+                doc_id = existing_doc_id
             else:
-                # Even if no content, create a minimal step
-                runbook_id = tags.get("runbook_id", f"RB-{uuid.uuid4().hex[:8].upper()}")
-                fallback_step = RunbookStep(
-                    step_id=f"{runbook_id}-S1",
-                    runbook_id=runbook_id,
-                    condition="Runbook applies",
-                    action=title,  # Use title as action
-                    expected_outcome=None,
-                    rollback=None,
-                    risk_level=None,
-                    service=service,
-                    component=component,
-                )
-                steps = [fallback_step]
-
-        # Log step extraction
-        try:
-            from ai_service.core import get_logger
-
-            logger = get_logger(__name__)
-            logger.info(f"Inserting {len(steps)} steps for runbook {title} (doc_id={doc_id})")
-        except:
-            pass
-
-        # Prepare step texts for embedding
-        step_texts = []
-
-        for step in steps:
-            # Create embedding text for this step (include prerequisites from runbook)
-            step_text = _create_runbook_step_embedding_text(step, prerequisites=prerequisites)
-            step_texts.append(step_text)
-
-        # Generate embeddings for all steps in batch
-        embedding_model = DEFAULT_MODEL
-        # Load batch size from config (graceful degradation if config missing)
-        try:
-            from ingestion.normalizers import INGESTION_CONFIG
-            default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
-        except Exception:
-            default_batch_size = 50  # Fallback to default
-        batch_size = min(default_batch_size, len(step_texts))
-        embeddings = embed_texts_batch(step_texts, model=embedding_model, batch_size=batch_size)
-
-        if not embeddings or len(embeddings) != len(step_texts):
-            raise ValueError(
-                f"Embedding generation failed: expected {len(step_texts)} embeddings, "
-                f"got {len(embeddings) if embeddings else 0}"
+                # New runbook - generate new ID
+                doc_id = uuid.uuid4()
+            
+            # Insert runbook metadata document
+            cur.execute(
+                """
+                INSERT INTO documents (id, doc_type, service, component, title, content, tags, last_reviewed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                """,
+                (
+                    doc_id,
+                    doc_type,
+                    service,
+                    component,
+                    title,
+                    content or "",  # Metadata content can be empty
+                    json.dumps(tags) if tags else None,
+                    last_reviewed_at,
+                ),
             )
 
-        # Insert each step into runbook_steps table
-        inserted_count = 0
-
-        # Log the steps we're about to insert
-        try:
-            from ai_service.core import get_logger
-
-            logger = get_logger(__name__)
-            logger.info(
-                f"About to insert {len(steps)} steps into runbook_steps table for runbook {title}"
-            )
-            for i, step in enumerate(steps):
-                logger.debug(
-                    f"Step {i+1}: step_id={step.step_id}, condition='{step.condition[:50]}...', action='{step.action[:50]}...'"
-                )
-        except:
-            pass
-
-        for step, embedding in zip(steps, embeddings):
-            embedding_str = "[" + ",".join(map(str, embedding)) + "]"
-
-            # Use step's service/component or fall back to runbook-level values
-            step_service = step.service or service
-            step_component = step.component or component
-
-            try:
-                # Log the step being inserted for debugging
+            if not steps:
+                # No steps extracted - create a fallback step from content
                 try:
                     from ai_service.core import get_logger
 
                     logger = get_logger(__name__)
-                    logger.debug(f"Inserting step {step.step_id} for runbook {title}")
+                    logger.warning(
+                        f"No steps extracted for runbook {title}. Creating fallback step from content."
+                    )
                 except:
                     pass
 
-                cur.execute(
-                    """
-                    INSERT INTO runbook_steps (
-                        step_id, runbook_id, condition, action, expected_outcome,
-                        rollback, risk_level, service, component, embedding,
-                        runbook_title, runbook_document_id, last_reviewed_at
+                # Create a single fallback step from the full content
+                if content and content.strip():
+                    # Load max length from config (graceful degradation if config missing)
+                    try:
+                        from ingestion.normalizers import INGESTION_CONFIG
+                        max_action_length = INGESTION_CONFIG.get("formatting", {}).get("max_fallback_action_length", 2000)
+                    except Exception:
+                        max_action_length = 2000  # Fallback to default
+
+                    fallback_step = RunbookStep(
+                        step_id=f"{tags.get('runbook_id', 'RB-UNKNOWN')}-S1",
+                        runbook_id=tags.get("runbook_id", "RB-UNKNOWN"),
+                        condition="Runbook applies",
+                        action=content.strip()[:max_action_length],  # Limit from config
+                        expected_outcome=None,
+                        rollback=None,
+                        risk_level=None,
+                        service=service,
+                        component=component,
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s)
-                    ON CONFLICT (step_id) DO UPDATE SET
-                        condition = EXCLUDED.condition,
-                        action = EXCLUDED.action,
-                        expected_outcome = EXCLUDED.expected_outcome,
-                        rollback = EXCLUDED.rollback,
-                        risk_level = EXCLUDED.risk_level,
-                        service = EXCLUDED.service,
-                        component = EXCLUDED.component,
-                        embedding = EXCLUDED.embedding,
-                        runbook_title = EXCLUDED.runbook_title,
-                        runbook_document_id = EXCLUDED.runbook_document_id,
-                        updated_at = now()
-                    """,
-                    (
-                        step.step_id,
-                        step.runbook_id,
-                        step.condition,
-                        step.action,
-                        step.expected_outcome,
-                        step.rollback,
-                        step.risk_level,
-                        step_service,
-                        step_component,
-                        embedding_str,
-                        title,  # runbook_title
-                        doc_id,  # runbook_document_id
-                        last_reviewed_at,
-                    ),
+                    steps = [fallback_step]
+                else:
+                    # Even if no content, create a minimal step
+                    runbook_id = tags.get("runbook_id", f"RB-{uuid.uuid4().hex[:8].upper()}")
+                    fallback_step = RunbookStep(
+                        step_id=f"{runbook_id}-S1",
+                        runbook_id=runbook_id,
+                        condition="Runbook applies",
+                        action=title,  # Use title as action
+                        expected_outcome=None,
+                        rollback=None,
+                        risk_level=None,
+                        service=service,
+                        component=component,
+                    )
+                    steps = [fallback_step]
+
+            # Log step extraction
+            try:
+                from ai_service.core import get_logger
+
+                logger = get_logger(__name__)
+                logger.info(f"Inserting {len(steps)} steps for runbook {title} (doc_id={doc_id})")
+            except:
+                pass
+
+            # Prepare step texts for embedding
+            step_texts = []
+
+            for step in steps:
+                # Create embedding text for this step (include prerequisites from runbook)
+                step_text = _create_runbook_step_embedding_text(step, prerequisites=prerequisites)
+                step_texts.append(step_text)
+
+            # Generate embeddings for all steps in batch
+            embedding_model = DEFAULT_MODEL
+            # Load batch size from config (graceful degradation if config missing)
+            try:
+                from ingestion.normalizers import INGESTION_CONFIG
+                default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
+            except Exception:
+                default_batch_size = 50  # Fallback to default
+            batch_size = min(default_batch_size, len(step_texts))
+            embeddings = embed_texts_batch(step_texts, model=embedding_model, batch_size=batch_size)
+
+            if not embeddings or len(embeddings) != len(step_texts):
+                raise ValueError(
+                    f"Embedding generation failed: expected {len(step_texts)} embeddings, "
+                    f"got {len(embeddings) if embeddings else 0}"
                 )
-                inserted_count += 1
 
-                # NOTE: Chunk creation for runbook steps is NO LONGER NEEDED for triage
-                # Triage retrieval only needs runbook metadata (from documents table)
-                # Runbook steps are retrieved by Resolution Agent, which may use chunks
-                # For now, keeping step chunking for Resolution Agent compatibility
+            # Insert each step into runbook_steps table
+            inserted_count = 0
+
+            # Log the steps we're about to insert
+            try:
+                from ai_service.core import get_logger
+
+                logger = get_logger(__name__)
+                logger.info(
+                    f"About to insert {len(steps)} steps into runbook_steps table for runbook {title}"
+                )
+                for i, step in enumerate(steps):
+                    logger.debug(
+                        f"Step {i+1}: step_id={step.step_id}, condition='{step.condition[:50]}...', action='{step.action[:50]}...'"
+                    )
+            except:
+                pass
+
+            for step, embedding in zip(steps, embeddings):
+                embedding_str = "[" + ",".join(map(str, embedding)) + "]"
+
+                # Use step's service/component or fall back to runbook-level values
+                step_service = step.service or service
+                step_component = step.component or component
+
                 try:
-                    # Create metadata for chunk
-                    chunk_metadata = {
-                        "step_id": step.step_id,
-                        "runbook_id": step.runbook_id,
-                        "condition": step.condition,
-                        "action": step.action,
-                        "expected_outcome": step.expected_outcome,
-                        "rollback": step.rollback,
-                        "risk_level": step.risk_level,
-                        "service": step_service,
-                        "component": step_component,
-                        "runbook_title": title,
-                    }
+                    # Log the step being inserted for debugging
+                    try:
+                        from ai_service.core import get_logger
 
-                    # Insert chunk with step data
-                    chunk_id = uuid.uuid4()
+                        logger = get_logger(__name__)
+                        logger.debug(f"Inserting step {step.step_id} for runbook {title}")
+                    except:
+                        pass
+
                     cur.execute(
                         """
-                        INSERT INTO chunks (id, document_id, chunk_index, content, metadata, embedding, tsv)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
-                        ON CONFLICT DO NOTHING
+                        INSERT INTO runbook_steps (
+                            step_id, runbook_id, condition, action, expected_outcome,
+                            rollback, risk_level, service, component, embedding,
+                            runbook_title, runbook_document_id, last_reviewed_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s)
+                        ON CONFLICT (step_id) DO UPDATE SET
+                            condition = EXCLUDED.condition,
+                            action = EXCLUDED.action,
+                            expected_outcome = EXCLUDED.expected_outcome,
+                            rollback = EXCLUDED.rollback,
+                            risk_level = EXCLUDED.risk_level,
+                            service = EXCLUDED.service,
+                            component = EXCLUDED.component,
+                            embedding = EXCLUDED.embedding,
+                            runbook_title = EXCLUDED.runbook_title,
+                            runbook_document_id = EXCLUDED.runbook_document_id,
+                            updated_at = now()
                         """,
                         (
-                            chunk_id,
-                            doc_id,
-                            inserted_count - 1,  # Use step index as chunk_index
-                            step_text,  # Content is the embedding text
-                            json.dumps(chunk_metadata),
+                            step.step_id,
+                            step.runbook_id,
+                            step.condition,
+                            step.action,
+                            step.expected_outcome,
+                            step.rollback,
+                            step.risk_level,
+                            step_service,
+                            step_component,
                             embedding_str,
-                            step_text,
+                            title,  # runbook_title
+                            doc_id,  # runbook_document_id
+                            last_reviewed_at,
                         ),
                     )
-                    # Don't commit here - commit all steps and chunks together at the end
-                    # This ensures atomicity: either all steps are stored or none
-                    logger = get_logger(__name__)
-                    logger.debug(f"Created chunk for runbook step {step.step_id}")
-                except Exception as chunk_error:
-                    # Log error - chunk creation is critical for retrieval
-                    logger = get_logger(__name__)
-                    logger.error(
-                        f"Failed to create chunk for runbook step {step.step_id}: {chunk_error}"
-                    )
-                    # Don't re-raise - log and continue with other steps
-                    # Chunk creation failure shouldn't prevent step storage
+                    inserted_count += 1
+
+                    # NOTE: Chunk creation for runbook steps is NO LONGER NEEDED for triage
+                    # Triage retrieval only needs runbook metadata (from documents table)
+                    # Runbook steps are retrieved by Resolution Agent, which may use chunks
+                    # For now, keeping step chunking for Resolution Agent compatibility
+                    try:
+                        # Create metadata for chunk
+                        chunk_metadata = {
+                            "step_id": step.step_id,
+                            "runbook_id": step.runbook_id,
+                            "condition": step.condition,
+                            "action": step.action,
+                            "expected_outcome": step.expected_outcome,
+                            "rollback": step.rollback,
+                            "risk_level": step.risk_level,
+                            "service": step_service,
+                            "component": step_component,
+                            "runbook_title": title,
+                        }
+
+                        # Insert chunk with step data
+                        chunk_id = uuid.uuid4()
+                        cur.execute(
+                            """
+                            INSERT INTO chunks (id, document_id, chunk_index, content, metadata, embedding, tsv)
+                            VALUES (%s, %s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
+                            ON CONFLICT DO NOTHING
+                            """,
+                            (
+                                chunk_id,
+                                doc_id,
+                                inserted_count - 1,  # Use step index as chunk_index
+                                step_text,  # Content is the embedding text
+                                json.dumps(chunk_metadata),
+                                embedding_str,
+                                step_text,
+                            ),
+                        )
+                        # Don't commit here - commit all steps and chunks together at the end
+                        # This ensures atomicity: either all steps are stored or none
+                        try:
+                            from ai_service.core import get_logger
+                            logger = get_logger(__name__)
+                            logger.debug(f"Created chunk for runbook step {step.step_id}")
+                        except:
+                            pass
+                    except Exception as chunk_error:
+                        # Log error - chunk creation is critical for retrieval
+                        try:
+                            from ai_service.core import get_logger
+                            logger = get_logger(__name__)
+                            logger.error(
+                                f"Failed to create chunk for runbook step {step.step_id}: {chunk_error}"
+                            )
+                        except:
+                            pass
+                        # Don't re-raise - log and continue with other steps
+                        # Chunk creation failure shouldn't prevent step storage
+                        continue
+
+                    # Log successful insertion
+                    try:
+                        from ai_service.core import get_logger
+
+                        logger = get_logger(__name__)
+                        logger.debug(f"Successfully inserted step {step.step_id}")
+                    except:
+                        pass
+
+                except Exception as step_error:
+                    # Log error with full details and step data
+                    try:
+                        from ai_service.core import get_logger
+
+                        logger = get_logger(__name__)
+                        logger.error(
+                            f"Error inserting step {step.step_id} into runbook_steps table: {str(step_error)}. "
+                            f"Step data: runbook_id={step.runbook_id}, condition='{step.condition[:100]}', "
+                            f"action='{step.action[:100]}', service={step_service}, component={step_component}",
+                            exc_info=True,
+                        )
+                    except:
+                        pass
+                    # Don't re-raise - continue with other steps and use fallback
                     continue
 
-                # Log successful insertion
-                try:
-                    from ai_service.core import get_logger
-
-                    logger = get_logger(__name__)
-                    logger.debug(f"Successfully inserted step {step.step_id}")
-                except:
-                    pass
-
-            except Exception as step_error:
-                # Log error with full details and step data
-                try:
-                    from ai_service.core import get_logger
-
-                    logger = get_logger(__name__)
-                    logger.error(
-                        f"Error inserting step {step.step_id} into runbook_steps table: {str(step_error)}. "
-                        f"Step data: runbook_id={step.runbook_id}, condition='{step.condition[:100]}', "
-                        f"action='{step.action[:100]}', service={step_service}, component={step_component}",
-                        exc_info=True,
-                    )
-                except:
-                    pass
-                # Don't re-raise - continue with other steps and use fallback
-                continue
-
-        # Log insertion results
-        try:
-            from ai_service.core import get_logger
-
-            logger = get_logger(__name__)
-            if inserted_count == len(steps):
-                logger.info(
-                    f"Successfully inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}"
-                )
-            else:
-                logger.error(
-                    f"Only inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}"
-                )
-        except:
-            pass
-
-        if inserted_count == 0:
-            # If no steps were inserted into runbook_steps, fall back to chunks table
+            # Log insertion results
             try:
                 from ai_service.core import get_logger
 
                 logger = get_logger(__name__)
-                logger.warning(
-                    f"Failed to insert any steps into runbook_steps table for runbook {title}. Using fallback chunks insertion."
-                )
+                if inserted_count == len(steps):
+                    logger.info(
+                        f"Successfully inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}"
+                    )
+                else:
+                    logger.error(
+                        f"Only inserted {inserted_count}/{len(steps)} steps into runbook_steps table for runbook {title}"
+                    )
             except:
                 pass
 
-            # Create a single chunk from the first step as fallback
-            if steps:
-                step = steps[0]
-                step_text = _create_runbook_step_embedding_text(step)
-                embedding = embeddings[0] if embeddings else embed_text(step_text)
-                if embedding is None:
-                    logger.error(f"Failed to generate embedding for fallback chunk. Skipping chunk creation.")
-                    # Skip chunk creation if embedding fails - no chunk will be created
-                else:
-                    embedding_str = "[" + ",".join(map(str, embedding)) + "]"
-
-                    metadata_dict = {
-                        "doc_type": "runbook_step",
-                        "step_id": step.step_id,
-                        "runbook_id": step.runbook_id,
-                        "condition": step.condition,
-                        "action": step.action,
-                        "service": step.service or service,
-                        "component": step.component or component,
-                        "title": title,
-                    }
-
-                    cur.execute(
-                        """
-                        INSERT INTO chunks (document_id, chunk_index, content, metadata, embedding, tsv)
-                        VALUES (%s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
-                        """,
-                        (
-                            doc_id,
-                            0,
-                            step_text,
-                            json.dumps(metadata_dict),
-                            embedding_str,
-                            step_text,
-                        ),
-                    )
-
+            if inserted_count == 0:
+                # If no steps were inserted into runbook_steps, fall back to chunks table
                 try:
                     from ai_service.core import get_logger
 
                     logger = get_logger(__name__)
-                    logger.info(f"Inserted fallback chunk for runbook {title}")
+                    logger.warning(
+                        f"Failed to insert any steps into runbook_steps table for runbook {title}. Using fallback chunks insertion."
+                    )
                 except:
                     pass
 
-        # Log before commit
-        try:
-            from ai_service.core import get_logger
+                # Create a single chunk from the first step as fallback
+                if steps:
+                    step = steps[0]
+                    step_text = _create_runbook_step_embedding_text(step)
+                    embedding = embeddings[0] if embeddings else embed_text(step_text)
+                    if embedding is None:
+                        try:
+                            from ai_service.core import get_logger
+                            logger = get_logger(__name__)
+                            logger.error(f"Failed to generate embedding for fallback chunk. Skipping chunk creation.")
+                        except:
+                            pass
+                        # Skip chunk creation if embedding fails - no chunk will be created
+                    else:
+                        embedding_str = "[" + ",".join(map(str, embedding)) + "]"
 
-            logger = get_logger(__name__)
-            logger.info(
-                f"About to commit transaction for runbook {title} with {inserted_count} steps inserted"
-            )
-        except:
-            pass
+                        metadata_dict = {
+                            "doc_type": "runbook_step",
+                            "step_id": step.step_id,
+                            "runbook_id": step.runbook_id,
+                            "condition": step.condition,
+                            "action": step.action,
+                            "service": step.service or service,
+                            "component": step.component or component,
+                            "title": title,
+                        }
 
-        conn.commit()
+                        cur.execute(
+                            """
+                            INSERT INTO chunks (document_id, chunk_index, content, metadata, embedding, tsv)
+                            VALUES (%s, %s, %s, %s::jsonb, %s::vector, to_tsvector('english', %s))
+                            """,
+                            (
+                                doc_id,
+                                0,
+                                step_text,
+                                json.dumps(metadata_dict),
+                                embedding_str,
+                                step_text,
+                            ),
+                        )
 
-        try:
-            from ai_service.core import get_logger
+                    try:
+                        from ai_service.core import get_logger
 
-            logger = get_logger(__name__)
-            logger.info(f"Successfully committed runbook {title} with {inserted_count} steps")
-        except:
-            pass
+                        logger = get_logger(__name__)
+                        logger.info(f"Inserted fallback chunk for runbook {title}")
+                    except:
+                        pass
 
-        return str(doc_id)
+            # Log before commit
+            try:
+                from ai_service.core import get_logger
 
-    except Exception as e:
-        conn.rollback()
-        try:
-            from ai_service.core import get_logger
+                logger = get_logger(__name__)
+                logger.info(
+                    f"About to commit transaction for runbook {title} with {inserted_count} steps inserted"
+                )
+            except:
+                pass
 
-            logger = get_logger(__name__)
-            logger.error(f"Transaction rolled back for runbook {title}: {str(e)}", exc_info=True)
-        except:
-            pass
-        raise e
-    finally:
-        cur.close()
-        conn.close()
+            conn.commit()
+
+            try:
+                from ai_service.core import get_logger
+
+                logger = get_logger(__name__)
+                logger.info(f"Successfully committed runbook {title} with {inserted_count} steps")
+            except:
+                pass
+
+            return str(doc_id)
+
+        except Exception as e:
+            conn.rollback()
+            try:
+                from ai_service.core import get_logger
+
+                logger = get_logger(__name__)
+                logger.error(f"Transaction rolled back for runbook {title}: {str(e)}", exc_info=True)
+            except:
+                pass
+            raise e
+        finally:
+            cur.close()
 
 
 def insert_incident_signature(
@@ -788,89 +805,93 @@ def insert_incident_signature(
     Returns:
         Signature ID (UUID as string)
     """
-    conn = get_db_connection()
-    cur = conn.cursor()
+    # Use context manager to ensure connection is returned to pool
+    with get_db_connection_context() as conn:
+        cur = conn.cursor()
 
-    try:
-        # Create embedding text for signature
-        signature_text = _create_incident_signature_embedding_text(signature)
+        try:
+            # Create embedding text for signature
+            signature_text = _create_incident_signature_embedding_text(signature)
 
-        # Generate embedding
-        embedding_model = DEFAULT_MODEL
-        embedding = embed_text(signature_text, model=embedding_model)
-        if embedding is None:
-            logger.error(f"Failed to generate embedding for incident signature {signature.incident_signature_id}. Skipping signature.")
-            cur.close()
-            conn.close()
-            raise ValueError(f"Failed to generate embedding for incident signature {signature.incident_signature_id}")
-        embedding_str = "[" + ",".join(map(str, embedding)) + "]"
+            # Generate embedding
+            embedding_model = DEFAULT_MODEL
+            embedding = embed_text(signature_text, model=embedding_model)
+            if embedding is None:
+                try:
+                    from ai_service.core import get_logger
+                    logger = get_logger(__name__)
+                    logger.error(f"Failed to generate embedding for incident signature {signature.incident_signature_id}. Skipping signature.")
+                except:
+                    pass
+                cur.close()
+                raise ValueError(f"Failed to generate embedding for incident signature {signature.incident_signature_id}")
+            embedding_str = "[" + ",".join(map(str, embedding)) + "]"
 
-        # Prepare arrays for PostgreSQL
-        symptoms_array = signature.symptoms if signature.symptoms else []
-        resolution_refs_array = signature.resolution_refs if signature.resolution_refs else []
-        source_incident_ids_array = [source_incident_id] if source_incident_id else []
+            # Prepare arrays for PostgreSQL
+            symptoms_array = signature.symptoms if signature.symptoms else []
+            resolution_refs_array = signature.resolution_refs if signature.resolution_refs else []
+            source_incident_ids_array = [source_incident_id] if source_incident_id else []
 
-        # Insert signature into incident_signatures table
-        signature_id = uuid.uuid4()
-        cur.execute(
-            """
-            INSERT INTO incident_signatures (
-                id, incident_signature_id, failure_type, error_class, symptoms,
-                affected_service, service, component, assignment_group, impact, urgency, close_notes, resolution_refs, embedding,
-                source_incident_ids, source_document_id, last_seen_at
+            # Insert signature into incident_signatures table
+            signature_id = uuid.uuid4()
+            cur.execute(
+                """
+                INSERT INTO incident_signatures (
+                    id, incident_signature_id, failure_type, error_class, symptoms,
+                    affected_service, service, component, assignment_group, impact, urgency, close_notes, resolution_refs, embedding,
+                    source_incident_ids, source_document_id, last_seen_at
+                )
+                VALUES (%s, %s, %s, %s, %s::TEXT[], %s, %s, %s, %s, %s, %s, %s, %s::TEXT[], %s::vector, %s::TEXT[], %s, %s)
+                ON CONFLICT (incident_signature_id) DO UPDATE SET
+                    failure_type = EXCLUDED.failure_type,
+                    error_class = EXCLUDED.error_class,
+                    symptoms = EXCLUDED.symptoms,
+                    affected_service = EXCLUDED.affected_service,
+                    service = EXCLUDED.service,
+                    component = EXCLUDED.component,
+                    assignment_group = EXCLUDED.assignment_group,
+                    impact = EXCLUDED.impact,
+                    urgency = EXCLUDED.urgency,
+                    close_notes = EXCLUDED.close_notes,
+                    resolution_refs = EXCLUDED.resolution_refs,
+                    embedding = EXCLUDED.embedding,
+                    source_incident_ids = array_cat(incident_signatures.source_incident_ids, EXCLUDED.source_incident_ids),
+                    source_document_id = COALESCE(EXCLUDED.source_document_id, incident_signatures.source_document_id),
+                    last_seen_at = EXCLUDED.last_seen_at,
+                    match_count = incident_signatures.match_count + 1,
+                    updated_at = now()
+                """,
+                (
+                    signature_id,
+                    signature.incident_signature_id,
+                    signature.failure_type,
+                    signature.error_class,
+                    symptoms_array,
+                    signature.affected_service,
+                    signature.service,
+                    signature.component,
+                    signature.assignment_group,
+                    signature.impact,
+                    signature.urgency,
+                    signature.close_notes,
+                    resolution_refs_array,
+                    embedding_str,
+                    source_incident_ids_array,
+                    source_document_id,
+                    datetime.now(),  # last_seen_at
+                ),
             )
-            VALUES (%s, %s, %s, %s, %s::TEXT[], %s, %s, %s, %s, %s, %s, %s, %s::TEXT[], %s::vector, %s::TEXT[], %s, %s)
-            ON CONFLICT (incident_signature_id) DO UPDATE SET
-                failure_type = EXCLUDED.failure_type,
-                error_class = EXCLUDED.error_class,
-                symptoms = EXCLUDED.symptoms,
-                affected_service = EXCLUDED.affected_service,
-                service = EXCLUDED.service,
-                component = EXCLUDED.component,
-                assignment_group = EXCLUDED.assignment_group,
-                impact = EXCLUDED.impact,
-                urgency = EXCLUDED.urgency,
-                close_notes = EXCLUDED.close_notes,
-                resolution_refs = EXCLUDED.resolution_refs,
-                embedding = EXCLUDED.embedding,
-                source_incident_ids = array_cat(incident_signatures.source_incident_ids, EXCLUDED.source_incident_ids),
-                source_document_id = COALESCE(EXCLUDED.source_document_id, incident_signatures.source_document_id),
-                last_seen_at = EXCLUDED.last_seen_at,
-                match_count = incident_signatures.match_count + 1,
-                updated_at = now()
-            """,
-            (
-                signature_id,
-                signature.incident_signature_id,
-                signature.failure_type,
-                signature.error_class,
-                symptoms_array,
-                signature.affected_service,
-                signature.service,
-                signature.component,
-                signature.assignment_group,
-                signature.impact,
-                signature.urgency,
-                signature.close_notes,
-                resolution_refs_array,
-                embedding_str,
-                source_incident_ids_array,
-                source_document_id,
-                datetime.now(),  # last_seen_at
-            ),
-        )
 
-        conn.commit()
+            conn.commit()
 
-        # NOTE: Chunk creation is NO LONGER NEEDED
-        # Triage retrieval now queries incident_signatures table directly
-        # (embeddings and tsvector are already in incident_signatures table)
+            # NOTE: Chunk creation is NO LONGER NEEDED
+            # Triage retrieval now queries incident_signatures table directly
+            # (embeddings and tsvector are already in incident_signatures table)
 
-        return str(signature_id)
+            return str(signature_id)
 
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        cur.close()
-        conn.close()
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cur.close()
