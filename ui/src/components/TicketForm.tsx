@@ -22,28 +22,33 @@ const allowedCategories = [
   "other",
 ];
 
-const emptyLabels = {
-  service: "Database",
-  component: "Database",
-  cmdb_ci: "Database-SQL",
-  category: "database",
-};
+// Removed emptyLabels - using real test incident data instead
 
-const makeInitialAlert = () => ({
-  alert_id: "sample-match-1",
-  title: "MATCHES_KB__Database_Alerts_High_Disk",
-  description:
-    "Database disk usage on primary SQL server has exceeded 90% for the last 20 minutes. Multiple I/O wait alerts observed on the database volume.",
-  source: "prometheus",
-  category: emptyLabels.category,
-  labels: {
-    ...emptyLabels,
-    environment: "production",
-    severity: "high",
-    alertname: "DatabaseDiskUsageHigh",
-  },
-  ts: new Date().toISOString(),
-});
+const makeInitialAlert = () => {
+  // Sample test incident from test_incidents.csv (INC6039763)
+  // This is a real database job failure incident
+  return {
+    alert_id: "INC6039763",
+    title: "SentryOne Monitoring/Alert",
+    description: `The SQL Server Agent job 'BACKUP_Native_SYS_DB_Full' failed on server BRPRWSQL506.INT.MGC.COM.
+
+Error: Unable to determine if the owner (INT\\Ssubramanian) has server access. Could not obtain information about Windows NT group/user 'INT\\Ssubramanian', error code 0x5. [SQLSTATE 42000] (Error 15404).
+
+The job failed immediately (duration: 0 seconds) at 10/29/2025 7:00:00 PM. This is a database maintenance job from Ola Hallengren's maintenance solution.`,
+    source: "servicenow",
+    category: "Monitoring/Alert",
+    labels: {
+      service: "Database-SQL",
+      component: "Database",
+      cmdb_ci: "Database-SQL",
+      environment: "production",
+      severity: "high",
+      alertname: "SQLServerAgentJobFailure",
+    },
+    affected_services: ["Database-SQL"], // Top-level field, not in labels
+    ts: "2025-10-29T19:01:00",
+  };
+};
 
 export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
   const [alert, setAlert] = useState(makeInitialAlert());
@@ -301,8 +306,8 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             </div>
             <select
               id="category"
-              value={alert.category || alert.labels.category}
-              onChange={(e) => handleLabelChange("category", e.target.value)}
+              value={alert.category || ""}
+              onChange={(e) => handleAlertChange("category", e.target.value)}
               required
               disabled={isLoading}
               className="flex h-10 w-full rounded-md border border-border/50 bg-secondary/50 px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all"

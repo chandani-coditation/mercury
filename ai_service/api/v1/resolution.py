@@ -85,6 +85,16 @@ async def resolution(
                             error_type="validation"
                         )
                         raise HTTPException(status_code=400, detail=error_msg)
+                    
+                    # Parse JSON string if needed (psycopg may return JSONB as string)
+                    import json
+                    if isinstance(triage_output, str):
+                        try:
+                            triage_output = json.loads(triage_output)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse triage_output JSON: {e}")
+                            raise ValueError(f"Invalid triage_output format: {e}")
+                    
                     resolution_result = resolution_agent(triage_output)
 
                     metadata = resolution_result.get("_metadata", {})
