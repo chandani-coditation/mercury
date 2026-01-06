@@ -9,20 +9,72 @@ This module handles:
 
 from typing import List, Dict, Optional
 import re
+import json
+from pathlib import Path
 from ai_service.core import get_logger
 
 logger = get_logger(__name__)
 
-# Step type order for logical flow
-STEP_TYPE_ORDER = {
-    "investigation": 1,
-    "mitigation": 2,
-    "resolution": 3,
-    "verification": 4,
-    "rollback": 5,
-    "documentation": 99,  # Should be filtered out
-    "context": 99,  # Should be filtered out
-}
+# Load step classification config
+_STEP_CLASSIFICATION_CONFIG = None
+
+
+def _load_step_classification_config():
+    """Load step classification configuration from config file."""
+    global _STEP_CLASSIFICATION_CONFIG
+    if _STEP_CLASSIFICATION_CONFIG is None:
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            config_path = project_root / "config" / "step_classification.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    _STEP_CLASSIFICATION_CONFIG = json.load(f)
+            else:
+                _STEP_CLASSIFICATION_CONFIG = {}
+                logger.warning("step_classification.json not found, using defaults")
+        except Exception as e:
+            logger.warning(f"Failed to load step_classification.json: {e}")
+            _STEP_CLASSIFICATION_CONFIG = {}
+    return _STEP_CLASSIFICATION_CONFIG
+
+
+def _get_step_type_priority_order():
+    """Get step type priority order from config."""
+    config = _load_step_classification_config()
+    return config.get("step_types", {}).get("priority_order", [
+        "investigation", "mitigation", "resolution", "verification", "rollback"
+    ])
+
+
+def _get_filtered_step_types():
+    """Get step types that should be filtered out."""
+    config = _load_step_classification_config()
+    return config.get("step_types", {}).get("filtered_types", {}).get("types", ["documentation", "context"])
+
+
+def _get_documentation_phrases():
+    """Get documentation phrases from config."""
+    config = _load_step_classification_config()
+    return config.get("documentation_phrases", {}).get("phrases", [
+        "actions taken", "actions that were", "actions which were",
+        "record all actions", "document all actions", "log all actions"
+    ])
+
+
+def _get_risk_level_keywords():
+    """Get risk level keywords from config."""
+    config = _load_step_classification_config()
+    risk_levels = config.get("risk_levels", {})
+    return {
+        "valid_levels": risk_levels.get("valid_levels", ["low", "medium", "high", "critical"]),
+        "default_level": risk_levels.get("default_level", "medium"),
+        "high_risk": risk_levels.get("high_risk_keywords", {}).get("keywords", [
+            "kill", "delete", "drop", "remove", "stop", "restart"
+        ]),
+        "medium_risk": risk_levels.get("medium_risk_keywords", {}).get("keywords", [
+            "update", "modify", "change", "alter"
+        ])
+    }
 
 
 def classify_step_type(step: Dict) -> str:
@@ -98,17 +150,8 @@ def classify_step_type(step: Dict) -> str:
         return "documentation"
 
     # Check if action is about recording/documenting actions taken (past tense indicates documentation)
-    if any(
-        phrase in action_lower
-        for phrase in [
-            "actions taken",
-            "actions that were",
-            "actions which were",
-            "record all actions",
-            "document all actions",
-            "log all actions",
-        ]
-    ):
+    documentation_phrases = _get_documentation_phrases()
+    if any(phrase in action_lower for phrase in documentation_phrases):
         return "documentation"
 
     # Check for "assess impact" or "impact assessment" patterns
@@ -240,9 +283,10 @@ def filter_steps(steps: List[Dict]) -> List[Dict]:
         Filtered list with documentation/context steps removed
     """
     filtered = []
+    filtered_types = _get_filtered_step_types()
     for step in steps:
         step_type = classify_step_type(step)
-        if step_type not in ["documentation", "context"]:
+        if step_type not in filtered_types:
             step["_inferred_step_type"] = step_type
             filtered.append(step)
         else:
@@ -283,9 +327,10 @@ def order_steps_by_type(steps: List[Dict]) -> List[Dict]:
             reverse=True,
         )
 
-    # Order by type priority
+    # Order by type priority (from config)
     ordered = []
-    for step_type in ["investigation", "mitigation", "resolution", "verification", "rollback"]:
+    step_type_order = _get_step_type_priority_order()
+    for step_type in step_type_order:
         if step_type in by_type:
             ordered.extend(by_type[step_type])
 
@@ -448,15 +493,19 @@ def transform_step_for_ui(step: Dict, step_number: int) -> Dict:
             expected_outcome = "Step completed successfully"
 
     # Get risk level
-    risk_level = step.get("risk_level", "medium")
-    if not risk_level or risk_level.lower() not in ["low", "medium", "high"]:
+    risk_config = _get_risk_level_keywords()
+    valid_levels = risk_config["valid_levels"]
+    default_level = risk_config["default_level"]
+    high_risk_keywords = risk_config["high_risk"]
+    medium_risk_keywords = risk_config["medium_risk"]
+    
+    risk_level = step.get("risk_level", default_level)
+    if not risk_level or risk_level.lower() not in valid_levels:
         # Infer from action
         action_lower = cleaned_action.lower()
-        if any(
-            word in action_lower for word in ["kill", "delete", "drop", "remove", "stop", "restart"]
-        ):
+        if any(word in action_lower for word in high_risk_keywords):
             risk_level = "high"
-        elif any(word in action_lower for word in ["update", "modify", "change", "alter"]):
+        elif any(word in action_lower for word in medium_risk_keywords):
             risk_level = "medium"
         else:
             risk_level = "low"

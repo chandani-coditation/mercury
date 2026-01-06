@@ -1,0 +1,72 @@
+{
+  "_comment": "Step Classification Configuration",
+  "_description": "Defines step types, risk levels, and classification patterns. Used for step transformation, ranking, and policy evaluation.",
+  
+  "step_types": {
+    "_description": "Step type definitions and priority order",
+    "_note": "Step types are ordered by priority - earlier types take precedence",
+    "priority_order": [
+      "investigation",
+      "mitigation",
+      "resolution",
+      "verification",
+      "rollback"
+    ],
+    "filtered_types": {
+      "_description": "Step types that should be filtered out (not included in recommendations)",
+      "types": ["documentation", "context"]
+    }
+  },
+  
+  "documentation_phrases": {
+    "_description": "Phrases that indicate a step is documentation (past tense, recording actions)",
+    "phrases": [
+      "actions taken",
+      "actions that were",
+      "actions which were",
+      "record all actions",
+      "document all actions",
+      "log all actions"
+    ]
+  },
+  
+  "risk_levels": {
+    "_description": "Risk level definitions and validation",
+    "valid_levels": ["low", "medium", "high", "critical"],
+    "default_level": "medium",
+    "high_risk_keywords": {
+      "_description": "Keywords that indicate high risk actions",
+      "keywords": [
+        "kill",
+        "delete",
+        "drop",
+        "remove",
+        "stop",
+        "restart"
+      ]
+    },
+    "medium_risk_keywords": {
+      "_description": "Keywords that indicate medium risk actions",
+      "keywords": [
+        "update",
+        "modify",
+        "change",
+        "alter"
+      ]
+    },
+    "high_risk_levels": {
+      "_description": "Risk levels that require rollback",
+      "levels": ["high", "critical"]
+    }
+  },
+  
+  "condition_text_exclusions": {
+    "_description": "Condition text values that should be excluded (treated as None)",
+    "exclusions": [
+      "step applies",
+      "n/a",
+      ""
+    ]
+  }
+}
+

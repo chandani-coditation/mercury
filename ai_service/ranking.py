@@ -8,9 +8,55 @@ Per architecture: Steps are ranked by:
 
 from typing import List, Dict, Optional
 import re
+import json
+from pathlib import Path
 from ai_service.core import get_logger
 
 logger = get_logger(__name__)
+
+# Load step classification config
+_STEP_CLASSIFICATION_CONFIG = None
+
+
+def _load_step_classification_config():
+    """Load step classification configuration from config file."""
+    global _STEP_CLASSIFICATION_CONFIG
+    if _STEP_CLASSIFICATION_CONFIG is None:
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            config_path = project_root / "config" / "step_classification.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    _STEP_CLASSIFICATION_CONFIG = json.load(f)
+            else:
+                _STEP_CLASSIFICATION_CONFIG = {}
+                logger.warning("step_classification.json not found, using defaults")
+        except Exception as e:
+            logger.warning(f"Failed to load step_classification.json: {e}")
+            _STEP_CLASSIFICATION_CONFIG = {}
+    return _STEP_CLASSIFICATION_CONFIG
+
+
+def _get_risk_level_keywords():
+    """Get risk level keywords from config."""
+    config = _load_step_classification_config()
+    risk_levels = config.get("risk_levels", {})
+    return {
+        "high_risk": risk_levels.get("high_risk_keywords", {}).get("keywords", [
+            "kill", "delete", "drop", "remove", "stop", "restart"
+        ]),
+        "medium_risk": risk_levels.get("medium_risk_keywords", {}).get("keywords", [
+            "update", "modify", "change", "alter"
+        ])
+    }
+
+
+def _get_condition_text_exclusions():
+    """Get condition text exclusions from config."""
+    config = _load_step_classification_config()
+    return config.get("condition_text_exclusions", {}).get("exclusions", [
+        "step applies", "n/a", ""
+    ])
 
 
 def _clean_action_for_plain_english(action: str) -> str:
@@ -286,22 +332,21 @@ def assemble_recommendations(
         if not risk_level:
             # Infer risk level from action content
             action_lower = enhanced_action.lower()
-            if any(
-                word in action_lower
-                for word in ["kill", "delete", "drop", "remove", "stop", "restart"]
-            ):
+            risk_keywords = _get_risk_level_keywords()
+            if any(word in action_lower for word in risk_keywords["high_risk"]):
                 risk_level = "high"
-            elif any(word in action_lower for word in ["update", "modify", "change", "alter"]):
+            elif any(word in action_lower for word in risk_keywords["medium_risk"]):
                 risk_level = "medium"
             else:
                 risk_level = "low"
 
+        condition_exclusions = _get_condition_text_exclusions()
         recommendation = {
             "step_id": step.get("step_id"),
             "action": enhanced_action,
             "condition": (
                 condition_text
-                if condition_text and condition_text.lower() not in ["step applies", "n/a"]
+                if condition_text and condition_text.lower() not in [excl.lower() for excl in condition_exclusions]
                 else None
             ),
             "expected_outcome": expected_outcome,

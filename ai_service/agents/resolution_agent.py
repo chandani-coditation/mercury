@@ -10,10 +10,56 @@ Per architecture: Resolution agent:
 """
 
 from typing import Dict, Any, Optional, List
+import json
+from pathlib import Path
 from ai_service.core import get_logger, get_llm_config
 from ai_service.models import TriageOutput
 from ai_service.repositories import IncidentRepository
 from ai_service.core import IncidentNotFoundError
+
+# Load problem keywords config
+_PROBLEM_KEYWORDS_CONFIG = None
+
+
+def _load_problem_keywords_config():
+    """Load problem keywords configuration from config file."""
+    global _PROBLEM_KEYWORDS_CONFIG
+    if _PROBLEM_KEYWORDS_CONFIG is None:
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            config_path = project_root / "config" / "problem_keywords.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    _PROBLEM_KEYWORDS_CONFIG = json.load(f)
+            else:
+                _PROBLEM_KEYWORDS_CONFIG = {}
+                logger = get_logger(__name__)
+                logger.warning("problem_keywords.json not found, using defaults")
+        except Exception as e:
+            logger = get_logger(__name__)
+            logger.warning(f"Failed to load problem_keywords.json: {e}")
+            _PROBLEM_KEYWORDS_CONFIG = {}
+    return _PROBLEM_KEYWORDS_CONFIG
+
+
+def _get_corrective_action_keywords():
+    """Get corrective action keywords from config."""
+    config = _load_problem_keywords_config()
+    return config.get("corrective_action_keywords", {}).get("keywords", [
+        "reduce", "clean", "fix", "resolve", "remove", "clear", "free", "backup"
+    ])
+
+
+def _get_preferred_step_types():
+    """Get preferred step types for filtering from config."""
+    config = _load_problem_keywords_config()
+    return config.get("step_type_filters", {}).get("preferred_types", ["mitigation", "resolution"])
+
+
+def _get_problem_keyword_groups():
+    """Get problem keyword groups from config."""
+    config = _load_problem_keywords_config()
+    return config.get("problem_keyword_groups", {})
 from retrieval.resolution_retrieval import (
     retrieve_runbook_steps,
     retrieve_historical_resolutions,
@@ -233,19 +279,8 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
             # Boost relevance if step mentions problem keywords
             if any(keyword in step_text for keyword in relevance_keywords):
                 # Also check if it's a corrective action (not just investigation)
-                if any(
-                    word in step_text
-                    for word in [
-                        "reduce",
-                        "clean",
-                        "fix",
-                        "resolve",
-                        "remove",
-                        "clear",
-                        "free",
-                        "backup",
-                    ]
-                ):
+                corrective_keywords = _get_corrective_action_keywords()
+                if any(word in step_text for word in corrective_keywords):
                     # Boost this step significantly
                     current_score = step.get("combined_score", 0.0)
                     step["combined_score"] = min(1.0, current_score + 0.3)
@@ -260,12 +295,13 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     selected_steps = ordered_steps[:max_steps]
 
     # 7.5. Ensure at least one mitigation or resolution step is included
+    preferred_types = _get_preferred_step_types()
     selected_types = {step.get("_inferred_step_type") for step in selected_steps}
-    if "mitigation" not in selected_types and "resolution" not in selected_types:
-        # Find the best mitigation or resolution step and add it
+    if not any(step_type in selected_types for step_type in preferred_types):
+        # Find the best preferred step type and add it
         for step in ordered_steps:
             step_type = step.get("_inferred_step_type")
-            if step_type in ["mitigation", "resolution"]:
+            if step_type in preferred_types:
                 if step not in selected_steps:
                     selected_steps.append(step)
                     logger.info(
@@ -603,29 +639,17 @@ def _identify_root_problem(triage_output: Dict[str, Any], incident_signature: An
     # Use summary for additional context
     summary = triage_output.get("summary", "")
     if summary:
-        # Extract key problem indicators from summary (generic, not hard-coded)
+        # Extract key problem indicators from summary using config-driven keyword groups
         summary_lower = summary.lower()
         problem_keywords = []
-        if any(word in summary_lower for word in ["connection", "saturation", "max_connections"]):
-            problem_keywords.append("connection saturation")
-        if any(word in summary_lower for word in ["replication", "lag", "delay"]):
-            problem_keywords.append("replication lag")
-        if any(word in summary_lower for word in ["deadlock", "lock"]):
-            problem_keywords.append("deadlock")
-        if any(word in summary_lower for word in ["slow", "query", "performance"]):
-            problem_keywords.append("slow query")
-        if any(word in summary_lower for word in ["cluster", "node", "quorum"]):
-            problem_keywords.append("cluster issue")
-        if any(word in summary_lower for word in ["disk", "space", "volume", "usage"]):
-            problem_keywords.append("disk usage")
-        if any(word in summary_lower for word in ["io", "i/o", "wait"]):
-            problem_keywords.append("io wait")
-        if any(word in summary_lower for word in ["memory", "ram"]):
-            problem_keywords.append("memory")
-        if any(word in summary_lower for word in ["cpu", "load"]):
-            problem_keywords.append("cpu")
-        if any(word in summary_lower for word in ["network", "latency", "bandwidth"]):
-            problem_keywords.append("network")
+        keyword_groups = _get_problem_keyword_groups()
+        
+        # Check each keyword group from config
+        for group_name, group_config in keyword_groups.items():
+            keywords = group_config.get("keywords", [])
+            problem_type = group_config.get("problem_type", group_name)
+            if any(word in summary_lower for word in keywords):
+                problem_keywords.append(problem_type)
 
         if problem_keywords:
             problem_parts.extend(problem_keywords)

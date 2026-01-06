@@ -2,65 +2,50 @@
 
 ## 🟡 Medium Priority Issues
 
-### 1. Remove Hardcoded Step Type and Risk Level Logic
-**Status**: 🟡 PENDING  
-**Impact**: Step type detection, risk level assessment, and step ordering use hardcoded values  
-**Location**: `ai_service/step_transformation.py`, `ai_service/ranking.py`, `ai_service/policy.py`
+### 1. ✅ Remove Hardcoded Step Type and Risk Level Logic (COMPLETED)
+**Status**: ✅ COMPLETED  
+**Impact**: Step type detection, risk level assessment, and step ordering are now config-driven  
+**Location**: `ai_service/step_transformation.py`, `ai_service/ranking.py`, `ai_service/policy.py`, `config/step_classification.json`
 
-**Hardcoded Values Found**:
-- **step_transformation.py**:
-  - Line 103-109: Documentation phrase detection keywords (hardcoded list)
-  - Line 245: Step type whitelist `["documentation", "context"]` (hardcoded)
-  - Line 288: Step type priority order `["investigation", "mitigation", "resolution", "verification", "rollback"]` (hardcoded)
-  - Line 452: Risk level validation `["low", "medium", "high"]` (hardcoded)
-  - Line 456, 459: Dangerous/risky keyword lists (hardcoded)
-- **ranking.py**:
-  - Line 291: Dangerous action keywords `["kill", "delete", "drop", "remove", "stop", "restart"]` (hardcoded)
-  - Line 294: Modification keywords `["update", "modify", "change", "alter"]` (hardcoded)
-  - Line 304: Condition text exclusions `["step applies", "n/a"]` (hardcoded)
-- **policy.py**:
-  - Line 172: High risk levels `["high", "critical"]` (hardcoded)
-  - Line 199: Risk level check for "high" (hardcoded)
-
-**Tasks**:
-- [ ] Create `config/step_classification.json` with:
+**Completed**:
+- ✅ Created `config/step_classification.json` with:
   - Step type definitions and priority order
   - Documentation phrase patterns
   - Risk level definitions and keywords
   - Dangerous action keywords
   - Modification keywords
   - Condition text exclusions
-- [ ] Refactor `step_transformation.py` to use config
-- [ ] Refactor `ranking.py` to use config
-- [ ] Refactor `policy.py` to use config
-- [ ] Test with various step types and risk levels
+- ✅ Refactored `step_transformation.py` to use config
+- ✅ Refactored `ranking.py` to use config
+- ✅ Refactored `policy.py` to use config
+- ✅ All hardcoded step type and risk level logic removed
+
+**Benefits**:
+- Zero hardcoding: all step classification logic comes from config
+- Fully extensible: add new step types or risk keywords without code changes
+- Maintainable: centralized configuration
+- Consistent: same classification logic used everywhere
 
 ---
 
-### 2. Remove Hardcoded Problem Keyword Detection
-**Status**: 🟡 PENDING  
-**Impact**: Problem keyword extraction uses hardcoded lists  
-**Location**: `ai_service/agents/resolution_agent.py`
+### 2. ✅ Remove Hardcoded Problem Keyword Detection (COMPLETED)
+**Status**: ✅ COMPLETED  
+**Impact**: Problem keyword extraction is now config-driven  
+**Location**: `ai_service/agents/resolution_agent.py`, `config/problem_keywords.json`
 
-**Hardcoded Values Found**:
-- Line 238-247: Corrective action keywords `["reduce", "clean", "fix", "resolve", "remove", "clear", "free", "backup"]` (hardcoded)
-- Line 268: Step type filter `["mitigation", "resolution"]` (hardcoded)
-- Line 609-628: Problem keyword detection lists:
-  - Connection: `["connection", "saturation", "max_connections"]`
-  - Replication: `["replication", "lag", "delay"]`
-  - Deadlock: `["deadlock", "lock"]`
-  - Performance: `["slow", "query", "performance"]`
-  - Cluster: `["cluster", "node", "quorum"]`
-  - Disk: `["disk", "space", "volume", "usage"]`
-  - IO: `["io", "i/o", "wait"]`
-  - Memory: `["memory", "ram"]`
-  - CPU: `["cpu", "load"]`
-  - Network: `["network", "latency", "bandwidth"]`
+**Completed**:
+- ✅ Created `config/problem_keywords.json` with:
+  - Corrective action keywords
+  - Step type filters
+  - Problem keyword groups (connection, replication, deadlock, performance, cluster, disk, IO, memory, CPU, network)
+- ✅ Refactored `resolution_agent.py` to use config-driven keyword detection
+- ✅ All hardcoded problem keyword lists removed
 
-**Tasks**:
-- [ ] Create `config/problem_keywords.json` with keyword groups and mappings
-- [ ] Refactor `resolution_agent.py` to use config-driven keyword detection
-- [ ] Test problem keyword extraction with various summaries
+**Benefits**:
+- Zero hardcoding: all problem keyword detection comes from config
+- Fully extensible: add new problem types or keywords without code changes
+- Maintainable: centralized configuration
+- Consistent: same keyword detection logic used everywhere
 
 ---
 
@@ -214,8 +199,8 @@
 ## 🎯 Priority Summary
 
 **Medium Priority**:
-1. 🟡 Remove Hardcoded Step Type and Risk Level Logic (#1)
-2. 🟡 Remove Hardcoded Problem Keyword Detection (#2)
+1. ✅ Remove Hardcoded Step Type and Risk Level Logic (#1) - COMPLETED
+2. ✅ Remove Hardcoded Problem Keyword Detection (#2) - COMPLETED
 3. 🟢 Remove Hardcoded UI Defaults (#3) - LOW PRIORITY
 4. 🟡 MMR Testing and Documentation (#4)
 5. 🟡 Integration Tests for Service/Component Filtering (#5)

@@ -1,9 +1,40 @@
 """Policy gates for resolution actions - configuration-driven."""
 
 from typing import Dict, Optional
+import json
+from pathlib import Path
 from ai_service.core import get_policy_config, get_logger
 
 logger = get_logger(__name__)
+
+# Load step classification config
+_STEP_CLASSIFICATION_CONFIG = None
+
+
+def _load_step_classification_config():
+    """Load step classification configuration from config file."""
+    global _STEP_CLASSIFICATION_CONFIG
+    if _STEP_CLASSIFICATION_CONFIG is None:
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            config_path = project_root / "config" / "step_classification.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    _STEP_CLASSIFICATION_CONFIG = json.load(f)
+            else:
+                _STEP_CLASSIFICATION_CONFIG = {}
+                logger.warning("step_classification.json not found, using defaults")
+        except Exception as e:
+            logger.warning(f"Failed to load step_classification.json: {e}")
+            _STEP_CLASSIFICATION_CONFIG = {}
+    return _STEP_CLASSIFICATION_CONFIG
+
+
+def _get_high_risk_levels():
+    """Get high risk levels from config."""
+    config = _load_step_classification_config()
+    risk_levels = config.get("risk_levels", {})
+    return risk_levels.get("high_risk_levels", {}).get("levels", ["high", "critical"])
 
 
 def evaluate_condition(condition: Dict, triage_output: Dict) -> bool:
@@ -169,7 +200,8 @@ def get_resolution_policy(severity: str, risk_level: str) -> Dict:
     policy = get_policy_from_config(triage_output)
 
     # Override rollback_required based on risk_level
-    if risk_level in ["high", "critical"]:
+    high_risk_levels = _get_high_risk_levels()
+    if risk_level in high_risk_levels:
         policy["rollback_required"] = True
 
     return policy
@@ -196,7 +228,8 @@ def should_auto_apply_resolution(resolution_output: Dict) -> bool:
         return False
 
     # High risk always requires approval
-    if risk_level == "high":
+    high_risk_levels = _get_high_risk_levels()
+    if risk_level in high_risk_levels:
         return False
 
     # Low and medium risk can auto-apply

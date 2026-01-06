@@ -1,0 +1,69 @@
+{
+  "_comment": "Problem Keyword Detection Configuration",
+  "_description": "Keyword groups for detecting problem types from incident summaries. Used for intelligent step selection and problem identification.",
+  
+  "corrective_action_keywords": {
+    "_description": "Keywords that indicate a step is a corrective action (not just investigation)",
+    "keywords": [
+      "reduce",
+      "clean",
+      "fix",
+      "resolve",
+      "remove",
+      "clear",
+      "free",
+      "backup"
+    ]
+  },
+  
+  "step_type_filters": {
+    "_description": "Step types to filter for when selecting steps",
+    "preferred_types": ["mitigation", "resolution"]
+  },
+  
+  "problem_keyword_groups": {
+    "_description": "Keyword groups that map to specific problem types",
+    "_note": "Each group contains keywords that, when found in summary, indicate that problem type",
+    "connection_saturation": {
+      "keywords": ["connection", "saturation", "max_connections"],
+      "problem_type": "connection saturation"
+    },
+    "replication_lag": {
+      "keywords": ["replication", "lag", "delay"],
+      "problem_type": "replication lag"
+    },
+    "deadlock": {
+      "keywords": ["deadlock", "lock"],
+      "problem_type": "deadlock"
+    },
+    "slow_query": {
+      "keywords": ["slow", "query", "performance"],
+      "problem_type": "slow query"
+    },
+    "cluster_issue": {
+      "keywords": ["cluster", "node", "quorum"],
+      "problem_type": "cluster issue"
+    },
+    "disk_usage": {
+      "keywords": ["disk", "space", "volume", "usage"],
+      "problem_type": "disk usage"
+    },
+    "io_wait": {
+      "keywords": ["io", "i/o", "wait"],
+      "problem_type": "io wait"
+    },
+    "memory": {
+      "keywords": ["memory", "ram"],
+      "problem_type": "memory"
+    },
+    "cpu": {
+      "keywords": ["cpu", "load"],
+      "problem_type": "cpu"
+    },
+    "network": {
+      "keywords": ["network", "latency", "bandwidth"],
+      "problem_type": "network"
+    }
+  }
+}
+
