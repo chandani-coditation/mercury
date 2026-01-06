@@ -30,8 +30,6 @@ export interface ReportData {
   resolution: {
     steps: string[];
     status: string;
-    risk_level?: string;
-    estimated_time?: number;
     reasoning?: string;
   };
 }
@@ -493,34 +491,7 @@ export const generateHTMLReport = (data: ReportData): string => {
                     : ""
                 }
                 
-                ${
-                  data.resolution.risk_level || data.resolution.estimated_time
-                    ? `
-                <div class="stats-grid">
-                    ${
-                      data.resolution.risk_level
-                        ? `
-                    <div class="stat-card">
-                        <div class="stat-value">${data.resolution.risk_level.toUpperCase()}</div>
-                        <div class="stat-label">Risk Level</div>
-                    </div>
-                    `
-                        : ""
-                    }
-                    ${
-                      data.resolution.estimated_time
-                        ? `
-                    <div class="stat-card">
-                        <div class="stat-value">${data.resolution.estimated_time} min</div>
-                        <div class="stat-label">Est. Duration</div>
-                    </div>
-                    `
-                        : ""
-                    }
-                </div>
-                `
-                    : ""
-                }
+                {/* Removed: Risk level and estimated time stats (deprecated fields) */}
                 
                 <ol class="resolution-steps">
                     ${data.resolution.steps

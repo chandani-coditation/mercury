@@ -260,17 +260,8 @@ const Index = () => {
         recommendations: recommendations, // Old format
         resolution_steps: stepsAsStrings, // Legacy format: array of strings
         // Keep rollback_plan as-is (can be string or object)
-        risk_level: resolution.risk_level || data.risk_level || null,
         overall_confidence:
           resolution.overall_confidence || resolution.confidence || null,
-        estimated_time_minutes:
-          resolution.estimated_time_minutes ||
-          resolution.estimated_duration ||
-          null,
-        estimated_duration:
-          resolution.estimated_duration ||
-          resolution.estimated_time_minutes ||
-          null,
       });
 
       // Update policy data to reflect approval
@@ -450,8 +441,6 @@ const Index = () => {
         setResolutionData({
           resolution_steps: [],
           rollback_plan: null,
-          risk_level: null,
-          estimated_time_minutes: null,
           confidence: null,
           reasoning: null,
         });

@@ -82,7 +82,6 @@ from ai_service.step_transformation import (
     filter_steps,
     order_steps_by_type,
     transform_step_for_ui,
-    calculate_estimated_time,
     clean_action_for_ui,
 )
 import json
@@ -395,13 +394,8 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         if len(final_steps) >= 3:
             overall_confidence = min(0.85, overall_confidence + 0.1)
 
-    risk_levels = [s.get("risk_level", "medium") for s in final_steps]
-    risk_level = (
-        "high" if "high" in risk_levels else ("medium" if "medium" in risk_levels else "low")
-    )
-
-    # 11. Calculate estimated time
-    estimated_time = calculate_estimated_time(selected_steps)
+    # Note: risk_level and estimated_time calculations removed - these fields are deprecated
+    # They are set to None in the output for backward compatibility
 
     # 12. Build reasoning from triage signals
     summary = triage_output.get("summary", "")
@@ -459,6 +453,8 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
                 reasoning = reasoning[:270] + "... (from runbook procedures)"
 
     # 13. Build final output in new format
+    # Note: risk_level and estimated_time_minutes are deprecated and set to None
+    # step.risk_level is also deprecated but kept for backward compatibility (set to None)
     result = {
         "steps": [
             {
@@ -466,12 +462,15 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
                 "title": step.get("title"),
                 "action": step.get("action"),
                 "expected_outcome": step.get("expected_outcome"),
-                "risk_level": step.get("risk_level"),
+                # risk_level deprecated - not based on historical data, set to None
+                "risk_level": None,
             }
             for step in final_steps
         ],
-        "estimated_time_minutes": estimated_time,
-        "risk_level": risk_level,
+        # estimated_time_minutes removed - not reliable, set to None
+        "estimated_time_minutes": None,
+        # risk_level deprecated - not based on historical data, set to None
+        "risk_level": None,
         "confidence": overall_confidence,
         "reasoning": reasoning,
         # Include metadata about runbook usage (for API response)
@@ -484,7 +483,7 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info(
         f"Resolution agent completed: {len(final_steps)} steps from {original_runbook_steps_count} runbook steps, "
-        f"confidence={overall_confidence:.2f}, risk={risk_level}, time={estimated_time}min"
+        f"confidence={overall_confidence:.2f}"
     )
 
     return result

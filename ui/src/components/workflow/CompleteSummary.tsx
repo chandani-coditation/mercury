@@ -101,12 +101,8 @@ export const CompleteSummary = ({
         recommendations: resolutionData.recommendations || [],
         steps: resolutionData.resolution_steps || resolutionData.steps || [],
         status: "completed",
-        risk_level: resolutionData.risk_level,
         overall_confidence:
           resolutionData.overall_confidence || resolutionData.confidence,
-        estimated_time:
-          resolutionData.estimated_time_minutes ||
-          resolutionData.estimated_duration,
         reasoning: resolutionData.reasoning,
       },
     };

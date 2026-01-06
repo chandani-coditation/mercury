@@ -1,8 +1,6 @@
 import {
   ArrowLeft,
   CheckCircle,
-  ArrowRight,
-  Clock,
   AlertTriangle,
   Brain,
   Info,
@@ -12,7 +10,6 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useState } from "react";
 import {
   Dialog,
@@ -38,28 +35,10 @@ export const ResolutionView = ({
 
   const resolution = data.resolution || data;
 
-  // New structure: recommendations array (old format)
-  const recommendations = resolution.recommendations || [];
-
   // New structure: steps array with objects (new format)
-  // Format: [{ step_number, title, action, expected_outcome, risk_level }, ...]
+  // Format: [{ step_number, title, action, expected_outcome }, ...]
   const stepsArray = resolution.steps || [];
 
-  // Legacy structure: steps as strings (for backward compatibility)
-  const stepsAsStrings =
-    recommendations.length > 0
-      ? recommendations.map((rec: any) => rec.action || rec.step || "")
-      : resolution.resolution_steps || data.resolution_steps || [];
-
-  // Determine which format we have
-  const hasStepsArray =
-    stepsArray.length > 0 && typeof stepsArray[0] === "object";
-  const hasRecommendations = recommendations.length > 0;
-  const hasLegacySteps = stepsAsStrings.length > 0 && !hasStepsArray;
-
-  const riskLevel = resolution.risk_level || data.risk_level || "unknown";
-  const estimatedTime =
-    resolution.estimated_time_minutes || resolution.estimated_duration;
   const overallConfidence =
     resolution.overall_confidence || resolution.confidence;
   const reasoning = resolution.reasoning;
@@ -88,19 +67,6 @@ export const ResolutionView = ({
     onMarkComplete();
   };
 
-  const getRiskColor = (risk: string) => {
-    switch (risk.toLowerCase()) {
-      case "low":
-        return "text-success border-success/30 bg-success/10";
-      case "medium":
-        return "text-warning border-warning/30 bg-warning/10";
-      case "high":
-        return "text-destructive border-destructive/30 bg-destructive/10";
-      default:
-        return "text-muted-foreground border-border/30 bg-secondary/10";
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Success Header */}
@@ -115,32 +81,6 @@ export const ResolutionView = ({
 
         {/* Key Metrics */}
         <div className="flex gap-4">
-          {estimatedTime && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
-              <Clock className="w-4 h-4 text-primary" />
-              <span className="text-sm">
-                <span className="font-semibold text-primary">
-                  {estimatedTime}
-                </span>
-                <span className="text-muted-foreground ml-1">min</span>
-              </span>
-            </div>
-          )}
-
-          {riskLevel && riskLevel !== "unknown" && (
-            <div
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-lg border",
-                getRiskColor(riskLevel),
-              )}
-            >
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm font-semibold uppercase">
-                {riskLevel} Risk
-              </span>
-            </div>
-          )}
-
           {overallConfidence && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/20">
               <Brain className="w-4 h-4 text-success" />
@@ -180,14 +120,13 @@ export const ResolutionView = ({
             Resolution Recommendations
           </h3>
           <div className="space-y-3">
-            {hasStepsArray ? (
+            {stepsArray.length > 0 ? (
               // New format: steps array with objects
               stepsArray.map((step: any, index: number) => {
                 const stepNumber = step.step_number || index + 1;
                 const stepTitle = step.title || "";
                 const stepAction = step.action || "";
                 const stepExpectedOutcome = step.expected_outcome || "";
-                const stepRiskLevel = step.risk_level || "medium";
                 const stepCommands =
                   commands[stepNumber - 1] ||
                   commands[(stepNumber - 1).toString()] ||
@@ -230,168 +169,7 @@ export const ResolutionView = ({
                           </div>
                         )}
 
-                        <div className="flex items-center gap-3 mt-2">
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-semibold ${
-                              stepRiskLevel === "low"
-                                ? "bg-success/20 text-success"
-                                : stepRiskLevel === "medium"
-                                  ? "bg-warning/20 text-warning"
-                                  : "bg-destructive/20 text-destructive"
-                            }`}
-                          >
-                            {stepRiskLevel.toUpperCase()} RISK
-                          </span>
-                        </div>
-
-                        {hasCommands && (
-                          <div className="mt-3 space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Terminal className="w-3 h-3" />
-                              <span>Commands:</span>
-                            </div>
-                            {stepCommands.map((cmd: string, cmdIdx: number) => (
-                              <pre
-                                key={cmdIdx}
-                                className="text-xs bg-black/20 border border-border/30 rounded p-2 overflow-x-auto"
-                              >
-                                <code className="text-primary">{cmd}</code>
-                              </pre>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : hasRecommendations ? (
-              // Old recommendations format
-              recommendations.map((rec: any, index: number) => {
-                const stepAction = rec.action || "";
-                const stepCondition = rec.condition || "";
-                const stepExpectedOutcome = rec.expected_outcome || "";
-                const stepRollback = rec.rollback || "";
-                const stepRiskLevel = rec.risk_level || "medium";
-                const stepConfidence = rec.confidence || 0;
-                const stepProvenance = rec.provenance || {};
-                const stepCommands =
-                  commands[index] || commands[index.toString()] || [];
-                const hasCommands = stepCommands && stepCommands.length > 0;
-
-                return (
-                  <div
-                    key={index}
-                    className="bg-background/50 border border-border/30 rounded-lg p-4 hover:border-primary/30 transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
-                        {index + 1}
-                      </span>
-                      <div className="flex-1 space-y-2">
-                        {stepCondition && (
-                          <div>
-                            <span className="text-xs font-semibold text-muted-foreground">
-                              Condition:{" "}
-                            </span>
-                            <span className="text-sm text-foreground">
-                              {stepCondition}
-                            </span>
-                          </div>
-                        )}
-                        <div>
-                          <span className="text-xs font-semibold text-muted-foreground">
-                            Action:{" "}
-                          </span>
-                          <p className="text-sm text-foreground leading-relaxed">
-                            {stepAction}
-                          </p>
-                        </div>
-                        {stepExpectedOutcome && (
-                          <div>
-                            <span className="text-xs font-semibold text-muted-foreground">
-                              Expected Outcome:{" "}
-                            </span>
-                            <span className="text-sm text-foreground">
-                              {stepExpectedOutcome}
-                            </span>
-                          </div>
-                        )}
-                        {stepRollback && (
-                          <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded">
-                            <span className="text-xs font-semibold text-warning">
-                              Rollback:{" "}
-                            </span>
-                            <span className="text-xs text-foreground">
-                              {stepRollback}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-3 mt-2">
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-semibold ${
-                              stepRiskLevel === "low"
-                                ? "bg-success/20 text-success"
-                                : stepRiskLevel === "medium"
-                                  ? "bg-warning/20 text-warning"
-                                  : "bg-destructive/20 text-destructive"
-                            }`}
-                          >
-                            {stepRiskLevel.toUpperCase()} RISK
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Confidence: {Math.round(stepConfidence * 100)}%
-                          </span>
-                          {stepProvenance.runbook_id && (
-                            <span className="text-xs text-muted-foreground font-mono">
-                              Runbook:{" "}
-                              {stepProvenance.runbook_id.substring(0, 8)}...
-                            </span>
-                          )}
-                        </div>
-
-                        {hasCommands && (
-                          <div className="mt-3 space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Terminal className="w-3 h-3" />
-                              <span>Commands:</span>
-                            </div>
-                            {stepCommands.map((cmd: string, cmdIdx: number) => (
-                              <pre
-                                key={cmdIdx}
-                                className="text-xs bg-black/20 border border-border/30 rounded p-2 overflow-x-auto"
-                              >
-                                <code className="text-primary">{cmd}</code>
-                              </pre>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : hasLegacySteps ? (
-              // Legacy format: steps as strings
-              stepsAsStrings.map((step: string, index: number) => {
-                const stepCommands =
-                  commands[index] || commands[index.toString()] || [];
-                const hasCommands = stepCommands && stepCommands.length > 0;
-
-                return (
-                  <div
-                    key={index}
-                    className="bg-background/50 border border-border/30 rounded-lg p-4 hover:border-primary/30 transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
-                        {index + 1}
-                      </span>
-                      <div className="flex-1">
-                        <p className="text-sm text-foreground leading-relaxed">
-                          {step}
-                        </p>
+                        {/* Removed: Step-level risk level badge (deprecated field) */}
 
                         {hasCommands && (
                           <div className="mt-3 space-y-2">
@@ -498,14 +276,7 @@ export const ResolutionView = ({
                 {/* Show additional rollback plan metadata if available */}
                 {typeof rollbackPlan === "object" && rollbackPlan !== null && (
                   <div className="space-y-2 pt-3 border-t border-warning/20">
-                    {rollbackPlan.estimated_time_minutes && (
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-semibold">
-                          Estimated Rollback Time:
-                        </span>{" "}
-                        {rollbackPlan.estimated_time_minutes} minutes
-                      </div>
-                    )}
+                    {/* Removed: Estimated rollback time (deprecated field) */}
                     {rollbackPlan.preconditions &&
                       rollbackPlan.preconditions.length > 0 && (
                         <div className="text-xs text-muted-foreground">
@@ -583,21 +354,8 @@ export const ResolutionView = ({
                     Ready to Mark Complete
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    You have reviewed{" "}
-                    {hasStepsArray
-                      ? stepsArray.length
-                      : hasRecommendations
-                        ? recommendations.length
-                        : stepsAsStrings.length}{" "}
-                    resolution step
-                    {(hasStepsArray
-                      ? stepsArray.length
-                      : hasRecommendations
-                        ? recommendations.length
-                        : stepsAsStrings.length) !== 1
-                      ? "s"
-                      : ""}
-                    .
+                    You have reviewed {stepsArray.length} resolution step
+                    {stepsArray.length !== 1 ? "s" : ""}.
                   </div>
                 </div>
               </div>
@@ -629,27 +387,7 @@ export const ResolutionView = ({
               </ul>
             </div>
 
-            {riskLevel &&
-              riskLevel !== "unknown" &&
-              riskLevel.toLowerCase() !== "low" && (
-                <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-semibold text-warning mb-1">
-                        {riskLevel.toUpperCase()} Risk Resolution
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Monitor the system closely for the next{" "}
-                        {estimatedTime
-                          ? `${estimatedTime * 2} minutes`
-                          : "30 minutes"}{" "}
-                        to ensure stability.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+            {/* Removed: Risk level warning in confirmation dialog (deprecated field) */}
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
