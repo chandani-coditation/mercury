@@ -1,6 +1,7 @@
 """Hybrid search combining vector similarity and full-text search."""
 
 from retrieval.incident_descriptions import get_incident_descriptions
+from retrieval.query_builders import HybridSearchQueryBuilder
 
 import os
 import time
@@ -21,7 +22,7 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-def _normalize_limit(limit: Union[int, str, float, None], default: int = 5) -> int:
+def _normalize_limit(limit: Union[int, str, float, None], default: int = 10) -> int:
     """
     Normalize limit parameter to integer.
     
@@ -79,7 +80,7 @@ def hybrid_search(
     query_text: str,
     service: Optional[str] = None,
     component: Optional[str] = None,
-    limit: int = 5,
+    limit: int = 10,  # Increased from 5 to 10 for better results
     vector_weight: float = 0.7,
     fulltext_weight: float = 0.3,
     rrf_k: int = 60,
@@ -100,8 +101,8 @@ def hybrid_search(
     """
     # Normalize and validate parameters
     query_text = _normalize_query_text(query_text)
-    limit = _normalize_limit(limit, default=5)
-    rrf_k = _normalize_limit(rrf_k, default=60)
+    limit = _normalize_limit(limit, default=10)  # Increased default from 5 to 10
+    rrf_k = _normalize_limit(rrf_k, default=HybridSearchQueryBuilder.DEFAULT_RRF_K)
     
     if not query_text:
         logger.warning("Empty query text provided to hybrid_search, returning empty results")
@@ -198,23 +199,10 @@ def hybrid_search(
                 COALESCE(v.vector_rank, 999) as vector_rank,
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
                 -- RRF: 1/(k + rank) where k is configurable (default 60)
-                (1.0 / ({rrf_k}.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
-                (1.0 / ({rrf_k}.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
+                {HybridSearchQueryBuilder.build_rrf_score_formula(vector_weight, fulltext_weight, rrf_k)} as rrf_score,
                 -- PHASE 1: Soft filter boosts for service/component matching
-                -- Service match boost: exact match = 0.15, partial match = 0.10, no match = 0.0
-                CASE 
-                    WHEN %s IS NULL THEN 0.0
-                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) = LOWER(%s) THEN 0.15
-                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) LIKE LOWER(%s) THEN 0.10
-                    ELSE 0.0
-                END as service_match_boost,
-                -- Component match boost: exact match = 0.10, partial match = 0.05, no match = 0.0
-                CASE 
-                    WHEN %s IS NULL THEN 0.0
-                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) = LOWER(%s) THEN 0.10
-                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) LIKE LOWER(%s) THEN 0.05
-                    ELSE 0.0
-                END as component_match_boost
+                {HybridSearchQueryBuilder.build_service_boost_case()} as service_match_boost,
+                {HybridSearchQueryBuilder.build_component_boost_case()} as component_match_boost
             FROM vector_results v
             FULL OUTER JOIN fulltext_results f ON v.id = f.id
         )
@@ -254,29 +242,26 @@ def hybrid_search(
         # 16: final limit
         exec_params = []
 
+        # Calculate RRF candidate limit (higher multiplier for better fusion results)
+        candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
+        
         # Vector results params
         exec_params.append(query_embedding_str)  # 1: vector_score embedding
         exec_params.append(query_embedding_str)  # 2: vector_rank embedding
         exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
-        exec_params.append(limit * 2)  # 4: vector_results limit
+        exec_params.append(candidate_limit)  # 4: vector_results limit (improved multiplier)
 
         # Fulltext results params
         exec_params.append(query_text)  # 5: fulltext_score text
         exec_params.append(query_text)  # 6: fulltext_rank text
         exec_params.append(query_text)  # 7: WHERE text
         exec_params.append(query_text)  # 8: ORDER BY text
-        exec_params.append(limit * 2)  # 9: fulltext_results limit
+        exec_params.append(candidate_limit)  # 9: fulltext_results limit (improved multiplier)
 
-        # Soft filter boost params (for service/component match detection)
-        # Service match boost params
-        exec_params.append(service_val)  # 10: service_val check (IS NULL)
-        exec_params.append(service_val if service_val else None)  # 11: service_val exact match
-        exec_params.append(f"%{service_val}%" if service_val else None)  # 12: service_val partial match
-        
-        # Component match boost params
-        exec_params.append(component_val)  # 13: component_val check (IS NULL)
-        exec_params.append(component_val if component_val else None)  # 14: component_val exact match
-        exec_params.append(f"%{component_val}%" if component_val else None)  # 15: component_val partial match
+        # Soft filter boost params (using centralized builder)
+        exec_params.extend(
+            HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
+        )  # 10-15: Service and component boost params
 
         # Final limit
         exec_params.append(limit)  # 16: final limit
@@ -293,36 +278,29 @@ def hybrid_search(
                 f"This is a bug in the query parameter building logic."
             )
 
-        # Debug: verify parameter count and log BEFORE execute
-        placeholder_count = query.count("%s")
-        param_count = len(exec_params)
-
-        # Log using standardized logger (DEBUG level for diagnostic info)
-        logger.debug(
-            f"HYBRID_SEARCH: placeholders={placeholder_count}, params={param_count}, "
-            f"service={repr(service_val)}, component={repr(component_val)}"
+        # Validate parameter count using centralized validator
+        is_valid, error_msg = HybridSearchQueryBuilder.validate_parameter_count(
+            query, exec_params, expected_count=16
         )
-        logger.debug(
-            f"HYBRID_SEARCH: param list length={len(exec_params)}, "
-            f"params={[type(p).__name__ for p in exec_params]}"
-        )
-
-        # Verify parameter count matches query placeholders
-        if param_count != placeholder_count:
-            error_msg = (
-                f"Parameter mismatch: query has {placeholder_count} placeholders "
-                f"but {param_count} parameters provided. "
+        if not is_valid:
+            logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
+            logger.error(
                 f"Service: {repr(service_val)}, Component: {repr(component_val)}. "
                 f"Params: {[str(p)[:50] if isinstance(p, str) else str(p) for p in exec_params]}"
             )
-            logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
             raise ValueError(error_msg)
+        
+        # Log using standardized logger (DEBUG level for diagnostic info)
+        logger.debug(
+            f"HYBRID_SEARCH: params={len(exec_params)}, candidate_limit={candidate_limit}, "
+            f"service={repr(service_val)}, component={repr(component_val)}"
+        )
 
         try:
             cur.execute(query, exec_params)
         except Exception as e:
             logger.error(f"HYBRID_SEARCH SQL ERROR: {e}")
-            logger.error(f"Query placeholders: {placeholder_count}, Params: {param_count}")
+            logger.error(f"Query placeholders: {query.count('%s')}, Params: {len(exec_params)}")
             logger.error(f"Service: {repr(service_val)}, Component: {repr(component_val)}")
             raise
 
@@ -477,7 +455,7 @@ def triage_retrieval(
     query_text: str,
     service: Optional[str] = None,
     component: Optional[str] = None,
-    limit: int = 5,
+    limit: int = 10,  # Increased from 5 to 10 for better results
     vector_weight: float = 0.7,
     fulltext_weight: float = 0.3,
     rrf_k: int = 60,
@@ -629,28 +607,12 @@ def triage_retrieval(
                 COALESCE(f.fulltext_score, 0.0) as fulltext_score,
                 COALESCE(v.vector_rank, 999) as vector_rank,
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
-                (1.0 / ({rrf_k}.0 + COALESCE(v.vector_rank, 999))) * {vector_weight} +
-                (1.0 / ({rrf_k}.0 + COALESCE(f.fulltext_rank, 999))) * {fulltext_weight} as rrf_score,
+                {HybridSearchQueryBuilder.build_rrf_score_formula(vector_weight, fulltext_weight, rrf_k)} as rrf_score,
                 -- PHASE 1: Soft filter boosts for service/component matching
-                -- Service match boost: exact match = 0.15, partial match = 0.10, no match = 0.0
-                -- Check both service and affected_service fields
-                CASE 
-                    WHEN %s IS NULL THEN 0.0
-                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) = LOWER(%s) 
-                         OR LOWER(COALESCE(v.metadata->>'affected_service', f.metadata->>'affected_service', '')) = LOWER(%s) THEN 0.15
-                    WHEN LOWER(COALESCE(v.metadata->>'service', f.metadata->>'service', '')) LIKE LOWER(%s)
-                         OR LOWER(COALESCE(v.metadata->>'affected_service', f.metadata->>'affected_service', '')) LIKE LOWER(%s) THEN 0.10
-                    ELSE 0.0
-                END as service_match_boost,
-                -- Component match boost: exact match = 0.10, partial match = 0.05, no match = 0.0
-                -- If signature component is NULL, don't penalize (allow match)
-                CASE 
-                    WHEN %s IS NULL THEN 0.0
-                    WHEN COALESCE(v.metadata->>'component', f.metadata->>'component', '') = '' THEN 0.05  -- NULL component gets small boost
-                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) = LOWER(%s) THEN 0.10
-                    WHEN LOWER(COALESCE(v.metadata->>'component', f.metadata->>'component', '')) LIKE LOWER(%s) THEN 0.05
-                    ELSE 0.0
-                END as component_match_boost
+                -- Service match boost: checks both service and affected_service fields
+                {HybridSearchQueryBuilder.build_service_boost_case_dual()} as service_match_boost,
+                -- Component match boost: allows NULL component boost for incident signatures
+                {HybridSearchQueryBuilder.build_component_boost_case(allow_null_boost=True)} as component_match_boost
             FROM vector_results v
             FULL OUTER JOIN fulltext_results f ON v.id = f.id
         )
@@ -675,35 +637,26 @@ def triage_retrieval(
         LIMIT %s
         """
 
+        # Calculate RRF candidate limit (higher multiplier for better fusion results)
+        candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
+        
         # Build params for incident signatures
-        # Query parameter order (PHASE 1: no hard filters, but soft filter boosts):
-        # Vector CTE: $1=score, $2=rank, $3=ORDER BY, $4=limit
-        # Fulltext CTE: $5=score, $6=rank, $7=WHERE, $8=ORDER BY, $9=limit
-        # Soft filter boosts: $10-15 (service check, service exact x2, service partial x2, component check, component exact, component partial)
-        # Final: $16=final limit
         sig_params = []
         # Vector CTE
         sig_params.append(query_embedding_str)  # 1: vector_score
         sig_params.append(query_embedding_str)  # 2: vector_rank
         sig_params.append(query_embedding_str)  # 3: vector ORDER BY
-        sig_params.append(limit)  # 4: vector limit
+        sig_params.append(candidate_limit)  # 4: vector limit (improved multiplier)
         # Fulltext CTE
         sig_params.append(str(query_text))  # 5: fulltext_score
         sig_params.append(str(query_text))  # 6: fulltext_rank
         sig_params.append(str(query_text))  # 7: fulltext WHERE
         sig_params.append(str(query_text))  # 8: fulltext ORDER BY
-        sig_params.append(limit)  # 9: fulltext limit
-        # Soft filter boost params (for service/component match detection)
-        # Service match boost params (check both service and affected_service)
-        sig_params.append(service_val)  # 10: service_val check (IS NULL)
-        sig_params.append(service_val if service_val else None)  # 11: service_val exact match (service field)
-        sig_params.append(service_val if service_val else None)  # 12: service_val exact match (affected_service field)
-        sig_params.append(f"%{service_val}%" if service_val else None)  # 13: service_val partial match (service field)
-        sig_params.append(f"%{service_val}%" if service_val else None)  # 14: service_val partial match (affected_service field)
-        # Component match boost params
-        sig_params.append(component_val)  # 15: component_val check (IS NULL)
-        sig_params.append(component_val if component_val else None)  # 16: component_val exact match
-        sig_params.append(f"%{component_val}%" if component_val else None)  # 17: component_val partial match
+        sig_params.append(candidate_limit)  # 9: fulltext limit (improved multiplier)
+        # Soft filter boost params (using centralized builder for dual service matching)
+        sig_params.extend(
+            HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(service_val, component_val)
+        )  # 10-17: Service (dual) and component boost params
         # Final limit
         sig_params.append(limit)  # 18: final limit
 
@@ -846,52 +799,30 @@ def triage_retrieval(
             ts_rank(to_tsvector('english', COALESCE(d.title, '') || ' ' || COALESCE(d.content, '')), 
                     plainto_tsquery('english', %s)) as relevance_score,
             -- PHASE 1: Soft filter boosts for service/component matching
-            CASE 
-                WHEN %s IS NULL THEN 0.0
-                WHEN LOWER(COALESCE(d.service, '')) = LOWER(%s) THEN 0.15
-                WHEN LOWER(COALESCE(d.service, '')) LIKE LOWER(%s) THEN 0.10
-                ELSE 0.0
-            END as service_match_boost,
-            CASE 
-                WHEN %s IS NULL THEN 0.0
-                WHEN LOWER(COALESCE(d.component, '')) = LOWER(%s) THEN 0.10
-                WHEN LOWER(COALESCE(d.component, '')) LIKE LOWER(%s) THEN 0.05
-                ELSE 0.0
-            END as component_match_boost
+            {HybridSearchQueryBuilder.build_service_boost_case("COALESCE(d.service, '')")} as service_match_boost,
+            {HybridSearchQueryBuilder.build_component_boost_case("COALESCE(d.component, '')")} as component_match_boost
         FROM documents d
         WHERE d.doc_type = 'runbook'
         ORDER BY (relevance_score + 
-                  CASE WHEN %s IS NULL THEN 0.0
-                       WHEN LOWER(COALESCE(d.service, '')) = LOWER(%s) THEN 0.15
-                       WHEN LOWER(COALESCE(d.service, '')) LIKE LOWER(%s) THEN 0.10
-                       ELSE 0.0 END +
-                  CASE WHEN %s IS NULL THEN 0.0
-                       WHEN LOWER(COALESCE(d.component, '')) = LOWER(%s) THEN 0.10
-                       WHEN LOWER(COALESCE(d.component, '')) LIKE LOWER(%s) THEN 0.05
-                       ELSE 0.0 END) DESC, 
+                  {HybridSearchQueryBuilder.build_service_boost_case("COALESCE(d.service, '')")} +
+                  {HybridSearchQueryBuilder.build_component_boost_case("COALESCE(d.component, '')")}) DESC, 
                  d.last_reviewed_at DESC NULLS LAST
         LIMIT %s
         """
 
         # Build params for runbook metadata query with soft filter boosts
-        # Query params: query_text, service_val check, service_val exact, service_val partial (x2 for ORDER BY),
-        #               component_val check, component_val exact, component_val partial (x2 for ORDER BY), limit
-        runbook_params_extended = [
-            query_text,  # 1: fulltext search
-            service_val,  # 2: service check (SELECT)
-            service_val if service_val else None,  # 3: service exact (SELECT)
-            f"%{service_val}%" if service_val else None,  # 4: service partial (SELECT)
-            component_val,  # 5: component check (SELECT)
-            component_val if component_val else None,  # 6: component exact (SELECT)
-            f"%{component_val}%" if component_val else None,  # 7: component partial (SELECT)
-            service_val,  # 8: service check (ORDER BY)
-            service_val if service_val else None,  # 9: service exact (ORDER BY)
-            f"%{service_val}%" if service_val else None,  # 10: service partial (ORDER BY)
-            component_val,  # 11: component check (ORDER BY)
-            component_val if component_val else None,  # 12: component exact (ORDER BY)
-            f"%{component_val}%" if component_val else None,  # 13: component partial (ORDER BY)
-            limit,  # 14: limit
-        ]
+        # Query params: query_text, soft filter boosts (SELECT), soft filter boosts (ORDER BY), limit
+        runbook_params_extended = [query_text]  # 1: fulltext search
+        # Add soft filter boost params for SELECT (6 params)
+        runbook_params_extended.extend(
+            HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
+        )
+        # Add soft filter boost params for ORDER BY (6 params, duplicated)
+        runbook_params_extended.extend(
+            HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
+        )
+        # Final limit
+        runbook_params_extended.append(limit)  # 14: limit
         cur.execute(runbook_meta_query, runbook_params_extended)
         runbook_rows = cur.fetchall()
 

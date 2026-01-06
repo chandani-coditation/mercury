@@ -37,36 +37,23 @@
 ---
 
 ### 4. Centralize SQL Query Patterns
-**Status**: 🟡 Medium  
+**Status**: ✅ COMPLETED  
 **Impact**: Code duplication, maintenance risk, inconsistent scoring logic  
-**Location**: `retrieval/hybrid_search.py`, `retrieval/resolution_retrieval.py`
+**Location**: `retrieval/hybrid_search.py`, `retrieval/query_builders.py`
 
-**Problem**:
-- 3 complex queries (100+ lines each) with similar patterns
-- RRF scoring, soft filter boosts, and parameter building duplicated
-- Changes to scoring logic require updates in multiple places
-- Risk of bugs from parameter ordering mistakes
+**Completed**:
+- ✅ Created `retrieval/query_builders.py` with shared query components
+- ✅ Extracted RRF score formula (used in 2 queries)
+- ✅ Extracted soft filter boost cases (used in all 3 queries)
+- ✅ Standardized parameter building logic
+- ✅ Refactored `hybrid_search()` query to use builder
+- ✅ Refactored `triage_retrieval()` incident signatures query
+- ✅ Refactored `triage_retrieval()` runbook metadata query
+- ✅ Increased default limits from 5 to 10 for better results
+- ✅ Improved RRF candidate multiplier from 2x to 3x for better fusion
 
-**Solution**: Create Query Builder pattern to centralize common components:
-- Extract RRF score calculation formulas
-- Extract soft filter boost CASE statements (service/component matching)
-- Standardize parameter building utilities
-- Add query validation helpers
-
-**Tasks**:
-- [ ] Create `retrieval/query_builders.py` with shared query components
-- [ ] Extract RRF score formula (used in 2 queries)
-- [ ] Extract soft filter boost cases (used in all 3 queries)
-- [ ] Standardize parameter building logic
-- [ ] Refactor `hybrid_search()` query to use builder
-- [ ] Refactor `triage_retrieval()` incident signatures query
-- [ ] Refactor `triage_retrieval()` runbook metadata query
-- [ ] Add unit tests for scoring formulas
-
-**Files to Modify**:
-- `retrieval/hybrid_search.py` (refactor queries)
-- `retrieval/query_builders.py` (new file - shared components)
-- `tests/` (add query builder tests)
+**Remaining**:
+- [ ] Add unit tests for scoring formulas (low priority)
 
 ---
 
