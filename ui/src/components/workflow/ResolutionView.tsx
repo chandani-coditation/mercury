@@ -282,13 +282,13 @@ export const ResolutionView = ({
                       <div className="flex-1 space-y-2">
                         <div className="flex items-start justify-between gap-2" style={{ position: "relative" }}>
                           <div className="flex-1">
-                            {stepTitle && (
-                              <div>
-                                <h4 className="text-sm font-semibold text-foreground">
-                                  {stepTitle}
-                                </h4>
-                              </div>
-                            )}
+                        {stepTitle && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground">
+                              {stepTitle}
+                            </h4>
+                          </div>
+                        )}
                             {!stepTitle && stepAction && (
                               <div>
                                 <h4 className="text-sm font-semibold text-foreground">

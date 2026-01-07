@@ -118,7 +118,7 @@ export const TriageTab = ({
       {/* Header with Severity and Category */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <SeverityBadge severity={data.severity} />
+        <SeverityBadge severity={data.severity} />
           {incidentId && onRatingChange && (
             <RatingButtons
               field="severity"
@@ -192,9 +192,9 @@ export const TriageTab = ({
                   )}
                 </div>
                 <div className="text-sm text-foreground leading-relaxed">
-                  <span className="text-sm font-semibold text-primary">
-                    {data.impact}
-                  </span>
+                <span className="text-sm font-semibold text-primary">
+                  {data.impact}
+                </span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
@@ -226,9 +226,9 @@ export const TriageTab = ({
                   )}
                 </div>
                 <div className="text-sm text-foreground leading-relaxed">
-                  <span className="text-sm font-semibold text-primary">
-                    {data.urgency}
-                  </span>
+                <span className="text-sm font-semibold text-primary">
+                  {data.urgency}
+                </span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">

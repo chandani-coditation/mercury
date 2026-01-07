@@ -456,13 +456,33 @@ const Index = () => {
     setIsLoading(true);
     setError("");
 
+    // Initialize with safe defaults to prevent empty page
+    let safeAlertData: any = {};
+    let safeTriageData: any = {};
+    let safePolicyData: any = { policy_band: null, policy_decision: {} };
+    let safeRetrievalData: any = {
+      chunks_used: 0,
+      chunk_sources: [],
+      chunks: [],
+    };
+    let safeResolutionData: any = {
+      steps: [],
+      recommendations: [],
+      resolution_steps: [],
+      rollback_plan: null,
+      confidence: null,
+      reasoning: null,
+    };
+
     try {
       const incident = await getIncident(incidentKey);
 
       // Extract data from incident
-      setIncidentId(incident.incident_id || incident.id);
+      const extractedIncidentId = incident.incident_id || incident.id;
+      setIncidentId(extractedIncidentId || "");
       const rawAlert = incident.alert || incident.raw_alert || {};
-      setAlertData(rawAlert);
+      safeAlertData = rawAlert;
+      setAlertData(safeAlertData);
 
       // Set triage data (always set, even if empty, to avoid rendering issues)
       const triageOutput = incident.triage_output || {};
@@ -477,7 +497,7 @@ const Index = () => {
         triageOutput.likely_cause ||
         "Analysis based on alert description and historical patterns.";
 
-      setTriageData({
+      safeTriageData = {
         ...triageOutput,
         summary: summary,
         likely_cause: likely_cause,
@@ -487,13 +507,15 @@ const Index = () => {
           rawAlert.labels?.category ||
           rawAlert.category ||
           "other",
-      });
+      };
+      setTriageData(safeTriageData);
 
       // Set policy data (always set, even if empty)
-      setPolicyData({
+      safePolicyData = {
         policy_band: incident.policy_band || null,
         policy_decision: incident.policy_decision || {},
-      });
+      };
+      setPolicyData(safePolicyData);
 
       // Set retrieval/evidence data (always set, even if empty)
       const evidence =
@@ -543,14 +565,15 @@ const Index = () => {
         ];
       }
 
-      setRetrievalData({
+      safeRetrievalData = {
         chunks_used: chunks.length,
         chunk_ids: chunks.map((c: any) => c.chunk_id).filter(Boolean),
         chunk_sources: chunks.map((c: any) => c.doc_title).filter(Boolean),
         chunks: chunks,
         retrieval_method: evidence.retrieval_method || "triage_retrieval",
         retrieval_params: evidence.retrieval_params || {},
-      });
+      };
+      setRetrievalData(safeRetrievalData);
 
       // Ensure resolution exists: if not stored yet, call resolution API once for this incident
       let resolutionOutput = incident.resolution_output;
@@ -571,16 +594,27 @@ const Index = () => {
 
       // Set resolution data from stored or newly generated output
       if (resolutionOutput) {
-        setResolutionData(resolutionOutput);
-      } else {
-        // Fallback: keep empty structure to avoid undefined errors in the UI
-        setResolutionData({
-          resolution_steps: [],
-          rollback_plan: null,
-          confidence: null,
-          reasoning: null,
-        });
+        // Normalize resolution data structure to ensure it has all expected fields
+        const stepsArray = resolutionOutput.steps || [];
+        const recommendations = resolutionOutput.recommendations || [];
+        const stepsAsStrings =
+          stepsArray.length > 0 && typeof stepsArray[0] === "object"
+            ? stepsArray.map((step: any) => step.action || step.title || "")
+            : recommendations.length > 0
+              ? recommendations.map((rec: any) => rec.action || rec.step || "")
+              : resolutionOutput.resolution_steps || [];
+
+        safeResolutionData = {
+          ...resolutionOutput,
+          steps: stepsArray,
+          recommendations: recommendations,
+          resolution_steps: stepsAsStrings,
+          overall_confidence:
+            resolutionOutput.overall_confidence || resolutionOutput.confidence || null,
+        };
       }
+      // Always set resolution data (even if empty) to prevent rendering issues
+      setResolutionData(safeResolutionData);
 
       // Load feedback history (thumbs up/down, notes)
       try {
@@ -588,7 +622,56 @@ const Index = () => {
           incident.incident_id || incident.id,
         );
         // API returns { incident_id, feedback: [...] }
-        setFeedbackHistory(feedbackResponse.feedback || []);
+        const feedbackList = feedbackResponse.feedback || [];
+        setFeedbackHistory(feedbackList);
+        
+        // Parse feedback history to populate rating state
+        // Extract triage ratings (severity, impact, urgency)
+        const parsedTriageRatings: {
+          severity?: string | null;
+          impact?: string | null;
+          urgency?: string | null;
+        } = {};
+        
+        // Extract resolution ratings (by step index)
+        const parsedResolutionRatings: Record<number, string | null> = {};
+        
+        feedbackList.forEach((fb: any) => {
+          if (!fb.rating || !fb.notes) return;
+          
+          // Parse notes to extract field/step identifier
+          // Format: "Rating for {field}: {rating}" or "Rating for resolution step {index}: {rating}"
+          const notesMatch = fb.notes.match(/Rating for (.+?):/);
+          if (!notesMatch) return;
+          
+          const identifier = notesMatch[1].trim();
+          
+          if (fb.feedback_type === "triage") {
+            // Check if it's a triage field (severity, impact, urgency)
+            if (identifier === "severity" || identifier === "impact" || identifier === "urgency") {
+              parsedTriageRatings[identifier as "severity" | "impact" | "urgency"] = fb.rating;
+            }
+          } else if (fb.feedback_type === "resolution") {
+            // Extract step index from "resolution step X"
+            // Notes format: "Rating for resolution step X: rating"
+            // Where X = originalIndex + 1 (1-based display number)
+            const stepMatch = identifier.match(/resolution step (\d+)/i);
+            if (stepMatch) {
+              // Step numbers in notes are 1-based (originalIndex + 1), convert to 0-based index
+              const stepNumber = parseInt(stepMatch[1], 10);
+              const originalIndex = stepNumber - 1; // Convert to 0-based original index
+              parsedResolutionRatings[originalIndex] = fb.rating;
+            }
+          }
+        });
+        
+        // Set the parsed ratings into state
+        if (Object.keys(parsedTriageRatings).length > 0) {
+          setTriageRatings(parsedTriageRatings);
+        }
+        if (Object.keys(parsedResolutionRatings).length > 0) {
+          setResolutionRatings(parsedResolutionRatings);
+        }
       } catch (feedbackErr) {
         console.warn(
           "Failed to load feedback history for incident:",
@@ -606,9 +689,28 @@ const Index = () => {
       setShowSearch(false);
     } catch (err: any) {
       console.error("❌ Failed to load incident:", err);
-      setError(
-        err.response?.data?.detail || err.message || "Failed to load incident",
-      );
+      const errorMessage =
+        err.response?.data?.detail || err.message || "Failed to load incident";
+      setError(errorMessage);
+      
+      // Even on error, set safe defaults to prevent empty page
+      // This allows the user to see the error message and navigate back
+      setAlertData(safeAlertData);
+      setTriageData(safeTriageData);
+      setPolicyData(safePolicyData);
+      setRetrievalData(safeRetrievalData);
+      setResolutionData(safeResolutionData);
+      setFeedbackHistory([]);
+      
+      // Don't navigate to complete page if there was an error
+      // Stay on current view or go back to form
+      if (currentView === "incidents") {
+        // If we're in incidents view, stay there
+        setCurrentView("incidents");
+      } else {
+        // Otherwise, go back to form
+        setCurrentStep("form");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -972,103 +1074,103 @@ const Index = () => {
             </div>
           ) : (
             <>
-              {/* Error Display (Global) */}
-              {error && !isLoading && (
-                <div className="mb-4 p-4 bg-destructive/10 border-l-4 border-destructive rounded text-destructive animate-fade-in">
-                  <div className="flex items-start gap-2">
-                    <svg
-                      className="w-5 h-5 flex-shrink-0 mt-0.5"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <div>
-                      <div className="font-semibold">Error</div>
-                      <div className="text-sm mt-1">{error}</div>
-                    </div>
-                  </div>
+          {/* Error Display (Global) */}
+          {error && !isLoading && (
+            <div className="mb-4 p-4 bg-destructive/10 border-l-4 border-destructive rounded text-destructive animate-fade-in">
+              <div className="flex items-start gap-2">
+                <svg
+                  className="w-5 h-5 flex-shrink-0 mt-0.5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <div>
+                  <div className="font-semibold">Error</div>
+                  <div className="text-sm mt-1">{error}</div>
                 </div>
-              )}
+              </div>
+            </div>
+          )}
 
-              {currentStep === "form" && (
-                <TicketForm
-                  onSubmit={handleSubmit}
-                  isLoading={isLoading}
-                  error={error}
-                />
-              )}
+          {currentStep === "form" && (
+            <TicketForm
+              onSubmit={handleSubmit}
+              isLoading={isLoading}
+              error={error}
+            />
+          )}
 
-              {currentStep === "triage" &&
-                triageData &&
-                policyData &&
-                retrievalData && (
-                  <TriageView
-                    triageData={triageData}
-                    policyData={policyData}
-                    retrievalData={retrievalData}
-                    onNext={handleNextToPolicy}
-                    onBack={handleBack}
+          {currentStep === "triage" &&
+            triageData &&
+            policyData &&
+            retrievalData && (
+              <TriageView
+                triageData={triageData}
+                policyData={policyData}
+                retrievalData={retrievalData}
+                onNext={handleNextToPolicy}
+                onBack={handleBack}
                     incidentId={incidentId}
                     triageRatings={triageRatings}
                     ratingStatus={ratingStatus.triage}
                     onRatingChange={handleTriageFieldRating}
-                  />
-                )}
+              />
+            )}
 
-              {currentStep === "policy" && policyData && (
-                <PolicyView
-                  data={policyData}
-                  retrievalData={retrievalData}
-                  onApprove={handleApproveAndContinue}
-                  onBack={handleBack}
-                  isLoading={isLoading}
-                  error={error}
-                />
-              )}
+          {currentStep === "policy" && policyData && (
+            <PolicyView
+              data={policyData}
+              retrievalData={retrievalData}
+              onApprove={handleApproveAndContinue}
+              onBack={handleBack}
+              isLoading={isLoading}
+              error={error}
+            />
+          )}
 
-              {currentStep === "resolution" && resolutionData && (
-                <ResolutionView
-                  data={resolutionData}
-                  onBack={handleBack}
-                  onMarkComplete={handleMarkComplete}
+          {currentStep === "resolution" && resolutionData && (
+            <ResolutionView
+              data={resolutionData}
+              onBack={handleBack}
+              onMarkComplete={handleMarkComplete}
                   incidentId={incidentId}
                   resolutionRatings={resolutionRatings}
                   ratingStatus={ratingStatus.resolution}
                   onRatingChange={handleResolutionStepRating}
-                />
-              )}
+            />
+          )}
 
-              {currentStep === "complete" && alertData && resolutionData && (
-                <CompleteSummary
-                  alertData={alertData || {}}
-                  triageData={triageData || {}}
-                  policyData={
-                    policyData || { policy_band: null, policy_decision: {} }
-                  }
-                  retrievalData={
-                    retrievalData || {
-                      chunks_used: 0,
-                      chunk_sources: [],
-                      chunks: [],
-                    }
-                  }
-                  resolutionData={resolutionData || { resolution_steps: [] }}
+          {currentStep === "complete" && (
+            <CompleteSummary
+              alertData={alertData || {}}
+              triageData={triageData || {}}
+              policyData={
+                policyData || { policy_band: null, policy_decision: {} }
+              }
+              retrievalData={
+                retrievalData || {
+                  chunks_used: 0,
+                  chunk_sources: [],
+                  chunks: [],
+                }
+              }
+              resolutionData={resolutionData || { resolution_steps: [] }}
                   feedbackHistory={feedbackHistory || []}
-                  onNewTicket={handleNewTicket}
-                  onViewTriage={() => {
-                    // Just navigate - use existing state data, no API calls
-                    setCurrentStep("triage");
-                  }}
-                  onViewResolution={() => {
-                    // Just navigate - use existing state data, no API calls
-                    setCurrentStep("resolution");
-                  }}
-                />
+              onNewTicket={handleNewTicket}
+              onViewTriage={() => {
+                // Just navigate - use existing state data, no API calls
+                setCurrentStep("triage");
+              }}
+              onViewResolution={() => {
+                // Just navigate - use existing state data, no API calls
+                setCurrentStep("resolution");
+              }}
+            />
               )}
             </>
           )}

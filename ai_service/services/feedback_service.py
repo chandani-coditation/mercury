@@ -30,7 +30,7 @@ class FeedbackService:
         rating: Optional[str] = None,
     ) -> str:
         """
-        Create a new feedback record.
+        Create a new feedback record, or update existing one if it's a rating for the same field/step.
 
         Args:
             incident_id: Incident ID
@@ -41,11 +41,36 @@ class FeedbackService:
             rating: Optional rating ('thumbs_up' or 'thumbs_down')
 
         Returns:
-            Feedback ID
+            Feedback ID (new or updated)
         """
         logger.debug(
-            f"Creating feedback via service for incident: {incident_id}, type={feedback_type}, rating={rating}"
+            f"Creating/updating feedback via service for incident: {incident_id}, type={feedback_type}, rating={rating}"
         )
+        
+        # If this is a rating feedback (thumbs up/down), check if we should update existing feedback
+        if rating and notes:
+            existing_feedback = self.repository.find_existing_rating_feedback(
+                incident_id=incident_id,
+                feedback_type=feedback_type,
+                notes=notes,
+            )
+            
+            if existing_feedback:
+                # Update existing feedback instead of creating new one
+                logger.info(
+                    f"Updating existing feedback {existing_feedback['id']} instead of creating new one"
+                )
+                updated = self.repository.update_rating(
+                    feedback_id=existing_feedback["id"],
+                    rating=rating,
+                    notes=notes,
+                )
+                if updated:
+                    return existing_feedback["id"]
+                else:
+                    logger.warning("Failed to update existing feedback, will create new one")
+        
+        # Create new feedback record
         return self.repository.create(
             incident_id=incident_id,
             feedback_type=feedback_type,

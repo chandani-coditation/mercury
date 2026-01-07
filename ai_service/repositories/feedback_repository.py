@@ -149,9 +149,181 @@ class FeedbackRepository:
                 cur.close()
 
     @staticmethod
+    def find_existing_rating_feedback(
+        incident_id: str,
+        feedback_type: str,
+        notes: Optional[str] = None,
+    ) -> Optional[Dict]:
+        """
+        Find existing feedback record for a rating (thumbs up/down) based on notes pattern.
+        
+        The notes field typically contains patterns like:
+        - "Rating for severity: thumbs_up"
+        - "Rating for resolution step 1: thumbs_down"
+        
+        Args:
+            incident_id: Incident ID
+            feedback_type: 'triage' or 'resolution'
+            notes: Notes string that contains the field/step identifier
+            
+        Returns:
+            Existing feedback record if found, None otherwise
+        """
+        if not notes:
+            return None
+            
+        logger.debug(
+            f"Finding existing rating feedback for incident: {incident_id}, type={feedback_type}, notes={notes}"
+        )
+        
+        with get_db_connection_context() as conn:
+            cur = conn.cursor()
+            
+            try:
+                # Validate UUID format
+                validated_uuid = uuid.UUID(incident_id)
+                uuid_str = str(validated_uuid)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid UUID format for incident_id: {incident_id}")
+                return None
+            
+            try:
+                # Find feedback with matching incident_id, feedback_type, and notes pattern
+                # Extract the field/step identifier from notes (e.g., "severity", "step 1")
+                # We look for feedback with notes that start with "Rating for" and contain the same identifier
+                cur.execute(
+                    """
+                    SELECT id,
+                           incident_id,
+                           feedback_type,
+                           notes,
+                           rating,
+                           created_at
+                    FROM feedback
+                    WHERE incident_id = %s
+                      AND feedback_type = %s
+                      AND notes IS NOT NULL
+                      AND notes LIKE %s
+                      AND rating IS NOT NULL
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (uuid_str, feedback_type, f"Rating for%"),
+                )
+                row = cur.fetchone()
+                
+                if row:
+                    # Extract field identifier from both notes to compare
+                    existing_notes = row["notes"] or ""
+                    # Simple pattern matching: if notes contain the same field/step identifier
+                    # For triage: "Rating for severity", "Rating for impact", "Rating for urgency"
+                    # For resolution: "Rating for resolution step 1", "Rating for resolution step 2", etc.
+                    if notes and existing_notes:
+                        # Extract the identifier part (everything after "Rating for " and before ":")
+                        def extract_identifier(note_str: str) -> Optional[str]:
+                            if "Rating for" in note_str:
+                                parts = note_str.split("Rating for")
+                                if len(parts) > 1:
+                                    identifier_part = parts[1].split(":")[0].strip()
+                                    return identifier_part
+                            return None
+                        
+                        existing_id = extract_identifier(existing_notes)
+                        new_id = extract_identifier(notes)
+                        
+                        # If identifiers match, this is the same field/step
+                        if existing_id and new_id and existing_id == new_id:
+                            logger.debug(
+                                f"Found existing feedback for {feedback_type} {existing_id}: {row['id']}"
+                            )
+                            return {
+                                "id": str(row["id"]),
+                                "incident_id": str(row["incident_id"]) if row["incident_id"] else None,
+                                "feedback_type": row["feedback_type"],
+                                "notes": row["notes"],
+                                "rating": row["rating"],
+                                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                            }
+                
+                return None
+            except Exception as e:
+                logger.error(
+                    f"Failed to find existing feedback: {str(e)}",
+                    exc_info=True,
+                )
+                return None
+            finally:
+                cur.close()
+
+    @staticmethod
+    def update_rating(
+        feedback_id: str,
+        rating: str,
+        notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Update an existing feedback record's rating and notes.
+        
+        Args:
+            feedback_id: Feedback record ID
+            rating: New rating ('thumbs_up' or 'thumbs_down')
+            notes: Optional new notes
+            
+        Returns:
+            True if update successful, False otherwise
+        """
+        logger.debug(f"Updating feedback rating: {feedback_id}, rating={rating}")
+        
+        with get_db_connection_context() as conn:
+            cur = conn.cursor()
+            
+            try:
+                validated_uuid = uuid.UUID(feedback_id)
+                uuid_str = str(validated_uuid)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid UUID format for feedback_id: {feedback_id}")
+                return False
+            
+            try:
+                # Validate rating
+                if rating not in ["thumbs_up", "thumbs_down"]:
+                    raise ValueError(f"Invalid rating: {rating}")
+                
+                update_fields = ["rating = %s"]
+                params = [rating]
+                
+                if notes:
+                    update_fields.append("notes = %s")
+                    params.append(notes)
+                
+                params.append(uuid_str)
+                
+                cur.execute(
+                    f"""
+                    UPDATE feedback
+                    SET {', '.join(update_fields)}, created_at = now()
+                    WHERE id = %s
+                    """,
+                    tuple(params),
+                )
+                
+                conn.commit()
+                logger.info(f"Feedback rating updated: {feedback_id}")
+                return True
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to update feedback rating: {str(e)}", exc_info=True)
+                return False
+            finally:
+                cur.close()
+
+    @staticmethod
     def list_for_incident(incident_id: str) -> List[Dict]:
         """
         List all feedback records for a given incident.
+        
+        For rating feedback (thumbs up/down), only returns the latest feedback
+        per field/step combination to avoid duplicates.
 
         This is used by the UI to show feedback history (including ratings)
         when an analyst views a historical incident.
@@ -160,7 +332,7 @@ class FeedbackRepository:
             incident_id: Incident ID (UUID as string)
 
         Returns:
-            List of feedback dictionaries (most recent first)
+            List of feedback dictionaries (most recent first, deduplicated by field/step)
 
         Raises:
             DatabaseError: If database operation fails
@@ -196,23 +368,50 @@ class FeedbackRepository:
                     (uuid_str,),
                 )
                 rows = cur.fetchall()
+                
+                # Helper function to extract field/step identifier from notes
+                def extract_identifier(note_str: Optional[str]) -> Optional[str]:
+                    if not note_str or "Rating for" not in note_str:
+                        return None
+                    parts = note_str.split("Rating for")
+                    if len(parts) > 1:
+                        identifier_part = parts[1].split(":")[0].strip()
+                        return identifier_part
+                    return None
+                
+                # Deduplicate: keep only latest feedback per field/step combination
+                seen_identifiers: Dict[str, bool] = {}
                 results: List[Dict] = []
+                
                 for r in rows:
                     # Rows are dictionaries due to dict_row factory
-                    results.append(
-                        {
-                            "id": str(r["id"]),
-                            "incident_id": str(r["incident_id"]) if r["incident_id"] else None,
-                            "feedback_type": r["feedback_type"],
-                            "notes": r["notes"],
-                            "rating": r["rating"],
-                            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-                        }
-                    )
+                    feedback_record = {
+                        "id": str(r["id"]),
+                        "incident_id": str(r["incident_id"]) if r["incident_id"] else None,
+                        "feedback_type": r["feedback_type"],
+                        "notes": r["notes"],
+                        "rating": r["rating"],
+                        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                    }
+                    
+                    # For rating feedback, deduplicate by field/step identifier
+                    if r["rating"] and r["notes"]:
+                        identifier = extract_identifier(r["notes"])
+                        if identifier:
+                            # Create unique key: feedback_type + identifier
+                            key = f"{r['feedback_type']}:{identifier}"
+                            if key in seen_identifiers:
+                                # Skip this duplicate - we already have the latest one
+                                continue
+                            seen_identifiers[key] = True
+                    
+                    results.append(feedback_record)
+                
                 logger.debug(
-                    "Listed %d feedback records for incident_id=%s",
+                    "Listed %d feedback records (after deduplication) for incident_id=%s (total before dedup: %d)",
                     len(results),
                     incident_id,
+                    len(rows),
                 )
                 return results
             except Exception as e:
