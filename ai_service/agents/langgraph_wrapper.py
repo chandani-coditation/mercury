@@ -55,6 +55,7 @@ def create_triage_graph():
         # Enhance query text for better retrieval
         try:
             from retrieval.query_enhancer import enhance_query
+
             query_text = enhance_query(alert)
         except Exception as e:
             logger.warning(f"Query enhancement failed, using basic query: {e}")
@@ -268,6 +269,7 @@ def create_resolution_graph():
         # Enhance query text for better retrieval
         try:
             from retrieval.query_enhancer import enhance_query
+
             base_query = enhance_query(alert)
             query_text = f"{base_query} resolution steps runbook"
         except Exception as e:
@@ -294,9 +296,10 @@ def create_resolution_graph():
 
         # Retrieve context
         from retrieval.hybrid_search import hybrid_search
-        
+
         if use_mmr:
             from retrieval.hybrid_search import mmr_search
+
             context_chunks = mmr_search(
                 query_text=query_text,
                 service=service_val,

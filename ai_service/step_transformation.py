@@ -41,24 +41,35 @@ def _load_step_classification_config():
 def _get_step_type_priority_order():
     """Get step type priority order from config."""
     config = _load_step_classification_config()
-    return config.get("step_types", {}).get("priority_order", [
-        "investigation", "mitigation", "resolution", "verification", "rollback"
-    ])
+    return config.get("step_types", {}).get(
+        "priority_order", ["investigation", "mitigation", "resolution", "verification", "rollback"]
+    )
 
 
 def _get_filtered_step_types():
     """Get step types that should be filtered out."""
     config = _load_step_classification_config()
-    return config.get("step_types", {}).get("filtered_types", {}).get("types", ["documentation", "context"])
+    return (
+        config.get("step_types", {})
+        .get("filtered_types", {})
+        .get("types", ["documentation", "context"])
+    )
 
 
 def _get_documentation_phrases():
     """Get documentation phrases from config."""
     config = _load_step_classification_config()
-    return config.get("documentation_phrases", {}).get("phrases", [
-        "actions taken", "actions that were", "actions which were",
-        "record all actions", "document all actions", "log all actions"
-    ])
+    return config.get("documentation_phrases", {}).get(
+        "phrases",
+        [
+            "actions taken",
+            "actions that were",
+            "actions which were",
+            "record all actions",
+            "document all actions",
+            "log all actions",
+        ],
+    )
 
 
 def _get_risk_level_keywords():
@@ -68,12 +79,12 @@ def _get_risk_level_keywords():
     return {
         "valid_levels": risk_levels.get("valid_levels", ["low", "medium", "high", "critical"]),
         "default_level": risk_levels.get("default_level", "medium"),
-        "high_risk": risk_levels.get("high_risk_keywords", {}).get("keywords", [
-            "kill", "delete", "drop", "remove", "stop", "restart"
-        ]),
-        "medium_risk": risk_levels.get("medium_risk_keywords", {}).get("keywords", [
-            "update", "modify", "change", "alter"
-        ])
+        "high_risk": risk_levels.get("high_risk_keywords", {}).get(
+            "keywords", ["kill", "delete", "drop", "remove", "stop", "restart"]
+        ),
+        "medium_risk": risk_levels.get("medium_risk_keywords", {}).get(
+            "keywords", ["update", "modify", "change", "alter"]
+        ),
     }
 
 
@@ -498,7 +509,7 @@ def transform_step_for_ui(step: Dict, step_number: int) -> Dict:
     default_level = risk_config["default_level"]
     high_risk_keywords = risk_config["high_risk"]
     medium_risk_keywords = risk_config["medium_risk"]
-    
+
     risk_level = step.get("risk_level", default_level)
     if not risk_level or risk_level.lower() not in valid_levels:
         # Infer from action

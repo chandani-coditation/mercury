@@ -10,6 +10,7 @@ from pathlib import Path
 # Load classification fallback rules from config
 _classification_fallbacks = None
 
+
 def _load_classification_fallbacks():
     """Load classification fallback rules from config file."""
     global _classification_fallbacks
@@ -21,17 +22,21 @@ def _load_classification_fallbacks():
                 with open(config_path, "r") as f:
                     _classification_fallbacks = json.load(f)
             else:
-                _classification_fallbacks = {"failure_type_fallbacks": {}, "error_class_fallbacks": {}}
+                _classification_fallbacks = {
+                    "failure_type_fallbacks": {},
+                    "error_class_fallbacks": {},
+                }
         except Exception:
             _classification_fallbacks = {"failure_type_fallbacks": {}, "error_class_fallbacks": {}}
     return _classification_fallbacks
+
 
 def _generate_fallback_section():
     """Generate fallback section for prompt from config."""
     fallbacks = _load_classification_fallbacks()
     failure_type_fallbacks = fallbacks.get("failure_type_fallbacks", {})
     error_class_fallbacks = fallbacks.get("error_class_fallbacks", {})
-    
+
     failure_type_lines = []
     for failure_type, keywords in failure_type_fallbacks.items():
         if keywords:
@@ -39,7 +44,7 @@ def _generate_fallback_section():
             failure_type_lines.append(f'     * {keywords_str} → "{failure_type}"')
         else:
             failure_type_lines.append(f'     * Default: "{failure_type}"')
-    
+
     error_class_lines = []
     for error_class, keywords in error_class_fallbacks.items():
         if keywords:
@@ -47,17 +52,23 @@ def _generate_fallback_section():
             error_class_lines.append(f'     * {keywords_str} → "{error_class}"')
         else:
             error_class_lines.append(f'     * Default: "{error_class}"')
-    
-    failure_type_section = "\n".join(failure_type_lines) if failure_type_lines else '     * Default: "UNKNOWN_FAILURE"'
-    error_class_section = "\n".join(error_class_lines) if error_class_lines else '     * Default: "UNKNOWN_ERROR"'
-    
+
+    failure_type_section = (
+        "\n".join(failure_type_lines) if failure_type_lines else '     * Default: "UNKNOWN_FAILURE"'
+    )
+    error_class_section = (
+        "\n".join(error_class_lines) if error_class_lines else '     * Default: "UNKNOWN_ERROR"'
+    )
+
     return failure_type_section, error_class_section
+
 
 def get_triage_user_prompt_template():
     """Get triage user prompt template with dynamically generated fallback sections from config."""
     failure_type_fallbacks, error_class_fallbacks = _generate_fallback_section()
-    
-    template = """You are an expert NOC (Network Operations Center) Triage Agent. Your ONLY responsibility is to CLASSIFY incidents based on retrieved evidence.
+
+    template = (
+        """You are an expert NOC (Network Operations Center) Triage Agent. Your ONLY responsibility is to CLASSIFY incidents based on retrieved evidence.
 
 Alert Information:
 - Title: {alert_title}
@@ -102,12 +113,16 @@ DETAILED INSTRUCTIONS:
 1. failure_type: 
    - PRIMARY: Extract from matched incident signatures (look for "Failure Type:" in evidence)
    - FALLBACK: If no matches, infer from alert description:
-""" + failure_type_fallbacks + """
+"""
+        + failure_type_fallbacks
+        + """
 
 2. error_class:
    - PRIMARY: Extract from matched incident signatures (look for "Error Class:" in evidence)
    - FALLBACK: If no matches, infer from alert symptoms:
-""" + error_class_fallbacks + """
+"""
+        + error_class_fallbacks
+        + """
 
 3. incident_signatures:
    - MUST be an array of strings
@@ -141,8 +156,10 @@ VALIDATION RULES (CRITICAL - STRICTLY ENFORCED):
 NOTE: The system automatically calculates severity (from impact/urgency in evidence), confidence (from evidence quality and match scores), and policy (from policy gate configuration). These are NOT part of your output.
 
 Remember: You are ONLY classifying. The Resolution Agent will handle recommendations later."""
-    
+    )
+
     return template
+
 
 # For backward compatibility, create a constant that calls the function
 # This allows existing code to use TRIAGE_USER_PROMPT_TEMPLATE.format() without changes

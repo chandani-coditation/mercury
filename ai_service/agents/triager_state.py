@@ -60,6 +60,7 @@ async def _triage_agent_state_internal(
     # Enhance query text for better retrieval
     try:
         from retrieval.query_enhancer import enhance_query
+
         query_text = enhance_query(alert)
     except Exception as e:
         logger.warning(f"Query enhancement failed, using basic query: {e}")

@@ -15,7 +15,7 @@ router = APIRouter()
 def get_retrieval_metrics():
     """
     Get retrieval quality metrics.
-    
+
     Returns:
         Dictionary with retrieval metrics including:
         - retrieval_count: Total number of retrievals
@@ -31,7 +31,7 @@ def get_retrieval_metrics():
     """
     try:
         from retrieval.metrics import get_metrics
-        
+
         metrics = get_metrics()
         return {
             "status": "success",
@@ -41,42 +41,32 @@ def get_retrieval_metrics():
         logger.warning("Retrieval metrics module not available")
         raise HTTPException(
             status_code=503,
-            detail="Metrics collection is not available. Ensure retrieval.metrics module is accessible."
+            detail="Metrics collection is not available. Ensure retrieval.metrics module is accessible.",
         )
     except Exception as e:
         logger.error(f"Error retrieving metrics: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve metrics: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve metrics: {str(e)}")
 
 
 @router.post("/metrics/reset")
 def reset_retrieval_metrics():
     """
     Reset all retrieval metrics (useful for testing).
-    
+
     Returns:
         Confirmation message
     """
     try:
         from retrieval.metrics import reset_metrics
-        
+
         reset_metrics()
-        return {
-            "status": "success",
-            "message": "Metrics reset successfully"
-        }
+        return {"status": "success", "message": "Metrics reset successfully"}
     except ImportError:
         logger.warning("Retrieval metrics module not available")
         raise HTTPException(
             status_code=503,
-            detail="Metrics collection is not available. Ensure retrieval.metrics module is accessible."
+            detail="Metrics collection is not available. Ensure retrieval.metrics module is accessible.",
         )
     except Exception as e:
         logger.error(f"Error resetting metrics: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to reset metrics: {str(e)}"
-        )
-
+        raise HTTPException(status_code=500, detail=f"Failed to reset metrics: {str(e)}")

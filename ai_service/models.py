@@ -42,7 +42,9 @@ class TriageOutput(BaseModel):
     matched_evidence: MatchedEvidence
     severity: str  # critical, high, medium, low (derived from impact/urgency - system-calculated, not from LLM)
     confidence: float  # 0.0 to 1.0 (system-calculated based on evidence quality, not from LLM)
-    policy: str  # AUTO, PROPOSE, REVIEW (determined by policy gate - system-calculated, not from LLM)
+    policy: (
+        str  # AUTO, PROPOSE, REVIEW (determined by policy gate - system-calculated, not from LLM)
+    )
     routing: Optional[str] = (
         None  # Team queue assignment (e.g., "SE DBA SQL") - derived from assignment_group
     )

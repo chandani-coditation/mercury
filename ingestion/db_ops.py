@@ -169,7 +169,12 @@ def insert_document_and_chunks(
                         subchunk_text = "\n".join(current_subchunk)
                         chunks_with_headers.append(
                             add_chunk_header(
-                                subchunk_text, doc_type, service, component, title, last_reviewed_str
+                                subchunk_text,
+                                doc_type,
+                                service,
+                                component,
+                                title,
+                                last_reviewed_str,
                             )
                         )
                 else:
@@ -184,12 +189,18 @@ def insert_document_and_chunks(
             # Generate embeddings in batches (much faster for large documents)
             # Load batch size from config (graceful degradation if config missing)
             from ingestion.embeddings import embed_texts_batch
+
             try:
                 from ingestion.normalizers import INGESTION_CONFIG
-                default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
+
+                default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get(
+                    "embedding_batch", 50
+                )
             except Exception:
                 default_batch_size = 50  # Fallback to default
-            batch_size = default_batch_size if len(chunks_with_headers) > 10 else len(chunks_with_headers)
+            batch_size = (
+                default_batch_size if len(chunks_with_headers) > 10 else len(chunks_with_headers)
+            )
             embeddings = embed_texts_batch(
                 chunks_with_headers, model=embedding_model, batch_size=batch_size
             )
@@ -208,7 +219,9 @@ def insert_document_and_chunks(
                 "component": component,
                 "title": title,
             }
-            for idx, (chunk_with_header, embedding) in enumerate(zip(chunks_with_headers, embeddings)):
+            for idx, (chunk_with_header, embedding) in enumerate(
+                zip(chunks_with_headers, embeddings)
+            ):
                 # Convert embedding to string format for pgvector: '[1,2,3,...]'
                 embedding_str = "[" + ",".join(map(str, embedding)) + "]"
 
@@ -238,7 +251,9 @@ def insert_document_and_chunks(
             cur.close()
 
 
-def _create_runbook_step_embedding_text(step: RunbookStep, prerequisites: Optional[List[str]] = None) -> str:
+def _create_runbook_step_embedding_text(
+    step: RunbookStep, prerequisites: Optional[List[str]] = None
+) -> str:
     """
     Create embedding text for a runbook step.
 
@@ -388,17 +403,20 @@ def insert_runbook_with_steps(
                 (title,),
             )
             existing_doc = cur.fetchone()
-            
+
             if existing_doc:
                 # Delete existing runbook and its chunks/steps
                 existing_doc_id = existing_doc["id"]
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
-                    logger.info(f"Found existing runbook with title '{title}' (id={existing_doc_id}). Replacing it.")
+                    logger.info(
+                        f"Found existing runbook with title '{title}' (id={existing_doc_id}). Replacing it."
+                    )
                 except:
                     pass
-                
+
                 # Delete chunks first (CASCADE will handle runbook_steps if they exist)
                 cur.execute("DELETE FROM chunks WHERE document_id = %s", (existing_doc_id,))
                 # Delete the document
@@ -408,7 +426,7 @@ def insert_runbook_with_steps(
             else:
                 # New runbook - generate new ID
                 doc_id = uuid.uuid4()
-            
+
             # Insert runbook metadata document
             cur.execute(
                 """
@@ -444,7 +462,10 @@ def insert_runbook_with_steps(
                     # Load max length from config (graceful degradation if config missing)
                     try:
                         from ingestion.normalizers import INGESTION_CONFIG
-                        max_action_length = INGESTION_CONFIG.get("formatting", {}).get("max_fallback_action_length", 2000)
+
+                        max_action_length = INGESTION_CONFIG.get("formatting", {}).get(
+                            "max_fallback_action_length", 2000
+                        )
                     except Exception:
                         max_action_length = 2000  # Fallback to default
 
@@ -498,7 +519,10 @@ def insert_runbook_with_steps(
             # Load batch size from config (graceful degradation if config missing)
             try:
                 from ingestion.normalizers import INGESTION_CONFIG
-                default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get("embedding_batch", 50)
+
+                default_batch_size = INGESTION_CONFIG.get("batch_sizes", {}).get(
+                    "embedding_batch", 50
+                )
             except Exception:
                 default_batch_size = 50  # Fallback to default
             batch_size = min(default_batch_size, len(step_texts))
@@ -625,6 +649,7 @@ def insert_runbook_with_steps(
                         # This ensures atomicity: either all steps are stored or none
                         try:
                             from ai_service.core import get_logger
+
                             logger = get_logger(__name__)
                             logger.debug(f"Created chunk for runbook step {step.step_id}")
                         except:
@@ -633,6 +658,7 @@ def insert_runbook_with_steps(
                         # Log error - chunk creation is critical for retrieval
                         try:
                             from ai_service.core import get_logger
+
                             logger = get_logger(__name__)
                             logger.error(
                                 f"Failed to create chunk for runbook step {step.step_id}: {chunk_error}"
@@ -705,8 +731,11 @@ def insert_runbook_with_steps(
                     if embedding is None:
                         try:
                             from ai_service.core import get_logger
+
                             logger = get_logger(__name__)
-                            logger.error(f"Failed to generate embedding for fallback chunk. Skipping chunk creation.")
+                            logger.error(
+                                f"Failed to generate embedding for fallback chunk. Skipping chunk creation."
+                            )
                         except:
                             pass
                         # Skip chunk creation if embedding fails - no chunk will be created
@@ -776,7 +805,9 @@ def insert_runbook_with_steps(
                 from ai_service.core import get_logger
 
                 logger = get_logger(__name__)
-                logger.error(f"Transaction rolled back for runbook {title}: {str(e)}", exc_info=True)
+                logger.error(
+                    f"Transaction rolled back for runbook {title}: {str(e)}", exc_info=True
+                )
             except:
                 pass
             raise e
@@ -821,12 +852,17 @@ def insert_incident_signature(
             if embedding is None:
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
-                    logger.error(f"Failed to generate embedding for incident signature {signature.incident_signature_id}. Skipping signature.")
+                    logger.error(
+                        f"Failed to generate embedding for incident signature {signature.incident_signature_id}. Skipping signature."
+                    )
                 except:
                     pass
                 cur.close()
-                raise ValueError(f"Failed to generate embedding for incident signature {signature.incident_signature_id}")
+                raise ValueError(
+                    f"Failed to generate embedding for incident signature {signature.incident_signature_id}"
+                )
             embedding_str = "[" + ",".join(map(str, embedding)) + "]"
 
             # Prepare arrays for PostgreSQL
@@ -846,7 +882,7 @@ def insert_incident_signature(
                 f"{incident_title or ''} "
                 f"{incident_description or ''}"
             ).strip()
-            
+
             signature_id = uuid.uuid4()
             cur.execute(
                 """
@@ -904,8 +940,8 @@ def insert_incident_signature(
                     source_document_id,
                     datetime.now(),  # last_seen_at
                     tsv_text,  # tsv text for full-text search
-                    incident_title or '',  # For ON CONFLICT UPDATE
-                    incident_description or '',  # For ON CONFLICT UPDATE
+                    incident_title or "",  # For ON CONFLICT UPDATE
+                    incident_description or "",  # For ON CONFLICT UPDATE
                 ),
             )
 

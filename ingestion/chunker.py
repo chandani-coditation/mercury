@@ -9,6 +9,7 @@ from typing import List
 # Load chunking config
 _chunking_config = None
 
+
 def _load_chunking_config():
     """Load chunking configuration from config file."""
     global _chunking_config
@@ -55,7 +56,7 @@ def chunk_text(
     overlap = overlap or chunking_config.get("overlap", 30)
     safe_max_tokens_config = chunking_config.get("safe_max_tokens", 3000)
     large_paragraph_threshold = chunking_config.get("large_paragraph_threshold", 100000)
-    
+
     encoding = tiktoken.get_encoding("cl100k_base")  # Used by text-embedding-3-small
 
     # Safety limit: ensure chunks never exceed embedding model limit (8191 tokens)
@@ -66,7 +67,9 @@ def chunk_text(
     paragraphs = re.split(r"\n\s*\n", text.strip())
 
     # If no paragraph breaks (e.g., large log file), split by single newlines
-    if len(paragraphs) == 1 and len(text) > large_paragraph_threshold:  # Large single paragraph (from config)
+    if (
+        len(paragraphs) == 1 and len(text) > large_paragraph_threshold
+    ):  # Large single paragraph (from config)
         paragraphs = text.split("\n")
 
     chunks = []

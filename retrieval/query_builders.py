@@ -12,14 +12,14 @@ class HybridSearchQueryBuilder:
 
     # RRF configuration
     DEFAULT_RRF_K = 60
-    
+
     # Soft filter boost values
     SERVICE_EXACT_MATCH_BOOST = 0.15
     SERVICE_PARTIAL_MATCH_BOOST = 0.10
     COMPONENT_EXACT_MATCH_BOOST = 0.10
     COMPONENT_PARTIAL_MATCH_BOOST = 0.05
     COMPONENT_NULL_BOOST = 0.05  # For incident signatures when component is NULL
-    
+
     # Limit multipliers for RRF fusion
     # Higher multiplier = more candidates for better fusion results
     RRF_CANDIDATE_MULTIPLIER = 3  # Changed from 2 to 3 for better results
@@ -30,15 +30,15 @@ class HybridSearchQueryBuilder:
     ) -> str:
         """
         Returns RRF score calculation SQL fragment.
-        
+
         RRF (Reciprocal Rank Fusion) formula:
         score = (1/(k + vector_rank) * vector_weight) + (1/(k + fulltext_rank) * fulltext_weight)
-        
+
         Args:
             vector_weight: Weight for vector search results (0-1)
             fulltext_weight: Weight for full-text search results (0-1)
             rrf_k: RRF constant (default 60, higher = less aggressive ranking)
-        
+
         Returns:
             SQL fragment for RRF score calculation
         """
@@ -49,14 +49,14 @@ class HybridSearchQueryBuilder:
 
     @staticmethod
     def build_service_boost_case(
-        metadata_alias: str = "COALESCE(v.metadata->>'service', f.metadata->>'service', '')"
+        metadata_alias: str = "COALESCE(v.metadata->>'service', f.metadata->>'service', '')",
     ) -> str:
         """
         Returns service match boost CASE statement.
-        
+
         Args:
             metadata_alias: SQL expression to access service field in metadata
-        
+
         Returns:
             SQL CASE statement for service match boost
         """
@@ -121,7 +121,7 @@ class HybridSearchQueryBuilder:
     ) -> List[Optional[str]]:
         """
         Builds standardized parameter list for soft filter boosts.
-        
+
         Returns parameters in order:
         - service_val (for IS NULL check)
         - service_val (for exact match)
@@ -129,14 +129,14 @@ class HybridSearchQueryBuilder:
         - component_val (for IS NULL check)
         - component_val (for exact match)
         - component_val with % (for partial match)
-        
+
         Args:
             service_val: Service value to match (can be None)
             component_val: Component value to match (can be None)
-        
+
         Returns:
             List of 6 parameters for soft filter boosts
-        
+
         Note: For PostgreSQL type inference, None values are kept as None for IS NULL checks,
         but converted to empty strings for text comparisons to avoid IndeterminateDatatype errors.
         """
@@ -159,17 +159,17 @@ class HybridSearchQueryBuilder:
     ) -> List[Optional[str]]:
         """
         Builds parameter list for soft filter boosts with dual service matching.
-        
+
         Used for incident signatures which check both service and affected_service.
         Returns 8 parameters (6 for service + 2 extra for affected_service).
-        
+
         Args:
             service_val: Service value to match (can be None)
             component_val: Component value to match (can be None)
-        
+
         Returns:
             List of 8 parameters for dual service soft filter boosts
-        
+
         Note: For PostgreSQL type inference, None values are kept as None for IS NULL checks,
         but converted to empty strings for text comparisons to avoid IndeterminateDatatype errors.
         """
@@ -181,7 +181,9 @@ class HybridSearchQueryBuilder:
         params.append(service_val if service_val else "")  # Exact match (service field)
         params.append(service_val if service_val else "")  # Exact match (affected_service field)
         params.append(f"%{service_val}%" if service_val else "")  # Partial match (service field)
-        params.append(f"%{service_val}%" if service_val else "")  # Partial match (affected_service field)
+        params.append(
+            f"%{service_val}%" if service_val else ""
+        )  # Partial match (affected_service field)
         # Component params (3 params)
         params.append(component_val)  # IS NULL check
         params.append(component_val if component_val else "")  # Exact match
@@ -194,19 +196,19 @@ class HybridSearchQueryBuilder:
     ) -> List[Optional[str]]:
         """
         Builds parameter list for soft filter boosts used in ORDER BY clause.
-        
+
         Returns parameters in order (duplicated for SELECT and ORDER BY):
         - Service params (3) for SELECT
         - Component params (3) for SELECT
         - Service params (3) for ORDER BY
         - Component params (3) for ORDER BY
-        
+
         Used for runbook metadata query which calculates boosts in both SELECT and ORDER BY.
-        
+
         Args:
             service_val: Service value to match (can be None)
             component_val: Component value to match (can be None)
-        
+
         Returns:
             List of 12 parameters (6 for SELECT + 6 for ORDER BY)
         """
@@ -221,13 +223,13 @@ class HybridSearchQueryBuilder:
     def calculate_rrf_candidate_limit(final_limit: int) -> int:
         """
         Calculates the limit for RRF candidate collection (vector and fulltext CTEs).
-        
+
         For better RRF fusion results, we need more candidates than the final limit.
         Higher multiplier = better fusion quality but slower queries.
-        
+
         Args:
             final_limit: Desired final number of results
-        
+
         Returns:
             Limit to use for vector and fulltext candidate collection
         """
@@ -239,18 +241,18 @@ class HybridSearchQueryBuilder:
     ) -> Tuple[bool, str]:
         """
         Validates that parameter count matches query placeholders.
-        
+
         Args:
             query: SQL query string with %s placeholders
             params: List of parameters
             expected_count: Expected parameter count (if None, counts placeholders)
-        
+
         Returns:
             Tuple of (is_valid, error_message)
         """
         placeholder_count = query.count("%s")
         param_count = len(params)
-        
+
         if expected_count is not None:
             if param_count != expected_count:
                 return (
@@ -264,6 +266,5 @@ class HybridSearchQueryBuilder:
                     f"Parameter count mismatch: query has {placeholder_count} placeholders "
                     f"but {param_count} parameters provided",
                 )
-        
-        return (True, "")
 
+        return (True, "")

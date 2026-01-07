@@ -13,11 +13,11 @@ router = APIRouter()
 def get_incidents(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    search: Optional[str] = Query(None, description="Search by incident ID or alert ID")
+    search: Optional[str] = Query(None, description="Search by incident ID or alert ID"),
 ):
     """
     List incidents with optional search and pagination.
-    
+
     Args:
         limit: Maximum number of incidents to return (1-200)
         offset: Number of incidents to skip
@@ -31,7 +31,7 @@ def get_incidents(
             "count": len(incidents),
             "total": total_count,
             "limit": limit,
-            "offset": offset
+            "offset": offset,
         }
     except DatabaseError as e:
         logger.error(f"Database error listing incidents: {str(e)}")

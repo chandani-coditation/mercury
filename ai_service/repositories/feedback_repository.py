@@ -52,8 +52,10 @@ class FeedbackRepository:
 
                 # Validate rating if provided
                 if rating and rating not in ["thumbs_up", "thumbs_down"]:
-                    raise ValueError(f"Invalid rating: {rating}. Must be 'thumbs_up' or 'thumbs_down'")
-                
+                    raise ValueError(
+                        f"Invalid rating: {rating}. Must be 'thumbs_up' or 'thumbs_down'"
+                    )
+
                 cur.execute(
                     """
                     INSERT INTO feedback (id, incident_id, feedback_type, system_output, user_edited, diff, notes, rating)
@@ -156,29 +158,29 @@ class FeedbackRepository:
     ) -> Optional[Dict]:
         """
         Find existing feedback record for a rating (thumbs up/down) based on notes pattern.
-        
+
         The notes field typically contains patterns like:
         - "Rating for severity: thumbs_up"
         - "Rating for resolution step 1: thumbs_down"
-        
+
         Args:
             incident_id: Incident ID
             feedback_type: 'triage' or 'resolution'
             notes: Notes string that contains the field/step identifier
-            
+
         Returns:
             Existing feedback record if found, None otherwise
         """
         if not notes:
             return None
-            
+
         logger.debug(
             f"Finding existing rating feedback for incident: {incident_id}, type={feedback_type}, notes={notes}"
         )
-        
+
         with get_db_connection_context() as conn:
             cur = conn.cursor()
-            
+
             try:
                 # Validate UUID format
                 validated_uuid = uuid.UUID(incident_id)
@@ -186,7 +188,7 @@ class FeedbackRepository:
             except (ValueError, TypeError):
                 logger.warning(f"Invalid UUID format for incident_id: {incident_id}")
                 return None
-            
+
             try:
                 # Find feedback with matching incident_id, feedback_type, and notes pattern
                 # Extract the field/step identifier from notes (e.g., "severity", "step 1")
@@ -211,7 +213,7 @@ class FeedbackRepository:
                     (uuid_str, feedback_type, f"Rating for%"),
                 )
                 row = cur.fetchone()
-                
+
                 if row:
                     # Extract field identifier from both notes to compare
                     existing_notes = row["notes"] or ""
@@ -227,10 +229,10 @@ class FeedbackRepository:
                                     identifier_part = parts[1].split(":")[0].strip()
                                     return identifier_part
                             return None
-                        
+
                         existing_id = extract_identifier(existing_notes)
                         new_id = extract_identifier(notes)
-                        
+
                         # If identifiers match, this is the same field/step
                         if existing_id and new_id and existing_id == new_id:
                             logger.debug(
@@ -238,13 +240,17 @@ class FeedbackRepository:
                             )
                             return {
                                 "id": str(row["id"]),
-                                "incident_id": str(row["incident_id"]) if row["incident_id"] else None,
+                                "incident_id": (
+                                    str(row["incident_id"]) if row["incident_id"] else None
+                                ),
                                 "feedback_type": row["feedback_type"],
                                 "notes": row["notes"],
                                 "rating": row["rating"],
-                                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                                "created_at": (
+                                    row["created_at"].isoformat() if row["created_at"] else None
+                                ),
                             }
-                
+
                 return None
             except Exception as e:
                 logger.error(
@@ -263,41 +269,41 @@ class FeedbackRepository:
     ) -> bool:
         """
         Update an existing feedback record's rating and notes.
-        
+
         Args:
             feedback_id: Feedback record ID
             rating: New rating ('thumbs_up' or 'thumbs_down')
             notes: Optional new notes
-            
+
         Returns:
             True if update successful, False otherwise
         """
         logger.debug(f"Updating feedback rating: {feedback_id}, rating={rating}")
-        
+
         with get_db_connection_context() as conn:
             cur = conn.cursor()
-            
+
             try:
                 validated_uuid = uuid.UUID(feedback_id)
                 uuid_str = str(validated_uuid)
             except (ValueError, TypeError):
                 logger.warning(f"Invalid UUID format for feedback_id: {feedback_id}")
                 return False
-            
+
             try:
                 # Validate rating
                 if rating not in ["thumbs_up", "thumbs_down"]:
                     raise ValueError(f"Invalid rating: {rating}")
-                
+
                 update_fields = ["rating = %s"]
                 params = [rating]
-                
+
                 if notes:
                     update_fields.append("notes = %s")
                     params.append(notes)
-                
+
                 params.append(uuid_str)
-                
+
                 cur.execute(
                     f"""
                     UPDATE feedback
@@ -306,7 +312,7 @@ class FeedbackRepository:
                     """,
                     tuple(params),
                 )
-                
+
                 conn.commit()
                 logger.info(f"Feedback rating updated: {feedback_id}")
                 return True
@@ -321,7 +327,7 @@ class FeedbackRepository:
     def list_for_incident(incident_id: str) -> List[Dict]:
         """
         List all feedback records for a given incident.
-        
+
         For rating feedback (thumbs up/down), only returns the latest feedback
         per field/step combination to avoid duplicates.
 
@@ -338,7 +344,7 @@ class FeedbackRepository:
             DatabaseError: If database operation fails
         """
         logger.debug(f"Listing feedback for incident_id={incident_id}")
-        
+
         # Validate and convert UUID format in Python for better error messages
         try:
             # Validate UUID format
@@ -348,7 +354,7 @@ class FeedbackRepository:
             error_msg = f"Invalid UUID format: {incident_id}"
             logger.error(f"{error_msg}: {str(e)}")
             raise DatabaseError(error_msg) from e
-        
+
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -368,7 +374,7 @@ class FeedbackRepository:
                     (uuid_str,),
                 )
                 rows = cur.fetchall()
-                
+
                 # Helper function to extract field/step identifier from notes
                 def extract_identifier(note_str: Optional[str]) -> Optional[str]:
                     if not note_str or "Rating for" not in note_str:
@@ -378,11 +384,11 @@ class FeedbackRepository:
                         identifier_part = parts[1].split(":")[0].strip()
                         return identifier_part
                     return None
-                
+
                 # Deduplicate: keep only latest feedback per field/step combination
                 seen_identifiers: Dict[str, bool] = {}
                 results: List[Dict] = []
-                
+
                 for r in rows:
                     # Rows are dictionaries due to dict_row factory
                     feedback_record = {
@@ -393,7 +399,7 @@ class FeedbackRepository:
                         "rating": r["rating"],
                         "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                     }
-                    
+
                     # For rating feedback, deduplicate by field/step identifier
                     if r["rating"] and r["notes"]:
                         identifier = extract_identifier(r["notes"])
@@ -404,9 +410,9 @@ class FeedbackRepository:
                                 # Skip this duplicate - we already have the latest one
                                 continue
                             seen_identifiers[key] = True
-                    
+
                     results.append(feedback_record)
-                
+
                 logger.debug(
                     "Listed %d feedback records (after deduplication) for incident_id=%s (total before dedup: %d)",
                     len(results),
@@ -419,21 +425,24 @@ class FeedbackRepository:
                 error_details = []
                 error_details.append(f"Exception type: {type(e).__name__}")
                 error_details.append(f"Exception message: {str(e) if str(e) else repr(e)}")
-                
+
                 # Check for psycopg-specific error attributes
-                if hasattr(e, 'pgcode'):
+                if hasattr(e, "pgcode"):
                     error_details.append(f"PostgreSQL error code: {e.pgcode}")
-                if hasattr(e, 'pgerror'):
+                if hasattr(e, "pgerror"):
                     error_details.append(f"PostgreSQL error message: {e.pgerror}")
-                if hasattr(e, 'diag'):
+                if hasattr(e, "diag"):
                     error_details.append(f"PostgreSQL diagnostic: {e.diag}")
-                
+
                 # Get full exception details
                 import traceback
+
                 error_traceback = traceback.format_exc()
-                
-                error_msg = " | ".join(error_details) if error_details else (str(e) if str(e) else repr(e))
-                
+
+                error_msg = (
+                    " | ".join(error_details) if error_details else (str(e) if str(e) else repr(e))
+                )
+
                 logger.error(
                     "Failed to list feedback for incident_id=%s: %s\nTraceback:\n%s",
                     incident_id,
@@ -445,4 +454,3 @@ class FeedbackRepository:
                 ) from e
             finally:
                 cur.close()
-

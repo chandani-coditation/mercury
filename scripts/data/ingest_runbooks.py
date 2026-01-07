@@ -281,7 +281,9 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
             runbook_patterns_config = service_component_mapping.get("runbook_filename_patterns", {})
             patterns = runbook_patterns_config.get("patterns", [])
             default_service = runbook_patterns_config.get("default_service", "General")
-            component_suffixes = runbook_patterns_config.get("component_suffixes_to_remove", [" Alerts", " Alert"])
+            component_suffixes = runbook_patterns_config.get(
+                "component_suffixes_to_remove", [" Alerts", " Alert"]
+            )
         else:
             patterns = []
             default_service = "General"
@@ -299,7 +301,7 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
         if any(keyword in filename_lower for keyword in keywords):
             service = pattern.get("service", default_service)
             component_extraction = pattern.get("component_extraction", "remove_keywords")
-            
+
             if component_extraction == "use_full_filename":
                 component = filename_clean
             elif component_extraction == "remove_keywords":
@@ -308,11 +310,14 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
                 for keyword in keywords:
                     # Remove keyword (case-insensitive)
                     import re
-                    component = re.sub(re.escape(keyword), "", component, flags=re.IGNORECASE).strip()
+
+                    component = re.sub(
+                        re.escape(keyword), "", component, flags=re.IGNORECASE
+                    ).strip()
                 component = " ".join(component.split())  # Normalize whitespace
             else:
                 component = None
-            
+
             matched = True
             break
 

@@ -199,56 +199,54 @@ def split_incidents_for_testing(
     incidents: List[IngestIncident], test_percentage: float = 0.1
 ) -> Tuple[List[IngestIncident], List[IngestIncident]]:
     """Split incidents into ingestion set (90%) and test set (10%).
-    
+
     Args:
         incidents: List of incidents to split
         test_percentage: Percentage to reserve for testing (default: 0.1 = 10%)
-    
+
     Returns:
         Tuple of (incidents_to_ingest, incidents_for_testing)
     """
     if not incidents:
         return [], []
-    
+
     # Shuffle for random selection
     shuffled = incidents.copy()
     random.seed(42)  # Fixed seed for reproducibility
     random.shuffle(shuffled)
-    
+
     # Calculate split point
     total = len(shuffled)
     test_count = max(1, int(total * test_percentage))  # At least 1 for testing
-    
+
     test_incidents = shuffled[:test_count]
     ingest_incidents = shuffled[test_count:]
-    
+
     return ingest_incidents, test_incidents
 
 
-def save_test_incidents_to_file(
-    incidents: List[IngestIncident], output_file: Path
-) -> None:
+def save_test_incidents_to_file(incidents: List[IngestIncident], output_file: Path) -> None:
     """Save test incidents to a CSV file (always replaces the file).
-    
+
     Args:
         incidents: List of incidents to save
         output_file: Path to output CSV file
     """
     if not incidents:
         return
-    
+
     # Ensure output directory exists
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Get field names from first incident
     first_incident = incidents[0]
     fieldnames = list(first_incident.model_dump(mode="json", exclude_none=True).keys())
-    
+
     # Write to CSV (always replace, not append)
     with open(output_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        
+
         for incident in incidents:
             # Convert to dict, handling datetime serialization
             incident_dict = incident.model_dump(mode="json", exclude_none=True)
@@ -257,16 +255,20 @@ def save_test_incidents_to_file(
                 if isinstance(incident_dict["timestamp"], datetime):
                     incident_dict["timestamp"] = incident_dict["timestamp"].isoformat()
             writer.writerow(incident_dict)
-    
+
     logger.info(f"Saved {len(incidents)} test incidents to {output_file}")
 
 
 def ingest_csv_file(
-    file_path: Path, field_mappings: Dict, severity_mapping: Dict, ingestion_url: str,
-    test_percentage: float = 0.1, test_output_file: Optional[Path] = None
+    file_path: Path,
+    field_mappings: Dict,
+    severity_mapping: Dict,
+    ingestion_url: str,
+    test_percentage: float = 0.1,
+    test_output_file: Optional[Path] = None,
 ) -> tuple[int, int, List[IngestIncident]]:
     """Ingest all rows from a CSV file with improved progress reporting.
-    
+
     Args:
         file_path: Path to CSV file
         field_mappings: Field mapping configuration
@@ -308,32 +310,40 @@ def ingest_csv_file(
         if total_rows == 0:
             print("  ⚠️  No valid tickets to ingest")
             return 0, error_count, []
-        
+
         # Split incidents: 90% for ingestion, 10% for testing
         test_incidents = []
         if test_percentage > 0:
-            ingest_incidents, test_incidents = split_incidents_for_testing(incidents, test_percentage)
-            
+            ingest_incidents, test_incidents = split_incidents_for_testing(
+                incidents, test_percentage
+            )
+
             # Save test incidents to file if output file specified (for single file mode)
             if test_output_file:
                 save_test_incidents_to_file(test_incidents, test_output_file)
-                print(f"  📝 Reserved {len(test_incidents)} ticket(s) for testing → {test_output_file.name}")
+                print(
+                    f"  📝 Reserved {len(test_incidents)} ticket(s) for testing → {test_output_file.name}"
+                )
             else:
                 print(f"  📝 Reserved {len(test_incidents)} ticket(s) for testing")
-            print(f"  📥 Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)\n")
-            logger.info(f"Reserved {len(test_incidents)} incidents for testing, ingesting {len(ingest_incidents)}")
-            
+            print(
+                f"  📥 Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)\n"
+            )
+            logger.info(
+                f"Reserved {len(test_incidents)} incidents for testing, ingesting {len(ingest_incidents)}"
+            )
+
             incidents = ingest_incidents  # Use only the ingestion set
 
         # Second pass: Ingest incidents (individual requests with progress)
         print(f"  Ingesting {total_rows} ticket(s)...")
         print(f"  Progress: [{' ' * 50}] 0%", end="", flush=True)
-        
+
         for idx, incident in enumerate(incidents, 1):
             # Calculate progress percentage
             progress = int((idx / total_rows) * 100)
             filled = int(progress / 2)  # 50 chars = 100%
-            
+
             # Estimate time remaining
             elapsed = time.time() - start_time
             if idx > 1:
@@ -345,16 +355,18 @@ def ingest_csv_file(
                     eta_str = f" (ETA: {int(remaining)}s)"
             else:
                 eta_str = ""
-            
+
             # Update progress bar
             incident_id = incident.incident_id or f"row_{idx}"
             title_preview = (
-                (incident.title[:40] + "...")
-                if len(incident.title) > 40
-                else incident.title
+                (incident.title[:40] + "...") if len(incident.title) > 40 else incident.title
             )
-            print(f"\r  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}% - {title_preview}{eta_str}", end="", flush=True)
-            
+            print(
+                f"\r  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}% - {title_preview}{eta_str}",
+                end="",
+                flush=True,
+            )
+
             success, _ = ingest_incident(incident, ingestion_url)
             if success:
                 success_count += 1
@@ -362,8 +374,12 @@ def ingest_csv_file(
                 error_count += 1
                 # Show error on new line but keep progress bar
                 print(f"\n     ⚠️  Failed: {incident_id}")
-                print(f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%", end="", flush=True)
-        
+                print(
+                    f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%",
+                    end="",
+                    flush=True,
+                )
+
         print(f"\r  Progress: [{'=' * 50}] 100% - Complete!                    ")
 
         elapsed_time = time.time() - start_time
@@ -447,11 +463,18 @@ def main():
             logger.error(f"File not found: {file_path}")
             sys.exit(1)
 
-        test_output = Path(args.test_output_file) if args.test_output_file else file_path.parent / "test_incidents.csv"
+        test_output = (
+            Path(args.test_output_file)
+            if args.test_output_file
+            else file_path.parent / "test_incidents.csv"
+        )
         success, errors, test_incidents = ingest_csv_file(
-            file_path, servicenow_mappings, severity_mapping, args.ingestion_url,
+            file_path,
+            servicenow_mappings,
+            severity_mapping,
+            args.ingestion_url,
             test_percentage=0 if args.no_test_split else args.test_percentage,
-            test_output_file=None  # Don't save per-file, accumulate instead
+            test_output_file=None,  # Don't save per-file, accumulate instead
         )
         total_success += success
         total_errors += errors
@@ -477,18 +500,25 @@ def main():
 
         for csv_file in csv_files:
             success, errors, test_incidents = ingest_csv_file(
-                csv_file, servicenow_mappings, severity_mapping, args.ingestion_url,
+                csv_file,
+                servicenow_mappings,
+                severity_mapping,
+                args.ingestion_url,
                 test_percentage=0 if args.no_test_split else args.test_percentage,
-                test_output_file=None  # Don't save per-file, accumulate instead
+                test_output_file=None,  # Don't save per-file, accumulate instead
             )
             total_success += success
             total_errors += errors
             if test_incidents:
                 all_test_incidents.extend(test_incidents)
-        
+
         # Save all accumulated test incidents to a single file (always replace)
         if all_test_incidents and not args.no_test_split:
-            test_output = Path(args.test_output_file) if args.test_output_file else dir_path / "test_incidents.csv"
+            test_output = (
+                Path(args.test_output_file)
+                if args.test_output_file
+                else dir_path / "test_incidents.csv"
+            )
             save_test_incidents_to_file(all_test_incidents, test_output)
             print(f"\n📝 Saved {len(all_test_incidents)} test incidents to {test_output.name}")
             logger.info(f"Saved {len(all_test_incidents)} test incidents to {test_output}")
@@ -506,12 +536,14 @@ def main():
 
     # Verify embeddings were created (skip if using Docker - use verify_db.py instead)
     if total_success > 0:
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("Verification")
-        print("="*70)
+        print("=" * 70)
         print("  Note: For detailed verification, run: python scripts/db/verify_db.py")
         print("  (Skipping direct database connection to use Docker PostgreSQL only)")
-        logger.info("Skipping direct database verification (use verify_db.py for Docker PostgreSQL)")
+        logger.info(
+            "Skipping direct database verification (use verify_db.py for Docker PostgreSQL)"
+        )
 
     if total_errors > 0:
         print(f"\n  Completed with {total_errors} error(s). Check logs for details.")

@@ -17,3 +17,5 @@ volume is critical|critical state,storage_critical,storage
 percent used.*9[0-9]|free space.*low,storage_capacity_low,storage
 percent used.*100|free space.*0,storage_exhausted,storage
 
+
+

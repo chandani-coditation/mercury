@@ -30,7 +30,7 @@ def get_incident_descriptions(incident_ids: List[str]) -> Dict[str, Dict[str, st
             if not incident_ids or len(incident_ids) == 0:
                 logger.warning("Empty incident_ids list, returning empty results")
                 return {}
-            
+
             # Query documents table for incidents matching the incident_ids in tags
             placeholders = ",".join(["%s"] * len(incident_ids))
 

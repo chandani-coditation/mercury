@@ -10,3 +10,5 @@ FT-008,failure_type,8,keyword,authentication|authorization,AUTHENTICATION_FAILUR
 FT-009,failure_type,9,exact_match,Monitoring/Alert,UNKNOWN_FAILURE,category,Monitoring alerts without specific failure
 FT-010,failure_type,10,fallback,,UNKNOWN_FAILURE,,Default fallback
 
+
+

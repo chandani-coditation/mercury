@@ -42,21 +42,21 @@ def _get_risk_level_keywords():
     config = _load_step_classification_config()
     risk_levels = config.get("risk_levels", {})
     return {
-        "high_risk": risk_levels.get("high_risk_keywords", {}).get("keywords", [
-            "kill", "delete", "drop", "remove", "stop", "restart"
-        ]),
-        "medium_risk": risk_levels.get("medium_risk_keywords", {}).get("keywords", [
-            "update", "modify", "change", "alter"
-        ])
+        "high_risk": risk_levels.get("high_risk_keywords", {}).get(
+            "keywords", ["kill", "delete", "drop", "remove", "stop", "restart"]
+        ),
+        "medium_risk": risk_levels.get("medium_risk_keywords", {}).get(
+            "keywords", ["update", "modify", "change", "alter"]
+        ),
     }
 
 
 def _get_condition_text_exclusions():
     """Get condition text exclusions from config."""
     config = _load_step_classification_config()
-    return config.get("condition_text_exclusions", {}).get("exclusions", [
-        "step applies", "n/a", ""
-    ])
+    return config.get("condition_text_exclusions", {}).get(
+        "exclusions", ["step applies", "n/a", ""]
+    )
 
 
 def _clean_action_for_plain_english(action: str) -> str:
@@ -346,7 +346,8 @@ def assemble_recommendations(
             "action": enhanced_action,
             "condition": (
                 condition_text
-                if condition_text and condition_text.lower() not in [excl.lower() for excl in condition_exclusions]
+                if condition_text
+                and condition_text.lower() not in [excl.lower() for excl in condition_exclusions]
                 else None
             ),
             "expected_outcome": expected_outcome,

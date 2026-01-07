@@ -310,10 +310,8 @@ def list_feedback_for_incident(incident_id: str):
     try:
         # Validate incident_id format (should be UUID)
         if not incident_id or len(incident_id.strip()) == 0:
-            raise HTTPException(
-                status_code=400, detail="Invalid incident_id: cannot be empty"
-            )
-        
+            raise HTTPException(status_code=400, detail="Invalid incident_id: cannot be empty")
+
         feedback_service = FeedbackService()
         records = feedback_service.list_for_incident(incident_id)
         return {"incident_id": incident_id, "feedback": records}
@@ -347,7 +345,4 @@ def list_feedback_for_incident(incident_id: str):
             type(e).__name__,
             exc_info=True,
         )
-        raise HTTPException(
-            status_code=500, detail=f"Internal server error: {error_msg}"
-        )
-
+        raise HTTPException(status_code=500, detail=f"Internal server error: {error_msg}")

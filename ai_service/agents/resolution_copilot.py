@@ -84,21 +84,23 @@ def _resolution_copilot_agent_internal(
         # Enhance query text for better retrieval
         try:
             from retrieval.query_enhancer import enhance_query
+
             query_text = enhance_query(alert)
         except Exception as e:
             logger.warning(f"Query enhancement failed, using basic query: {e}")
             query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
-        
+
         labels = alert.get("labels", {}) or {}
-        
+
         # Check if MMR should be used
         resolution_config_all = get_retrieval_config() or {}
         resolution_retrieval_cfg = resolution_config_all.get("resolution", {})
         use_mmr = resolution_retrieval_cfg.get("use_mmr", False)
         mmr_diversity = resolution_retrieval_cfg.get("mmr_diversity", 0.5)
-        
+
         if use_mmr:
             from retrieval.hybrid_search import mmr_search
+
             context_chunks = mmr_search(
                 query_text=query_text,
                 service=labels.get("service") if isinstance(labels, dict) else None,
@@ -242,14 +244,15 @@ def _resolution_copilot_agent_internal(
     # Enhance query text for better retrieval
     try:
         from retrieval.query_enhancer import enhance_query
+
         base_query = enhance_query(alert_dict)
         query_text = f"{base_query} resolution steps runbook"
     except Exception as e:
         logger.warning(f"Query enhancement failed, using basic query: {e}")
         query_text = f"{alert_dict.get('title', '')} {alert_dict.get('description', '')} resolution steps runbook"
-    
+
     labels = alert_dict.get("labels") or {}
-    
+
     logger.debug(
         f"Retrieving context for resolution: query='{query_text[:100]}...', "
         f"limit={retrieval_limit}, vector_weight={vector_weight}, fulltext_weight={fulltext_weight}"
@@ -261,9 +264,10 @@ def _resolution_copilot_agent_internal(
     # Check if MMR should be used
     use_mmr = retrieval_config.get("use_mmr", False)
     mmr_diversity = retrieval_config.get("mmr_diversity", 0.5)
-    
+
     if use_mmr:
         from retrieval.hybrid_search import mmr_search
+
         context_chunks = mmr_search(
             query_text=query_text,
             service=service_val,
@@ -315,8 +319,12 @@ def _resolution_copilot_agent_internal(
     # Get config to check if graceful degradation is enabled
     workflow_config = get_workflow_config() or {}
     resolution_config = workflow_config.get("resolution", {})
-    allow_resolution_without_context = resolution_config.get("allow_resolution_without_context", False) if resolution_config else False
-    
+    allow_resolution_without_context = (
+        resolution_config.get("allow_resolution_without_context", False)
+        if resolution_config
+        else False
+    )
+
     MIN_REQUIRED_CHUNKS = 1  # Preferred minimum chunks for resolution
 
     if len(context_chunks) < MIN_REQUIRED_CHUNKS:
@@ -381,12 +389,18 @@ def _resolution_copilot_agent_internal(
             if not allow_resolution_without_context:
                 raise
             # If graceful degradation is enabled, log warning and continue
-            logger.warning("Resolution context validation failed, but graceful degradation enabled. Continuing with low confidence.")
-            resolution_evidence_warning = "No matching context found, generating resolution with low confidence."
+            logger.warning(
+                "Resolution context validation failed, but graceful degradation enabled. Continuing with low confidence."
+            )
+            resolution_evidence_warning = (
+                "No matching context found, generating resolution with low confidence."
+            )
         except Exception as e:
             # If we can't check the database
             if allow_resolution_without_context:
-                warning_msg = f"Cannot verify database state: {e}. Proceeding with low confidence resolution."
+                warning_msg = (
+                    f"Cannot verify database state: {e}. Proceeding with low confidence resolution."
+                )
                 logger.warning(warning_msg)
                 resolution_evidence_warning = warning_msg
             else:
@@ -397,9 +411,13 @@ def _resolution_copilot_agent_internal(
                 raise ValueError(error_msg)
 
     if len(context_chunks) >= MIN_REQUIRED_CHUNKS:
-        logger.info(f"✅ RESOLUTION SUCCESS: Context validation passed - {len(context_chunks)} chunks retrieved for resolution")
+        logger.info(
+            f"✅ RESOLUTION SUCCESS: Context validation passed - {len(context_chunks)} chunks retrieved for resolution"
+        )
     else:
-        logger.warning(f"⚠️ RESOLUTION WARNING: Proceeding with {len(context_chunks)} chunks (below preferred minimum of {MIN_REQUIRED_CHUNKS}). Graceful degradation enabled.")
+        logger.warning(
+            f"⚠️ RESOLUTION WARNING: Proceeding with {len(context_chunks)} chunks (below preferred minimum of {MIN_REQUIRED_CHUNKS}). Graceful degradation enabled."
+        )
 
     # Call LLM for resolution
     resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
@@ -518,11 +536,11 @@ def _resolution_copilot_agent_internal(
     # Note: evidence_warning is only set in triage-first path (when incident_id not provided)
     # resolution_evidence_warning is set in the normal resolution path (when incident_id is provided)
     # Both are initialized to None at function start, so safe to check
-    
+
     # Determine overall status and evidence status
     has_resolution_evidence = len(context_chunks) > 0
     resolution_status = "success" if has_resolution_evidence else "failed_no_evidence"
-    
+
     # Enhance warning messages to be more explicit
     if resolution_evidence_warning:
         if "No historical data" in resolution_evidence_warning:
@@ -543,33 +561,41 @@ def _resolution_copilot_agent_internal(
             )
             resolution_status = "failed_no_matching_evidence"
         else:
-            resolution_evidence_warning = f"⚠️ {resolution_evidence_warning} Status: {resolution_status.upper()}."
-    
+            resolution_evidence_warning = (
+                f"⚠️ {resolution_evidence_warning} Status: {resolution_status.upper()}."
+            )
+
     if evidence_warning:
         result["evidence_warning"] = evidence_warning
-        result["evidence_status"] = "failed_no_evidence" if "NO EVIDENCE" in evidence_warning else "success"
-    
+        result["evidence_status"] = (
+            "failed_no_evidence" if "NO EVIDENCE" in evidence_warning else "success"
+        )
+
     if resolution_evidence_warning:
         result["resolution_evidence_warning"] = resolution_evidence_warning
         result["resolution_evidence_status"] = resolution_status
-    
+
     # Add overall status indicators
     result["status"] = "success" if has_resolution_evidence else "failed_no_evidence"
     result["evidence_count"] = {
         "context_chunks": len(context_chunks),
-        "has_evidence": has_resolution_evidence
+        "has_evidence": has_resolution_evidence,
     }
-    
+
     # Add warning field for backward compatibility
     if resolution_evidence_warning:
         result["warning"] = resolution_evidence_warning
     elif evidence_warning:
         result["warning"] = evidence_warning
-    
+
     # Log clear status message
     if has_resolution_evidence:
-        logger.info(f"✅ RESOLUTION SUCCESS: Found {len(context_chunks)} context chunks. Resolution generated successfully.")
+        logger.info(
+            f"✅ RESOLUTION SUCCESS: Found {len(context_chunks)} context chunks. Resolution generated successfully."
+        )
     else:
-        logger.warning(f"❌ RESOLUTION FAILED: No evidence found. {resolution_evidence_warning or 'No context chunks available.'}")
+        logger.warning(
+            f"❌ RESOLUTION FAILED: No evidence found. {resolution_evidence_warning or 'No context chunks available.'}"
+        )
 
     return result

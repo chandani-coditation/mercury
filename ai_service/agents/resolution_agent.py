@@ -45,9 +45,9 @@ def _load_problem_keywords_config():
 def _get_corrective_action_keywords():
     """Get corrective action keywords from config."""
     config = _load_problem_keywords_config()
-    return config.get("corrective_action_keywords", {}).get("keywords", [
-        "reduce", "clean", "fix", "resolve", "remove", "clear", "free", "backup"
-    ])
+    return config.get("corrective_action_keywords", {}).get(
+        "keywords", ["reduce", "clean", "fix", "resolve", "remove", "clear", "free", "backup"]
+    )
 
 
 def _get_preferred_step_types():
@@ -60,6 +60,8 @@ def _get_problem_keyword_groups():
     """Get problem keyword groups from config."""
     config = _load_problem_keywords_config()
     return config.get("problem_keyword_groups", {})
+
+
 from retrieval.resolution_retrieval import (
     retrieve_runbook_steps,
     retrieve_historical_resolutions,
@@ -642,7 +644,7 @@ def _identify_root_problem(triage_output: Dict[str, Any], incident_signature: An
         summary_lower = summary.lower()
         problem_keywords = []
         keyword_groups = _get_problem_keyword_groups()
-        
+
         # Check each keyword group from config
         # Skip metadata keys (starting with _) and ensure group_config is a dict
         for group_name, group_config in keyword_groups.items():
@@ -651,7 +653,9 @@ def _identify_root_problem(triage_output: Dict[str, Any], incident_signature: An
                 continue
             # Safety check: ensure group_config is a dictionary
             if not isinstance(group_config, dict):
-                logger.warning(f"Invalid group_config type for '{group_name}': expected dict, got {type(group_config)}")
+                logger.warning(
+                    f"Invalid group_config type for '{group_name}': expected dict, got {type(group_config)}"
+                )
                 continue
             keywords = group_config.get("keywords", [])
             problem_type = group_config.get("problem_type", group_name)

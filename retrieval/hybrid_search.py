@@ -25,17 +25,17 @@ logger = get_logger(__name__)
 def _normalize_limit(limit: Union[int, str, float, None], default: int = 10) -> int:
     """
     Normalize limit parameter to integer.
-    
+
     Args:
         limit: Limit value (can be int, string, float, or None)
         default: Default value if limit is None or invalid
-    
+
     Returns:
         Integer limit value
     """
     if limit is None:
         return default
-    
+
     try:
         if isinstance(limit, (int, float)):
             limit_int = int(limit)
@@ -43,7 +43,7 @@ def _normalize_limit(limit: Union[int, str, float, None], default: int = 10) -> 
             limit_int = int(limit.strip())
         else:
             return default
-        
+
         # Ensure positive
         if limit_int < 1:
             return default
@@ -56,19 +56,19 @@ def _normalize_limit(limit: Union[int, str, float, None], default: int = 10) -> 
 def _normalize_query_text(query_text: Optional[str]) -> str:
     """
     Normalize query text parameter.
-    
+
     Args:
         query_text: Query text (can be None, empty string, or string)
-    
+
     Returns:
         Normalized query text (empty string if None/invalid)
     """
     if query_text is None:
         return ""
-    
+
     if isinstance(query_text, str):
         return query_text.strip()
-    
+
     # Try to convert to string
     try:
         return str(query_text).strip()
@@ -103,24 +103,29 @@ def hybrid_search(
     # Normalize and validate parameters
     query_text = _normalize_query_text(query_text)
     # Use simpler query for full-text search if provided, otherwise use query_text for both
-    fulltext_query = _normalize_query_text(fulltext_query_text) if fulltext_query_text is not None else query_text
+    fulltext_query = (
+        _normalize_query_text(fulltext_query_text)
+        if fulltext_query_text is not None
+        else query_text
+    )
     limit = _normalize_limit(limit, default=10)  # Increased default from 5 to 10
     rrf_k = _normalize_limit(rrf_k, default=HybridSearchQueryBuilder.DEFAULT_RRF_K)
-    
+
     if not query_text:
         logger.warning("Empty query text provided to hybrid_search, returning empty results")
         return []
-    
+
     start_time = time.time()
     logger.debug(
         f"Starting hybrid search: query='{query_text[:100]}...', "
         f"fulltext_query='{fulltext_query[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
-    
+
     # TASK #7: Track retrieval metrics
     try:
         from retrieval.metrics import record_retrieval
+
         _track_metrics = True
     except ImportError:
         _track_metrics = False
@@ -133,7 +138,9 @@ def hybrid_search(
             # Generate query embedding
             query_embedding = embed_text(query_text)
             if query_embedding is None:
-                logger.error(f"Failed to generate query embedding. Cannot proceed with hybrid search.")
+                logger.error(
+                    f"Failed to generate query embedding. Cannot proceed with hybrid search."
+                )
                 return []
             # Convert to pgvector string format
             query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
@@ -146,7 +153,9 @@ def hybrid_search(
             # Service/component are now used as score boosters in ORDER BY, not WHERE filters
             # This allows semantic search to find relevant content even with mismatches
             # Match quality will be calculated in the final ORDER BY clause
-            filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
+            filter_clause = (
+                ""  # No hard filters - all results included, ranked by relevance + match boosts
+            )
 
             # Hybrid search query using RRF
             # Vector search: cosine similarity
@@ -252,7 +261,7 @@ def hybrid_search(
 
             # Calculate RRF candidate limit (higher multiplier for better fusion results)
             candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
-            
+
             # Vector results params
             exec_params.append(query_embedding_str)  # 1: vector_score embedding
             exec_params.append(query_embedding_str)  # 2: vector_rank embedding
@@ -303,7 +312,7 @@ def hybrid_search(
                     f"Params: {[str(p)[:50] if isinstance(p, str) else str(p) for p in exec_params]}"
                 )
                 raise ValueError(error_msg)
-            
+
             # Log using standardized logger (DEBUG level for diagnostic info)
             logger.debug(
                 f"HYBRID_SEARCH: params={len(exec_params)}, candidate_limit={candidate_limit}, "
@@ -321,7 +330,9 @@ def hybrid_search(
             results = cur.fetchall()
 
             duration = time.time() - start_time
-            logger.debug(f"Hybrid search completed: found {len(results)} results in {duration:.3f}s")
+            logger.debug(
+                f"Hybrid search completed: found {len(results)} results in {duration:.3f}s"
+            )
 
             # Diagnostic: log top fused hits to verify RRF/MMR behavior
             top_preview = []
@@ -354,7 +365,7 @@ def hybrid_search(
                 if not isinstance(metadata, dict):
                     logger.warning(f"Metadata is not a dict, converting: {type(metadata)}")
                     metadata = {}
-                
+
                 chunks.append(
                     {
                         "chunk_id": str(row.get("id", "")),
@@ -364,8 +375,14 @@ def hybrid_search(
                         "metadata": metadata,
                         "doc_title": row.get("doc_title", ""),
                         "doc_type": row.get("doc_type", ""),
-                        "vector_score": float(row.get("vector_score", 0.0)) if row.get("vector_score") else 0.0,
-                        "fulltext_score": float(row.get("fulltext_score", 0.0)) if row.get("fulltext_score") else 0.0,
+                        "vector_score": (
+                            float(row.get("vector_score", 0.0)) if row.get("vector_score") else 0.0
+                        ),
+                        "fulltext_score": (
+                            float(row.get("fulltext_score", 0.0))
+                            if row.get("fulltext_score")
+                            else 0.0
+                        ),
                         "rrf_score": float(row.get("rrf_score", 0.0)),
                         "service_match_boost": float(row.get("service_match_boost", 0.0)),
                         "component_match_boost": float(row.get("component_match_boost", 0.0)),
@@ -417,7 +434,7 @@ def mmr_search(
     """
     # Normalize limit
     limit = _normalize_limit(limit, default=5)
-    
+
     # Get initial results from hybrid search
     candidates = hybrid_search(query_text, service, component, limit=limit * 3)
 
@@ -497,15 +514,42 @@ def triage_retrieval(
     start_time = time.time()
     # Use simpler query for full-text search if provided, otherwise use query_text for both
     fulltext_query = fulltext_query_text if fulltext_query_text is not None else query_text
+
+    # For runbooks, clean the enhanced query_text to remove URLs and special characters
+    # that can break plainto_tsquery, but keep more context than the cleaned fulltext_query_text
+    import re
+
+    def clean_query_for_runbooks(text: str) -> str:
+        """Clean query for runbook full-text search: remove URLs and IPs, keep words"""
+        if not text:
+            return ""
+        # Remove URLs
+        cleaned = re.sub(r"https?://\S+|www\.\S+", "", text)
+        # Remove IP addresses
+        cleaned = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "", cleaned)
+        # Remove special characters except spaces and hyphens
+        cleaned = re.sub(r"[^a-zA-Z0-9\s-]", " ", cleaned)
+        # Replace multiple spaces with single space
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned
+
+    # For runbooks, use the enhanced query_text directly (original behavior)
+    # This gives runbooks more context to match properly
+    # Note: We still clean it to remove URLs/IPs that break plainto_tsquery, but keep more context
+    runbook_fulltext_query = clean_query_for_runbooks(query_text) if query_text else fulltext_query
+    # If cleaned query is empty or too short, fall back to fulltext_query
+    if not runbook_fulltext_query or len(runbook_fulltext_query.strip()) < 10:
+        runbook_fulltext_query = fulltext_query
     logger.debug(
         f"Starting triage retrieval: query='{query_text[:100]}...', "
         f"fulltext_query='{fulltext_query[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
-    
+
     # TASK #7: Track retrieval metrics
     try:
         from retrieval.metrics import record_retrieval
+
         _track_metrics = True
     except ImportError:
         _track_metrics = False
@@ -518,7 +562,9 @@ def triage_retrieval(
             # Generate query embedding
             query_embedding = embed_text(query_text)
             if query_embedding is None:
-                logger.error(f"Failed to generate query embedding for triage retrieval. Cannot proceed.")
+                logger.error(
+                    f"Failed to generate query embedding for triage retrieval. Cannot proceed."
+                )
                 return {"incident_signatures": [], "runbook_metadata": []}
             query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
@@ -529,7 +575,9 @@ def triage_retrieval(
             # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
             # Service/component are now used as score boosters in ORDER BY, not WHERE filters
             # This allows semantic search to find relevant incident signatures even with mismatches
-            filter_clause = ""  # No hard filters - all results included, ranked by relevance + match boosts
+            filter_clause = (
+                ""  # No hard filters - all results included, ranked by relevance + match boosts
+            )
 
             # Retrieve incident signatures directly from incident_signatures table
             # (No need for chunks table - embeddings and tsvector are already in incident_signatures)
@@ -659,7 +707,7 @@ def triage_retrieval(
 
             # Calculate RRF candidate limit (higher multiplier for better fusion results)
             candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
-            
+
             # Build params for incident signatures
             sig_params = []
             # Vector CTE
@@ -676,7 +724,9 @@ def triage_retrieval(
             sig_params.append(candidate_limit)  # 10: fulltext limit (improved multiplier)
             # Soft filter boost params (using centralized builder for dual service matching)
             sig_params.extend(
-                HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(service_val, component_val)
+                HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(
+                    service_val, component_val
+                )
             )  # 11-18: Service (dual) and component boost params
             # Final limit
             sig_params.append(limit)  # 19: final limit
@@ -743,7 +793,9 @@ def triage_retrieval(
                             "metadata": metadata,
                             "doc_title": row["doc_title"],
                             "doc_type": row["doc_type"],
-                            "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
+                            "vector_score": (
+                                float(row["vector_score"]) if row["vector_score"] else 0.0
+                            ),
                             "fulltext_score": (
                                 float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
                             ),
@@ -791,21 +843,34 @@ def triage_retrieval(
                             "vector_score": float(row[7]) if row[7] else 0.0,
                             "fulltext_score": float(row[8]) if row[8] else 0.0,
                             "rrf_score": float(row[9]) if row[9] else 0.0,
-                            "service_match_boost": float(row[10]) if row_len > 10 and row[10] else 0.0,
-                            "component_match_boost": float(row[11]) if row_len > 11 and row[11] else 0.0,
-                            "final_score": float(row[12]) if row_len > 12 and row[12] else float(row[9]) if row[9] else 0.0,
+                            "service_match_boost": (
+                                float(row[10]) if row_len > 10 and row[10] else 0.0
+                            ),
+                            "component_match_boost": (
+                                float(row[11]) if row_len > 11 and row[11] else 0.0
+                            ),
+                            "final_score": (
+                                float(row[12])
+                                if row_len > 12 and row[12]
+                                else float(row[9]) if row[9] else 0.0
+                            ),
                         }
                     )
 
             # Retrieve runbook metadata (documents only, NOT steps)
             # Runbook metadata is in documents table, not chunks
             # PHASE 1: No hard filters - use soft filter boosts in ORDER BY
-            runbook_params = [fulltext_query]  # For full-text search (use simpler query)
+            # Use cleaned enhanced query for runbooks (defined above at function start)
+            runbook_params = [
+                runbook_fulltext_query
+            ]  # For full-text search (use cleaned enhanced query)
 
             # PHASE 1: Soft Filters - Remove hard WHERE filters for runbook metadata
             # Service/component are now used as relevance boosters, not WHERE filters
             # This allows semantic search to find relevant runbooks even with mismatches
-            runbook_filter_clause = ""  # No hard filters - all results included, ranked by relevance
+            runbook_filter_clause = (
+                ""  # No hard filters - all results included, ranked by relevance
+            )
             runbook_params.append(limit)  # For LIMIT
 
             runbook_meta_query = f"""
@@ -835,15 +900,18 @@ def triage_retrieval(
             """
 
             # Build params for runbook metadata query with soft filter boosts
-            # Query params: fulltext_query, soft filter boosts (SELECT only), limit
+            # Query params: runbook_fulltext_query (ts_rank), soft filter boosts (SELECT only), limit
             # Note: ORDER BY doesn't use parameters - it just references the calculated columns
-            runbook_params_extended = [fulltext_query]  # 1: fulltext search (use simpler query)
+            # Use cleaned enhanced query for runbooks (more context than fulltext_query_text, but cleaned)
+            runbook_params_extended = [
+                runbook_fulltext_query,  # 1: fulltext search for ts_rank
+            ]
             # Add soft filter boost params for SELECT only (6 params: 3 for service, 3 for component)
             runbook_params_extended.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
             )
             # Final limit
-            runbook_params_extended.append(limit)  # 8: limit
+            runbook_params_extended.append(limit)  # 10: limit
             cur.execute(runbook_meta_query, runbook_params_extended)
             runbook_rows = cur.fetchall()
 
@@ -860,13 +928,23 @@ def triage_retrieval(
                             "title": row["title"],
                             "tags": tags,
                             "last_reviewed_at": (
-                                row["last_reviewed_at"].isoformat() if row["last_reviewed_at"] else None
+                                row["last_reviewed_at"].isoformat()
+                                if row["last_reviewed_at"]
+                                else None
                             ),
                             "relevance_score": (
                                 float(row["relevance_score"]) if row["relevance_score"] else 0.0
                             ),
-                            "service_match_boost": float(row.get("service_match_boost", 0.0)) if "service_match_boost" in row else 0.0,
-                            "component_match_boost": float(row.get("component_match_boost", 0.0)) if "component_match_boost" in row else 0.0,
+                            "service_match_boost": (
+                                float(row.get("service_match_boost", 0.0))
+                                if "service_match_boost" in row
+                                else 0.0
+                            ),
+                            "component_match_boost": (
+                                float(row.get("component_match_boost", 0.0))
+                                if "component_match_boost" in row
+                                else 0.0
+                            ),
                         }
                     )
                 else:
@@ -881,8 +959,12 @@ def triage_retrieval(
                             "tags": tags,
                             "last_reviewed_at": row[6].isoformat() if row[6] else None,
                             "relevance_score": float(row[7]) if row[7] else 0.0,
-                            "service_match_boost": float(row[8]) if len(row) > 8 and row[8] else 0.0,
-                            "component_match_boost": float(row[9]) if len(row) > 9 and row[9] else 0.0,
+                            "service_match_boost": (
+                                float(row[8]) if len(row) > 8 and row[8] else 0.0
+                            ),
+                            "component_match_boost": (
+                                float(row[9]) if len(row) > 9 and row[9] else 0.0
+                            ),
                         }
                     )
 
@@ -895,7 +977,7 @@ def triage_retrieval(
                 "incident_signatures": incident_signatures,
                 "runbook_metadata": runbook_metadata,
             }
-            
+
             # TASK #7: Record retrieval metrics
             if _track_metrics:
                 retrieval_time_ms = (time.time() - start_time) * 1000
@@ -913,7 +995,7 @@ def triage_retrieval(
                     )
                 except Exception as e:
                     logger.debug(f"Failed to record triage retrieval metrics: {e}")
-            
+
             return result
 
         finally:

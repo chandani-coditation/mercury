@@ -17,16 +17,16 @@ logger = get_logger(__name__)
 def _normalize_uuid_list(ids: Optional[List[Union[str, uuid.UUID]]]) -> List[str]:
     """
     Normalize a list of IDs to strings (handles UUID objects, strings, None values).
-    
+
     Args:
         ids: List of IDs (can be UUID objects, strings, or None)
-    
+
     Returns:
         List of string IDs (None values and invalid IDs are filtered out)
     """
     if not ids:
         return []
-    
+
     normalized = []
     for id_val in ids:
         if id_val is None:
@@ -48,24 +48,24 @@ def _normalize_uuid_list(ids: Optional[List[Union[str, uuid.UUID]]]) -> List[str
         except (ValueError, AttributeError, TypeError):
             logger.warning(f"Invalid ID format, skipping: {repr(id_val)}")
             continue
-    
+
     return normalized
 
 
 def _normalize_limit(limit: Union[int, str, float, None], default: int = 20) -> int:
     """
     Normalize limit parameter to integer.
-    
+
     Args:
         limit: Limit value (can be int, string, float, or None)
         default: Default value if limit is None or invalid
-    
+
     Returns:
         Integer limit value
     """
     if limit is None:
         return default
-    
+
     try:
         if isinstance(limit, (int, float)):
             limit_int = int(limit)
@@ -73,7 +73,7 @@ def _normalize_limit(limit: Union[int, str, float, None], default: int = 20) -> 
             limit_int = int(limit.strip())
         else:
             return default
-        
+
         # Ensure positive
         if limit_int < 1:
             return default
@@ -86,20 +86,20 @@ def _normalize_limit(limit: Union[int, str, float, None], default: int = 20) -> 
 def _normalize_query_text(query_text: Optional[str]) -> Optional[str]:
     """
     Normalize query text parameter.
-    
+
     Args:
         query_text: Query text (can be None, empty string, or string)
-    
+
     Returns:
         Normalized query text (None if empty/invalid)
     """
     if query_text is None:
         return None
-    
+
     if isinstance(query_text, str):
         text = query_text.strip()
         return text if text else None
-    
+
     # Try to convert to string
     try:
         text = str(query_text).strip()
@@ -140,7 +140,7 @@ def retrieve_runbook_steps(
     runbook_ids = _normalize_uuid_list(runbook_ids) if runbook_ids else []
     query_text = _normalize_query_text(query_text)
     limit = _normalize_limit(limit, default=20)
-    
+
     # Prefer document_ids over runbook_ids (chunks contain full recommendations)
     if document_ids:
         return retrieve_runbook_chunks_by_document_id(document_ids, query_text, limit)
@@ -157,7 +157,7 @@ def retrieve_runbook_steps(
             if not runbook_ids or len(runbook_ids) == 0:
                 logger.warning("Empty runbook_ids list, returning empty results")
                 return []
-            
+
             placeholders = ",".join(["%s"] * len(runbook_ids))
 
             # If query_text is provided, use semantic search to find relevant steps
@@ -167,7 +167,9 @@ def retrieve_runbook_steps(
                     # Generate query embedding for semantic search
                     query_embedding = embed_text(query_text)
                     if query_embedding is None:
-                        logger.warning(f"Failed to generate query embedding for semantic search. Falling back to direct retrieval.")
+                        logger.warning(
+                            f"Failed to generate query embedding for semantic search. Falling back to direct retrieval."
+                        )
                         # Fall back to direct retrieval without semantic search
                         query_text = None
                     else:
@@ -254,12 +256,16 @@ def retrieve_runbook_steps(
                         "component": row.get("component"),
                         "runbook_title": row.get("runbook_title"),
                         "runbook_document_id": (
-                            str(row["runbook_document_id"]) if row.get("runbook_document_id") else None
+                            str(row["runbook_document_id"])
+                            if row.get("runbook_document_id")
+                            else None
                         ),
                         # For compatibility with existing code that expects chunk_id
                         "chunk_id": str(row["id"]),
                         "document_id": (
-                            str(row["runbook_document_id"]) if row.get("runbook_document_id") else None
+                            str(row["runbook_document_id"])
+                            if row.get("runbook_document_id")
+                            else None
                         ),
                     }
                     # Add similarity score if available (from semantic search)
@@ -319,7 +325,7 @@ def retrieve_runbook_chunks_by_document_id(
     document_ids = _normalize_uuid_list(document_ids) if document_ids else []
     query_text = _normalize_query_text(query_text)
     limit = _normalize_limit(limit, default=20)
-    
+
     if not document_ids:
         return []
 
@@ -332,7 +338,7 @@ def retrieve_runbook_chunks_by_document_id(
             if not document_ids or len(document_ids) == 0:
                 logger.warning("Empty document_ids list, returning empty results")
                 return []
-            
+
             placeholders = ",".join(["%s"] * len(document_ids))
 
             # If query_text is provided, use semantic search
@@ -341,7 +347,9 @@ def retrieve_runbook_chunks_by_document_id(
                 try:
                     query_embedding = embed_text(query_text)
                     if query_embedding is None:
-                        logger.warning(f"Failed to generate query embedding for semantic search. Falling back to direct retrieval.")
+                        logger.warning(
+                            f"Failed to generate query embedding for semantic search. Falling back to direct retrieval."
+                        )
                         query_text = None
                     else:
                         embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
@@ -404,7 +412,9 @@ def retrieve_runbook_chunks_by_document_id(
             steps = []
             for row in rows:
                 if isinstance(row, dict):
-                    metadata = row.get("metadata", {}) if isinstance(row.get("metadata"), dict) else {}
+                    metadata = (
+                        row.get("metadata", {}) if isinstance(row.get("metadata"), dict) else {}
+                    )
                     step = {
                         "step_id": metadata.get("step_id") or f"chunk-{row['id']}",
                         "runbook_id": row.get("runbook_id") or metadata.get("runbook_id"),
@@ -428,21 +438,29 @@ def retrieve_runbook_chunks_by_document_id(
                     metadata = row[4] if isinstance(row[4], dict) else {}
                     step = {
                         "step_id": (
-                            metadata.get("step_id") if isinstance(metadata, dict) else f"chunk-{row[0]}"
+                            metadata.get("step_id")
+                            if isinstance(metadata, dict)
+                            else f"chunk-{row[0]}"
                         ),
                         "runbook_id": row[7]
                         or (metadata.get("runbook_id") if isinstance(metadata, dict) else None),
                         "condition": (
-                            metadata.get("condition") if isinstance(metadata, dict) else "Step applies"
+                            metadata.get("condition")
+                            if isinstance(metadata, dict)
+                            else "Step applies"
                         ),
                         "action": row[3]
                         or (metadata.get("action") if isinstance(metadata, dict) else ""),
                         "expected_outcome": (
                             metadata.get("expected_outcome") if isinstance(metadata, dict) else None
                         ),
-                        "rollback": metadata.get("rollback") if isinstance(metadata, dict) else None,
+                        "rollback": (
+                            metadata.get("rollback") if isinstance(metadata, dict) else None
+                        ),
                         "service": metadata.get("service") if isinstance(metadata, dict) else None,
-                        "component": metadata.get("component") if isinstance(metadata, dict) else None,
+                        "component": (
+                            metadata.get("component") if isinstance(metadata, dict) else None
+                        ),
                         "runbook_title": row[6],
                         "runbook_document_id": str(row[1]),
                         "chunk_id": str(row[0]),
@@ -488,12 +506,16 @@ def retrieve_close_notes_from_signatures(
     # Normalize and validate parameters
     # Note: incident_signature_ids are strings (not UUIDs), so we just validate they're strings
     if incident_signature_ids:
-        incident_signature_ids = [str(id_val).strip() for id_val in incident_signature_ids if id_val and str(id_val).strip()]
+        incident_signature_ids = [
+            str(id_val).strip()
+            for id_val in incident_signature_ids
+            if id_val and str(id_val).strip()
+        ]
     else:
         incident_signature_ids = []
-    
+
     limit = _normalize_limit(limit, default=10)
-    
+
     if not incident_signature_ids:
         return []
 
@@ -506,7 +528,7 @@ def retrieve_close_notes_from_signatures(
             if not incident_signature_ids or len(incident_signature_ids) == 0:
                 logger.warning("Empty incident_signature_ids list, returning empty results")
                 return []
-            
+
             placeholders = ",".join(["%s"] * len(incident_signature_ids))
 
             query = f"""
@@ -580,12 +602,16 @@ def retrieve_historical_resolutions(
     # Normalize and validate parameters
     # Note: incident_signature_ids are strings (not UUIDs), so we just validate they're strings
     if incident_signature_ids:
-        incident_signature_ids = [str(id_val).strip() for id_val in incident_signature_ids if id_val and str(id_val).strip()]
+        incident_signature_ids = [
+            str(id_val).strip()
+            for id_val in incident_signature_ids
+            if id_val and str(id_val).strip()
+        ]
     else:
         incident_signature_ids = []
-    
+
     limit = _normalize_limit(limit, default=10)
-    
+
     if not incident_signature_ids:
         return []
 
@@ -647,7 +673,9 @@ def retrieve_historical_resolutions(
                         row["triage_output"] if isinstance(row["triage_output"], dict) else {}
                     )
                     resolution_output = (
-                        row["resolution_output"] if isinstance(row["resolution_output"], dict) else {}
+                        row["resolution_output"]
+                        if isinstance(row["resolution_output"], dict)
+                        else {}
                     )
 
                     # Determine success: accepted = successful, proposed but not accepted = partial
@@ -678,7 +706,9 @@ def retrieve_historical_resolutions(
                             "is_successful": is_successful,
                             "rollback_triggered": rollback_triggered,
                             "rollback_status": row["rollback_status"],
-                            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                            "created_at": (
+                                row["created_at"].isoformat() if row["created_at"] else None
+                            ),
                         }
                     )
                 else:
@@ -821,7 +851,9 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
             for row in rows:
                 if isinstance(row, dict):
                     resolution_output = (
-                        row["resolution_output"] if isinstance(row["resolution_output"], dict) else {}
+                        row["resolution_output"]
+                        if isinstance(row["resolution_output"], dict)
+                        else {}
                     )
                     is_successful = row["resolution_accepted_at"] is not None
                     proposed_at = row["resolution_proposed_at"]
@@ -833,7 +865,9 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
                 # Get provenance chunk_ids from this resolution
                 provenance = resolution_output.get("provenance", [])
                 prov_chunk_ids = [
-                    p.get("chunk_id") for p in provenance if isinstance(p, dict) and p.get("chunk_id")
+                    p.get("chunk_id")
+                    for p in provenance
+                    if isinstance(p, dict) and p.get("chunk_id")
                 ]
 
                 # Check which step_ids are referenced via their chunk_ids

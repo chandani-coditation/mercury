@@ -95,6 +95,7 @@ async def _resolution_agent_state_internal(
     # Enhance query text for better retrieval
     try:
         from retrieval.query_enhancer import enhance_query
+
         base_query = enhance_query(alert_dict)
         query_text = f"{base_query} resolution steps runbook"
     except Exception as e:
@@ -110,12 +111,13 @@ async def _resolution_agent_state_internal(
     # Check if MMR should be used
     use_mmr = resolution_cfg.get("use_mmr", False)
     mmr_diversity = resolution_cfg.get("mmr_diversity", 0.5)
-    
+
     # Retrieve context
     from retrieval.hybrid_search import hybrid_search
-    
+
     if use_mmr:
         from retrieval.hybrid_search import mmr_search
+
         context_chunks = mmr_search(
             query_text=query_text,
             service=service_val,

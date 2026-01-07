@@ -49,9 +49,19 @@ try:
         with open(extraction_patterns_path, "r") as f:
             EXTRACTION_PATTERNS_CONFIG = json.load(f)
     else:
-        EXTRACTION_PATTERNS_CONFIG = {"error_code_patterns": [], "job_patterns": [], "id_patterns": [], "service_patterns": []}
+        EXTRACTION_PATTERNS_CONFIG = {
+            "error_code_patterns": [],
+            "job_patterns": [],
+            "id_patterns": [],
+            "service_patterns": [],
+        }
 except Exception:
-    EXTRACTION_PATTERNS_CONFIG = {"error_code_patterns": [], "job_patterns": [], "id_patterns": [], "service_patterns": []}
+    EXTRACTION_PATTERNS_CONFIG = {
+        "error_code_patterns": [],
+        "job_patterns": [],
+        "id_patterns": [],
+        "service_patterns": [],
+    }
 
 # Try to load ingestion config
 try:
@@ -108,40 +118,40 @@ def _validate_with_schema(data: dict, schema_name: str) -> tuple[bool, list]:
 def normalize_technical_terms(text: str) -> str:
     """
     Normalize technical terms in text during ingestion using config file.
-    
+
     This standardizes terms like "DB" -> "Database" based on config mappings.
     All mappings come from config file, not LLM-generated.
-    
+
     **Soft Rule**: This is an enhancement that gracefully degrades if config is missing
     or malformed. If normalization fails, returns original text unchanged.
-    
+
     Args:
         text: Input text to normalize
-    
+
     Returns:
         Normalized text (or original text if normalization fails)
     """
     if not text:
         return text
-    
+
     try:
         abbreviations = TECHNICAL_TERMS_CONFIG.get("abbreviations", {})
         if not abbreviations:
             # No config available - return original text (graceful degradation)
             return text
-        
+
         normalized_text = text
-        
+
         # Apply abbreviation normalization
         for abbrev, expansion in abbreviations.items():
             try:
                 # Create regex pattern for word boundary
-                pattern = r'\b' + re.escape(abbrev) + r'\b'
+                pattern = r"\b" + re.escape(abbrev) + r"\b"
                 normalized_text = re.sub(pattern, expansion, normalized_text, flags=re.IGNORECASE)
             except Exception:
                 # Skip this abbreviation if regex fails (graceful degradation)
                 continue
-        
+
         return normalized_text
     except Exception:
         # If any error occurs, return original text (graceful degradation)
@@ -151,16 +161,16 @@ def normalize_technical_terms(text: str) -> str:
 def extract_structured_data(text: str) -> Dict[str, List[str]]:
     """
     Extract structured data (error codes, IDs, job names) from text.
-    
+
     This is pattern-based extraction, not LLM generation.
     Extracts actual patterns from text for better matching.
-    
+
     **Soft Rule**: This is an enhancement that gracefully degrades if extraction fails.
     If extraction fails, returns empty dict. Never breaks ingestion.
-    
+
     Args:
         text: Input text to extract from
-    
+
     Returns:
         Dictionary with extracted structured data (or empty dict if extraction fails)
     """
@@ -169,19 +179,19 @@ def extract_structured_data(text: str) -> Dict[str, List[str]]:
         "job_names": [],
         "ids": [],
     }
-    
+
     if not text:
         return extracted
-    
+
     try:
         # Load patterns from config (centralized)
         error_code_patterns = EXTRACTION_PATTERNS_CONFIG.get("error_code_patterns", [])
         job_patterns = EXTRACTION_PATTERNS_CONFIG.get("job_patterns", [])
         id_patterns = EXTRACTION_PATTERNS_CONFIG.get("id_patterns", [])
-        
+
         # Get error code prefix from config
         error_code_prefix = INGESTION_CONFIG.get("formatting", {}).get("error_code_prefix", "error")
-        
+
         # Extract error codes (e.g., "Error 500", "SQLSTATE 23505", "HTTP 404")
         for pattern_str in error_code_patterns:
             try:
@@ -191,7 +201,7 @@ def extract_structured_data(text: str) -> Dict[str, List[str]]:
             except Exception:
                 # Skip invalid pattern (graceful degradation)
                 continue
-        
+
         # Extract job/process names (quoted strings, capitalized words after "job", "process", "task")
         for pattern_str in job_patterns:
             try:
@@ -201,7 +211,7 @@ def extract_structured_data(text: str) -> Dict[str, List[str]]:
             except Exception:
                 # Skip invalid pattern (graceful degradation)
                 continue
-        
+
         # Extract IDs (UUIDs, numeric IDs, alphanumeric IDs)
         for pattern_str in id_patterns:
             try:
@@ -211,12 +221,12 @@ def extract_structured_data(text: str) -> Dict[str, List[str]]:
             except Exception:
                 # Skip invalid pattern (graceful degradation)
                 continue
-        
+
         # Remove duplicates
         extracted["error_codes"] = list(set(extracted["error_codes"]))
         extracted["job_names"] = list(set(extracted["job_names"]))
         extracted["ids"] = list(set(extracted["ids"]))
-        
+
         return extracted
     except Exception:
         # If extraction fails, return empty dict (graceful degradation)
@@ -242,7 +252,7 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
         # If normalization fails, use original text (graceful degradation)
         normalized_title = alert.title
         normalized_description = alert.description
-    
+
     content_parts = [
         f"Alert: {normalized_title}",
         f"Description: {normalized_description}",
@@ -262,7 +272,7 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
         content_parts.append(f"Labels: {', '.join(f'{k}={v}' for k, v in alert.labels.items())}")
 
     content = "\n\n".join(content_parts)
-    
+
     # Extract structured data for metadata (error codes, IDs, job names)
     structured_data = extract_structured_data(content)
     if structured_data["error_codes"] or structured_data["job_names"] or structured_data["ids"]:
@@ -294,13 +304,13 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
     normalized_service, normalized_component = normalize_service_component(
         service, component, context=context_text if context_text else None
     )
-    
+
     # Extract structured data for metadata (error codes, IDs, job names)
     structured_data = extract_structured_data(content)
     if structured_data["error_codes"] or structured_data["job_names"] or structured_data["ids"]:
         # Add to tags for better matching
         tags["structured_data"] = structured_data
-    
+
     return IngestDocument(
         doc_type="alert",
         service=normalized_service,
@@ -313,10 +323,10 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
 
 
 def extract_runbook_steps(
-    runbook: IngestRunbook, 
+    runbook: IngestRunbook,
     runbook_id: str,
     normalized_service: Optional[str] = None,
-    normalized_component: Optional[str] = None
+    normalized_component: Optional[str] = None,
 ) -> List[RunbookStep]:
     """
     Extract atomic runbook steps from runbook content.
@@ -388,7 +398,7 @@ def extract_runbook_steps(
                     action = parts[1].strip()
                     # Apply technical term normalization to action text (from historical data)
                     action = normalize_technical_terms(action)
-            
+
             # Normalize action text if it wasn't parsed above
             if action == step_text:
                 action = normalize_technical_terms(action)
@@ -562,7 +572,9 @@ def extract_runbook_steps(
                 step_id=step_id,
                 runbook_id=runbook_id,
                 condition="Runbook applies",
-                action=runbook.content.strip()[:INGESTION_CONFIG.get("formatting", {}).get("max_fallback_title_length", 1000)],  # Limit from config
+                action=runbook.content.strip()[
+                    : INGESTION_CONFIG.get("formatting", {}).get("max_fallback_title_length", 1000)
+                ],  # Limit from config
                 expected_outcome=None,
                 rollback=None,
                 risk_level=None,
@@ -598,82 +610,85 @@ def extract_runbook_steps(
 def validate_service_component_value(value: Optional[str], field_name: str) -> Optional[str]:
     """
     Validate and normalize a service/component value.
-    
+
     Args:
         value: Raw value to validate
         field_name: Name of field (for logging) - "service" or "component"
-    
+
     Returns:
         Validated and normalized value, or None if invalid
     """
     if value is None:
         return None
-    
+
     # Convert to string if not already
     if not isinstance(value, str):
         value = str(value)
-    
+
     # Trim whitespace
     value = value.strip()
-    
+
     # Check for empty string after trimming
     if not value:
         return None
-    
+
     # Validate length (reasonable limits)
     if len(value) > 100:
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
-            logger.warning(f"{field_name} value too long ({len(value)} chars), truncating: {value[:50]}...")
+            logger.warning(
+                f"{field_name} value too long ({len(value)} chars), truncating: {value[:50]}..."
+            )
         except:
             pass
         value = value[:100].strip()
-    
+
     # Check for invalid characters (allow alphanumeric, spaces, hyphens, underscores, dots)
     # Remove any control characters
     import re
-    value = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', value)
-    
+
+    value = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", value)
+
     # Warn about suspicious patterns (but don't reject)
     if re.search(r'[<>{}[\]\\|`~!@#$%^&*()+=\'"]', value):
         try:
             from ai_service.core import get_logger
+
             logger = get_logger(__name__)
             logger.warning(f"{field_name} contains special characters (may cause issues): {value}")
         except:
             pass
-    
+
     return value
 
 
 def normalize_service_component(
-    service: Optional[str], 
-    component: Optional[str], 
-    context: Optional[str] = None
+    service: Optional[str], component: Optional[str], context: Optional[str] = None
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Normalize and validate service/component values using mapping configuration.
-    
+
     PHASE 2: Standardizes service/component values during ingestion to ensure consistency
     between runbooks and incidents. Uses aliases from service_component_mapping.json.
-    
+
     TASK #9: Added validation for service/component values:
     - Trims whitespace
     - Handles None values
     - Validates format (length, special characters)
     - Logs validation warnings
-    
+
     Intelligent Service Mapping:
     - When service is "Server", intelligently maps to "Infrastructure" or "Storage" based on:
       1. Component value (CPU/Memory → Infrastructure, Disk → Storage)
       2. Context text analysis (title/description keywords) if component is missing
-    
+
     Args:
         service: Raw service value (may be None)
         component: Raw component value (may be None)
         context: Optional context text (title/description) for intelligent mapping when service is "Server"
-    
+
     Returns:
         Tuple of (normalized_service, normalized_component)
         - If mapping exists, returns canonical value
@@ -683,25 +698,25 @@ def normalize_service_component(
     # TASK #9: Validate service/component values first
     validated_service = validate_service_component_value(service, "service")
     validated_component = validate_service_component_value(component, "component")
-    
+
     if not SERVICE_COMPONENT_MAPPING:
         # No mapping config available, return validated values
         return validated_service, validated_component
-    
+
     service_aliases = SERVICE_COMPONENT_MAPPING.get("service_aliases", {})
     component_aliases = SERVICE_COMPONENT_MAPPING.get("component_aliases", {})
-    
+
     normalized_service = validated_service
     # Start with validated component, but may be updated from context detection
     component_to_normalize = validated_component
-    
+
     # INTELLIGENT MAPPING: When service is ambiguous (e.g., "Server"), map to correct service based on component or context
     special_values = SERVICE_COMPONENT_MAPPING.get("special_values", {})
     ambiguous_service_name = special_values.get("ambiguous_service", "Server")
-    
+
     if validated_service and validated_service.lower() == ambiguous_service_name.lower():
         detected_component = None
-        
+
         # First, try to infer from existing component
         if validated_component:
             detected_component = validated_component
@@ -711,12 +726,14 @@ def normalize_service_component(
             # Update component_to_normalize if we detected from context
             if detected_component:
                 component_to_normalize = detected_component
-        
+
         # Map detected component to appropriate service using config-driven mapping
         if detected_component:
             component_to_service = SERVICE_COMPONENT_MAPPING.get("component_to_service_mapping", {})
             # Normalize component name for lookup (case-insensitive)
-            component_key = detected_component.capitalize()  # Match config keys like "CPU", "Memory", "Disk"
+            component_key = (
+                detected_component.capitalize()
+            )  # Match config keys like "CPU", "Memory", "Disk"
             if component_key in component_to_service:
                 normalized_service = component_to_service[component_key]
             else:
@@ -726,7 +743,7 @@ def normalize_service_component(
                     if comp_key.lower() == component_lower:
                         normalized_service = service_value
                         break
-    
+
     # Normalize service using aliases (after intelligent mapping)
     if normalized_service and normalized_service in service_aliases:
         normalized_service = service_aliases[normalized_service]
@@ -737,7 +754,7 @@ def normalize_service_component(
             if alias.lower() == service_lower:
                 normalized_service = canonical
                 break
-    
+
     # Normalize component (may be from validated_component or detected from context)
     normalized_component = component_to_normalize
     if component_to_normalize and component_to_normalize in component_aliases:
@@ -751,34 +768,34 @@ def normalize_service_component(
             if alias.lower() == component_lower:
                 normalized_component = None if canonical is None else canonical
                 break
-    
+
     return normalized_service, normalized_component
 
 
 def _detect_component_from_text(text: str) -> Optional[str]:
     """
     Intelligently detect component from text using configurable patterns.
-    
+
     Uses component_detection_patterns from service_component_mapping.json to match
     regex patterns against text. This is config-driven, not hardcoded.
-    
+
     Args:
         text: Text to analyze (typically title + description)
-    
+
     Returns:
         Detected component name (e.g., "CPU", "Memory", "Disk") or None
     """
     if not text:
         return None
-    
+
     text_lower = text.lower()
     detection_patterns = SERVICE_COMPONENT_MAPPING.get("component_detection_patterns", {})
-    
+
     # Try each component's patterns in order (config defines priority)
     for component_name, patterns in detection_patterns.items():
         if not isinstance(patterns, list):
             continue
-        
+
         for pattern_str in patterns:
             try:
                 # Compile pattern with case-insensitive flag
@@ -789,12 +806,15 @@ def _detect_component_from_text(text: str) -> Optional[str]:
                 # Skip invalid regex patterns (graceful degradation)
                 try:
                     from ai_service.core import get_logger
+
                     logger = get_logger(__name__)
-                    logger.warning(f"Invalid regex pattern in component_detection_patterns: {pattern_str}")
+                    logger.warning(
+                        f"Invalid regex pattern in component_detection_patterns: {pattern_str}"
+                    )
                 except:
                     pass
                 continue
-    
+
     return None
 
 
@@ -818,7 +838,7 @@ def _extract_service_component(
         service_extraction_config = SERVICE_COMPONENT_MAPPING.get("service_extraction", {})
         delimiter = service_extraction_config.get("delimiter", "-")
         take_first_part = service_extraction_config.get("take_first_part", True)
-        
+
         if delimiter and delimiter in raw_service:
             if take_first_part:
                 service = raw_service.split(delimiter)[0].strip()
@@ -829,15 +849,17 @@ def _extract_service_component(
             service = raw_service
 
     # Extract component deterministically based on failure_type using config-driven mapping
-    failure_type_to_component = SERVICE_COMPONENT_MAPPING.get("failure_type_to_component_mapping", {})
-    
+    failure_type_to_component = SERVICE_COMPONENT_MAPPING.get(
+        "failure_type_to_component_mapping", {}
+    )
+
     if failure_type in failure_type_to_component:
         mapped_component = failure_type_to_component[failure_type]
-        
+
         # Special case: DETECT_FROM_TEXT means we need to detect component from title/description
         special_values = SERVICE_COMPONENT_MAPPING.get("special_values", {})
         detect_from_text_value = special_values.get("detect_from_text", "DETECT_FROM_TEXT")
-        
+
         if mapped_component == detect_from_text_value:
             title_desc = f"{incident.title or ''} {incident.description or ''}".strip()
             component = _detect_component_from_text(title_desc)
@@ -888,11 +910,13 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
 
     # Step 5: Extract service/component (deterministic parsing)
     service, component = _extract_service_component(incident, failure_type)
-    
+
     # PHASE 2: Normalize service/component using mapping configuration
     # Pass context (title + description) for intelligent "Server" → "Infrastructure"/"Storage" mapping
     context_text = f"{incident.title or ''} {incident.description or ''}".strip()
-    service, component = normalize_service_component(service, component, context=context_text if context_text else None)
+    service, component = normalize_service_component(
+        service, component, context=context_text if context_text else None
+    )
 
     # Resolution refs will be populated later when linking to runbook steps
     resolution_refs = None
@@ -1016,7 +1040,7 @@ def normalize_runbook(
     normalized_service, normalized_component = normalize_service_component(
         runbook.service, runbook.component
     )
-    
+
     # Extract atomic steps (will use normalized service/component)
     steps = extract_runbook_steps(runbook, runbook_id, normalized_service, normalized_component)
 
@@ -1030,7 +1054,7 @@ def normalize_runbook(
 
     # Note: Steps are NOT included in content - they are stored separately as chunks
     content = "\n\n".join(content_parts)
-    
+
     # Build comprehensive tags (mandatory fields from specification)
     tags = {
         "type": "runbook",

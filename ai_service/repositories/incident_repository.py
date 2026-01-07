@@ -168,7 +168,9 @@ class IncidentRepository:
                 cur.close()
 
     @staticmethod
-    def list_all(limit: int = 50, offset: int = 0, search: Optional[str] = None) -> Tuple[List[Dict], int]:
+    def list_all(
+        limit: int = 50, offset: int = 0, search: Optional[str] = None
+    ) -> Tuple[List[Dict], int]:
         """
         List incidents with optional search and pagination.
 
@@ -204,9 +206,7 @@ class IncidentRepository:
                     cur.execute(count_query)
                 count_row = cur.fetchone()
                 # RealDictRow can be accessed by column name
-                total_count = (
-                    count_row.get("total_count", 0) if count_row is not None else 0
-                )
+                total_count = count_row.get("total_count", 0) if count_row is not None else 0
 
                 # Get paginated results with metrics
                 query = f"""
@@ -234,12 +234,12 @@ class IncidentRepository:
                 params.extend([limit, offset])
                 cur.execute(query, params)
                 rows = cur.fetchall()
-                
+
                 # Convert to dicts and extract metrics from JSONB fields
                 result = []
                 for row in rows:
                     incident_dict = dict(row)
-                    
+
                     # Extract triage confidence from triage_output JSONB
                     triage_output = incident_dict.get("triage_output")
                     if isinstance(triage_output, dict):
@@ -250,23 +250,22 @@ class IncidentRepository:
                             incident_dict["triage_time_secs"] = api_latency
                     else:
                         incident_dict["triage_confidence"] = None
-                    
+
                     # Extract resolution confidence from resolution_output JSONB
                     resolution_output = incident_dict.get("resolution_output")
                     if isinstance(resolution_output, dict):
-                        incident_dict["resolution_confidence"] = (
-                            resolution_output.get("overall_confidence") or 
-                            resolution_output.get("confidence")
-                        )
+                        incident_dict["resolution_confidence"] = resolution_output.get(
+                            "overall_confidence"
+                        ) or resolution_output.get("confidence")
                         # Prefer explicit API latency if available
                         api_latency_res = resolution_output.get("api_latency_secs")
                         if api_latency_res is not None:
                             incident_dict["resolution_time_secs"] = api_latency_res
                     else:
                         incident_dict["resolution_confidence"] = None
-                    
+
                     result.append(incident_dict)
-                
+
                 logger.debug(f"Listed {len(result)} incidents (total: {total_count})")
                 return result, total_count
             except Exception as e:

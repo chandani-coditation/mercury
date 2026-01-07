@@ -87,7 +87,9 @@ class IncidentService:
         logger.debug(f"Getting incident by alert_id via service: {alert_id}")
         return self.repository.get_by_alert_id(alert_id)
 
-    def list_incidents(self, limit: int = 50, offset: int = 0, search: Optional[str] = None) -> Tuple[List[Dict], int]:
+    def list_incidents(
+        self, limit: int = 50, offset: int = 0, search: Optional[str] = None
+    ) -> Tuple[List[Dict], int]:
         """
         List incidents with optional search and pagination.
 
@@ -99,7 +101,9 @@ class IncidentService:
         Returns:
             Tuple of (list of incident dictionaries, total count)
         """
-        logger.debug(f"Listing incidents via service: limit={limit}, offset={offset}, search={search}")
+        logger.debug(
+            f"Listing incidents via service: limit={limit}, offset={offset}, search={search}"
+        )
         return self.repository.list_all(limit=limit, offset=offset, search=search)
 
     def update_resolution(

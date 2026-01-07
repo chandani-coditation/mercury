@@ -109,11 +109,7 @@ async def triage(
             result = triage_agent(alert_dict)
 
         # Compute latency and persist triage output in a helper
-        latency = _record_triage_latency_and_update_incident(
-            result=result, start_time=start_time
-        )
-
-        
+        latency = _record_triage_latency_and_update_incident(result=result, start_time=start_time)
 
         return result
 

@@ -305,24 +305,26 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     # that can cause plainto_tsquery to produce empty queries
     title = alert.get("title", "") or ""
     description = alert.get("description", "") or ""
-    
+
     # Extract key terms from description (first line only, before URLs/special content)
     import re
-    description_lines = description.split('\n')
+
+    description_lines = description.split("\n")
     first_line = description_lines[0] if description_lines else ""
     # Clean first line: remove special chars but keep words
-    first_line_cleaned = re.sub(r'[^\w\s-]', ' ', first_line)
-    first_line_cleaned = re.sub(r'\s+', ' ', first_line_cleaned).strip()
-    
+    first_line_cleaned = re.sub(r"[^\w\s-]", " ", first_line)
+    first_line_cleaned = re.sub(r"\s+", " ", first_line_cleaned).strip()
+
     # Use title + first line of description (most relevant info)
     # This avoids URLs and KB content that breaks plainto_tsquery
     if first_line_cleaned and len(first_line_cleaned) > 5:  # Only add if meaningful
         fulltext_query_text = f"{title} {first_line_cleaned}".strip()
     else:
         fulltext_query_text = title.strip()
-    
+
     try:
         from retrieval.query_enhancer import enhance_query
+
         query_text = enhance_query(alert)  # Enhanced query for vector search
     except Exception as e:
         # Fallback to basic query if enhancement fails
@@ -352,10 +354,13 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Check if MMR should be used
         if use_mmr:
             from retrieval.hybrid_search import mmr_search
+
             # MMR requires hybrid_search results first, so we use triage_retrieval then apply MMR
             # For now, use triage_retrieval and note that MMR can be applied to results if needed
-            logger.debug(f"MMR requested but triage_retrieval doesn't support MMR yet. Using standard retrieval.")
-        
+            logger.debug(
+                f"MMR requested but triage_retrieval doesn't support MMR yet. Using standard retrieval."
+            )
+
         # rrf_k = retrieval_config.get("rrf_k", 60)
         rrf_k = retrieval_cfg.get("rrf_k", 60)
         triage_evidence = triage_retrieval(
@@ -437,7 +442,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
     # Call LLM for triage with evidence
     if has_evidence:
-        logger.info(f"✅ TRIAGE SUCCESS: Found {len(incident_signatures)} incident signatures and {len(runbook_metadata)} runbook metadata. Calling LLM for triage...")
+        logger.info(
+            f"✅ TRIAGE SUCCESS: Found {len(incident_signatures)} incident signatures and {len(runbook_metadata)} runbook metadata. Calling LLM for triage..."
+        )
         triage_output = call_llm_for_triage(alert, triage_evidence)
 
         # Validate triage output with guardrails
@@ -492,7 +499,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # PHASE 3: Enhanced confidence calculation - reflects match quality
         # Base confidence from evidence count + service/component match boosts
         base_confidence = triage_output.get("confidence", 0.0)
-        
+
         if base_confidence == 0 and incident_signatures:
             # Calculate base confidence based on number of matches
             num_matches = len(incident_signatures)
@@ -505,20 +512,20 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             logger.info(
                 f"Base confidence calculated: {base_confidence} based on {num_matches} signature matches"
             )
-        
+
         # PHASE 3: Calculate service/component match quality from retrieval results
         # Use service_match_boost and component_match_boost from retrieval if available
         # Otherwise, calculate from alert vs signature metadata
         confidence_boost = 0.0
         service_match_quality = "none"  # none, partial, exact
         component_match_quality = "none"
-        
+
         # Try to get match boosts from retrieval results (more accurate)
         if incident_signatures:
             top_sig = incident_signatures[0]
             sig_service_boost = top_sig.get("service_match_boost", 0.0)
             sig_component_boost = top_sig.get("component_match_boost", 0.0)
-            
+
             # Convert boost values to match quality for logging
             if sig_service_boost >= 0.15:
                 service_match_quality = "exact"
@@ -526,7 +533,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             elif sig_service_boost >= 0.10:
                 service_match_quality = "partial"
                 confidence_boost += 0.05
-            
+
             if sig_component_boost >= 0.10:
                 component_match_quality = "exact"
                 confidence_boost += 0.05
@@ -535,15 +542,23 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 confidence_boost += 0.02
         else:
             # Fallback: Calculate from alert vs signature metadata if no retrieval boosts
-            alert_service = alert.get("labels", {}).get("service") if isinstance(alert.get("labels"), dict) else None
-            alert_component = alert.get("labels", {}).get("component") if isinstance(alert.get("labels"), dict) else None
-            
+            alert_service = (
+                alert.get("labels", {}).get("service")
+                if isinstance(alert.get("labels"), dict)
+                else None
+            )
+            alert_component = (
+                alert.get("labels", {}).get("component")
+                if isinstance(alert.get("labels"), dict)
+                else None
+            )
+
             if runbook_metadata and (alert_service or alert_component):
                 # Check match quality from top runbook
                 top_rb = runbook_metadata[0]
                 rb_service = top_rb.get("service")
                 rb_component = top_rb.get("component")
-                
+
                 # Check service match
                 if alert_service and rb_service:
                     alert_service_lower = str(alert_service).lower()
@@ -551,10 +566,13 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                     if alert_service_lower == rb_service_lower:
                         service_match_quality = "exact"
                         confidence_boost += 0.1
-                    elif alert_service_lower in rb_service_lower or rb_service_lower in alert_service_lower:
+                    elif (
+                        alert_service_lower in rb_service_lower
+                        or rb_service_lower in alert_service_lower
+                    ):
                         service_match_quality = "partial"
                         confidence_boost += 0.05
-                
+
                 # Check component match
                 if alert_component and rb_component:
                     alert_component_lower = str(alert_component).lower()
@@ -562,14 +580,17 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                     if alert_component_lower == rb_component_lower:
                         component_match_quality = "exact"
                         confidence_boost += 0.05
-                    elif alert_component_lower in rb_component_lower or rb_component_lower in alert_component_lower:
+                    elif (
+                        alert_component_lower in rb_component_lower
+                        or rb_component_lower in alert_component_lower
+                    ):
                         component_match_quality = "partial"
                         confidence_boost += 0.02
-        
+
         # Calculate final confidence (cap at 1.0)
         final_confidence = min(base_confidence + confidence_boost, 1.0)
         triage_output["confidence"] = final_confidence
-        
+
         logger.info(
             f"Enhanced confidence calculation: base={base_confidence:.2f}, "
             f"service_match={service_match_quality}, component_match={component_match_quality}, "
@@ -868,16 +889,18 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Even without evidence, we can provide low confidence (0.0-0.3) based on alert description
         # This allows graceful degradation instead of hard failure
         no_evidence_confidence = 0.0
-        
+
         # If we have some runbook metadata, give small confidence boost
         if runbook_metadata:
             no_evidence_confidence = 0.2  # Low confidence but not zero
-            logger.info(f"No incident signatures found, but {len(runbook_metadata)} runbook(s) matched - confidence set to 0.2")
+            logger.info(
+                f"No incident signatures found, but {len(runbook_metadata)} runbook(s) matched - confidence set to 0.2"
+            )
         else:
             # No evidence at all - very low confidence
             no_evidence_confidence = 0.0
             logger.info("No evidence found - confidence set to 0.0")
-        
+
         triage_output = {
             "incident_signature": {
                 "failure_type": "UNKNOWN_FAILURE",
@@ -974,7 +997,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         "evidence_count": {
             "incident_signatures": len(incident_signatures),
             "runbook_metadata": len(runbook_metadata),
-            "total": len(incident_signatures) + len(runbook_metadata)
+            "total": len(incident_signatures) + len(runbook_metadata),
         },
     }
 
@@ -984,8 +1007,12 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
     # Log clear status message
     if has_evidence:
-        logger.info(f"✅ TRIAGE SUCCESS: Found {len(incident_signatures)} incident signatures and {len(runbook_metadata)} runbook metadata. Triage completed successfully.")
+        logger.info(
+            f"✅ TRIAGE SUCCESS: Found {len(incident_signatures)} incident signatures and {len(runbook_metadata)} runbook metadata. Triage completed successfully."
+        )
     else:
-        logger.warning(f"❌ TRIAGE FAILED: No evidence found. {evidence_warning or 'No matching historical evidence available.'}")
+        logger.warning(
+            f"❌ TRIAGE FAILED: No evidence found. {evidence_warning or 'No matching historical evidence available.'}"
+        )
 
     return result

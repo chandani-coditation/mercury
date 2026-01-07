@@ -114,7 +114,7 @@ def _get_db_connection():
     Internal function to get a database connection from the pool.
     Falls back to direct connection if pool is not initialized.
     Includes retry logic for transient failures.
-    
+
     NOTE: This function should NOT be used directly. Use get_db_connection_context() instead
     to ensure connections are properly returned to the pool.
     """

@@ -111,7 +111,9 @@ class AgentStateRepository:
                     state_id = result["id"] if isinstance(result, dict) else result[0]
 
                 conn.commit()
-                logger.debug(f"Agent state saved: state_id={state_id}, incident_id={state.incident_id}")
+                logger.debug(
+                    f"Agent state saved: state_id={state_id}, incident_id={state.incident_id}"
+                )
                 return str(state_id)
 
             except Exception as e:
@@ -264,7 +266,9 @@ class AgentStateRepository:
                 states: List[AgentState] = []
                 for row in results:
                     state_data = row["state_data"] if isinstance(row, dict) else row[0]
-                    state_dict = state_data if isinstance(state_data, dict) else json.loads(state_data)
+                    state_dict = (
+                        state_data if isinstance(state_data, dict) else json.loads(state_data)
+                    )
                     try:
                         states.append(AgentState(**state_dict))
                     except Exception as exc:

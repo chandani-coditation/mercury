@@ -34,3 +34,5 @@ EC-GENERIC-006,error_class,15,,keyword,unable to open|cannot open,FILE_ACCESS_ER
 EC-GENERIC-007,error_class,16,,keyword,step failed|job failed,EXECUTION_ERROR,description,Generic execution
 EC-GENERIC-008,error_class,17,,fallback,,UNKNOWN_ERROR,,Default fallback
 
+
+

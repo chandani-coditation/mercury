@@ -99,8 +99,10 @@ async def resolution(
         elif use_state:
             if not incident_id:
                 error_msg = format_user_friendly_error(
-                    ValueError("State-based resolution requires an incident_id. Please triage the alert first."),
-                    error_type="validation"
+                    ValueError(
+                        "State-based resolution requires an incident_id. Please triage the alert first."
+                    ),
+                    error_type="validation",
                 )
                 raise HTTPException(status_code=400, detail=error_msg)
             result = await resolution_agent_state(
@@ -116,20 +118,23 @@ async def resolution(
                     triage_output = incident.get("triage_output")
                     if not triage_output:
                         error_msg = format_user_friendly_error(
-                            ValueError(f"Incident {incident_id} has no triage output. Please triage the alert first."),
-                            error_type="validation"
+                            ValueError(
+                                f"Incident {incident_id} has no triage output. Please triage the alert first."
+                            ),
+                            error_type="validation",
                         )
                         raise HTTPException(status_code=400, detail=error_msg)
-                    
+
                     # Parse JSON string if needed (psycopg may return JSONB as string)
                     import json
+
                     if isinstance(triage_output, str):
                         try:
                             triage_output = json.loads(triage_output)
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse triage_output JSON: {e}")
                             raise ValueError(f"Invalid triage_output format: {e}")
-                    
+
                     resolution_result = resolution_agent(triage_output)
 
                     metadata = resolution_result.get("_metadata", {})
@@ -160,7 +165,6 @@ async def resolution(
 
         resolution_data = result.get("resolution") or {}
         steps = resolution_data.get("steps") or resolution_data.get("resolution_steps") or []
-
 
         return result
 

@@ -46,7 +46,7 @@ class FeedbackService:
         logger.debug(
             f"Creating/updating feedback via service for incident: {incident_id}, type={feedback_type}, rating={rating}"
         )
-        
+
         # If this is a rating feedback (thumbs up/down), check if we should update existing feedback
         if rating and notes:
             existing_feedback = self.repository.find_existing_rating_feedback(
@@ -54,7 +54,7 @@ class FeedbackService:
                 feedback_type=feedback_type,
                 notes=notes,
             )
-            
+
             if existing_feedback:
                 # Update existing feedback instead of creating new one
                 logger.info(
@@ -69,7 +69,7 @@ class FeedbackService:
                     return existing_feedback["id"]
                 else:
                     logger.warning("Failed to update existing feedback, will create new one")
-        
+
         # Create new feedback record
         return self.repository.create(
             incident_id=incident_id,
@@ -93,9 +93,7 @@ class FeedbackService:
         Returns:
             List of feedback dictionaries
         """
-        logger.debug(
-            "Listing feedback via service between %s and %s", start_date, end_date
-        )
+        logger.debug("Listing feedback via service between %s and %s", start_date, end_date)
         if start_date is None:
             from datetime import timedelta
 
@@ -119,8 +117,5 @@ class FeedbackService:
         Returns:
             List of feedback dictionaries (most recent first)
         """
-        logger.debug(
-            "Listing feedback for incident via service: incident_id=%s", incident_id
-        )
+        logger.debug("Listing feedback for incident via service: incident_id=%s", incident_id)
         return self.repository.list_for_incident(incident_id)
-
