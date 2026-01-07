@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, FileText, Hash, TrendingUp } from "lucide-react";
+import { ChevronDown, FileText, Hash, TrendingUp, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface EvidenceChunkProps {
@@ -167,35 +167,67 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
         <div className="p-4 pt-0 space-y-3">
           {/* Relevance Scores Breakdown */}
           {hasScores && (
-            <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-background/50 border border-border/30">
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground mb-1">Vector</div>
-                <div className="text-sm font-semibold font-mono text-foreground">
-                  {scores.vector_score
-                    ? (scores.vector_score * 100).toFixed(1)
-                    : "0.0"}
-                  %
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-background/50 border border-border/30">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <span className="text-xs text-muted-foreground">Vector</span>
+                    <div className="group relative inline-block align-middle">
+                      <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+                      <div className="hidden group-hover:block absolute z-20 w-56 p-2 text-[10px] text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
+                        Semantic similarity between this chunk and the alert based on vector embeddings.
+                        Higher means a closer semantic match.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold font-mono text-foreground">
+                    {scores.vector_score
+                      ? (scores.vector_score * 100).toFixed(1)
+                      : "0.0"}
+                    %
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <span className="text-xs text-muted-foreground">Fulltext</span>
+                    <div className="group relative inline-block align-middle">
+                      <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+                      <div className="hidden group-hover:block absolute z-20 w-56 p-2 text-[10px] text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
+                        Keyword-based match score from full-text search. Higher means more overlapping
+                        words and phrases with the alert.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold font-mono text-foreground">
+                    {scores.fulltext_score
+                      ? (scores.fulltext_score * 100).toFixed(1)
+                      : "0.0"}
+                    %
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <span className="text-xs text-muted-foreground">RRF</span>
+                    <div className="group relative inline-block align-middle">
+                      <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+                      <div className="hidden group-hover:block absolute z-20 w-64 p-2 text-[10px] text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
+                        Reciprocal Rank Fusion (RRF) combines the vector and full-text rankings into a
+                        single relevance score so the best matches from both methods are surfaced.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold font-mono text-foreground">
+                    {scores.rrf_score
+                      ? (scores.rrf_score * 1000).toFixed(1)
+                      : "0.0"}
+                  </div>
                 </div>
               </div>
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground mb-1">
-                  Fulltext
-                </div>
-                <div className="text-sm font-semibold font-mono text-foreground">
-                  {scores.fulltext_score
-                    ? (scores.fulltext_score * 100).toFixed(1)
-                    : "0.0"}
-                  %
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground mb-1">RRF</div>
-                <div className="text-sm font-semibold font-mono text-foreground">
-                  {scores.rrf_score
-                    ? (scores.rrf_score * 1000).toFixed(1)
-                    : "0.0"}
-                </div>
-              </div>
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                <span className="font-semibold">Vector</span> = semantic similarity,{" "}
+                <span className="font-semibold">Fulltext</span> = keyword match,{" "}
+                <span className="font-semibold">RRF</span> = combined relevance from both.
+              </p>
             </div>
           )}
 

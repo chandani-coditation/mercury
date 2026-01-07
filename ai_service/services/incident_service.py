@@ -1,6 +1,6 @@
 """Service for incident business logic."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from ai_service.repositories.incident_repository import IncidentRepository
 from ai_service.core import IncidentNotFoundError, get_logger
 
@@ -87,19 +87,20 @@ class IncidentService:
         logger.debug(f"Getting incident by alert_id via service: {alert_id}")
         return self.repository.get_by_alert_id(alert_id)
 
-    def list_incidents(self, limit: int = 50, offset: int = 0) -> List[Dict]:
+    def list_incidents(self, limit: int = 50, offset: int = 0, search: Optional[str] = None) -> Tuple[List[Dict], int]:
         """
-        List incidents.
+        List incidents with optional search and pagination.
 
         Args:
             limit: Maximum number of incidents to return
             offset: Number of incidents to skip
+            search: Optional search term to filter by incident_id or alert_id
 
         Returns:
-            List of incident dictionaries
+            Tuple of (list of incident dictionaries, total count)
         """
-        logger.debug(f"Listing incidents via service: limit={limit}, offset={offset}")
-        return self.repository.list_all(limit=limit, offset=offset)
+        logger.debug(f"Listing incidents via service: limit={limit}, offset={offset}, search={search}")
+        return self.repository.list_all(limit=limit, offset=offset, search=search)
 
     def update_resolution(
         self,
@@ -122,7 +123,25 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-        logger.debug(f"Updating resolution via service for incident: {incident_id}")
+        logger.debug(
+            f"Updating resolution via service for incident: {incident_id}, "
+            f"policy_band={policy_band}"
+        )
+
+        # If policy_band or policy_decision not provided, preserve existing values
+        if policy_band is None or policy_decision is None:
+            try:
+                current = self.repository.get_by_id(incident_id)
+                if policy_band is None:
+                    policy_band = current.get("policy_band")
+                if policy_decision is None:
+                    policy_decision = current.get("policy_decision")
+            except IncidentNotFoundError:
+                # Let repository.raise a clearer error later
+                logger.warning(
+                    f"Incident {incident_id} not found when trying to preserve policy during resolution update"
+                )
+
         self.repository.update_resolution(
             incident_id=incident_id,
             resolution_output=resolution_output,

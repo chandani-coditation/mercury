@@ -68,7 +68,9 @@ class FeedbackService:
         Returns:
             List of feedback dictionaries
         """
-        logger.debug(f"Listing feedback via service between {start_date} and {end_date}")
+        logger.debug(
+            "Listing feedback via service between %s and %s", start_date, end_date
+        )
         if start_date is None:
             from datetime import timedelta
 
@@ -78,3 +80,22 @@ class FeedbackService:
             end_date = datetime.utcnow()
 
         return self.repository.list_between(start_ts=start_date, end_ts=end_date)
+
+    def list_for_incident(self, incident_id: str) -> List[Dict]:
+        """
+        List all feedback records for a specific incident.
+
+        This powers the UI feedback history view so analysts can see
+        previous thumbs up/down ratings and notes.
+
+        Args:
+            incident_id: Incident ID
+
+        Returns:
+            List of feedback dictionaries (most recent first)
+        """
+        logger.debug(
+            "Listing feedback for incident via service: incident_id=%s", incident_id
+        )
+        return self.repository.list_for_incident(incident_id)
+

@@ -8,12 +8,39 @@ from ai_service.agents import triage_agent
 from ai_service.agents.triager_state import triage_agent_state
 from ai_service.core import get_logger, ValidationError
 from ai_service.api.error_utils import format_user_friendly_error
+from ai_service.services import IncidentService
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 # Feature flag for LangGraph (can be enabled via environment variable)
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
+
+
+def _record_triage_latency_and_update_incident(result: dict, start_time: datetime) -> float:
+    """
+    Attach end-to-end API latency to triage output and persist to the incident.
+
+    This helper is intentionally defensive: failures are logged but do not
+    break the main /triage flow.
+    """
+    latency = (datetime.utcnow() - start_time).total_seconds()
+
+    try:
+        incident_id = result.get("incident_id")
+        triage_output = result.get("triage") or {}
+        triage_output["api_latency_secs"] = latency
+        result["triage"] = triage_output
+
+        if incident_id:
+            IncidentService().update_triage_output(incident_id, triage_output)
+    except Exception as e:
+        logger.warning(
+            f"Failed to record triage API latency/update incident: {e}",
+            exc_info=True,
+        )
+
+    return latency
 
 
 @router.post("/triage")
@@ -49,6 +76,7 @@ async def triage(
         f"Triage request received: alert={alert.title}, use_state={use_state}, use_langgraph={use_lg}"
     )
 
+    start_time = datetime.utcnow()
     try:
         # Convert alert to dict
         alert_dict = alert.model_dump(mode="json", exclude_none=True)
@@ -80,11 +108,12 @@ async def triage(
             # Use synchronous agent (backward compatible)
             result = triage_agent(alert_dict)
 
-        logger.info(
-            f"Triage completed: incident_id={result['incident_id']}, "
-            f"severity={result['triage'].get('severity')}, "
-            f"policy_band={result['policy_band']}"
+        # Compute latency and persist triage output in a helper
+        latency = _record_triage_latency_and_update_incident(
+            result=result, start_time=start_time
         )
+
+        
 
         return result
 

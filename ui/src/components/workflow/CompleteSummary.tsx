@@ -33,6 +33,7 @@ interface CompleteSummaryProps {
   policyData: any;
   retrievalData: any;
   resolutionData: any;
+  feedbackHistory?: any[];
   onNewTicket: () => void;
   onViewTriage?: () => void;
   onViewResolution?: () => void;
@@ -44,6 +45,7 @@ export const CompleteSummary = ({
   policyData,
   retrievalData,
   resolutionData,
+  feedbackHistory = [],
   onNewTicket,
   onViewTriage,
   onViewResolution,
@@ -608,6 +610,51 @@ export const CompleteSummary = ({
                   </span>
                 )}
               </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Feedback History */}
+      {feedbackHistory && feedbackHistory.length > 0 && (
+        <Card className="p-6 glass-card glow-border">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <ListChecks className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">Feedback History</h3>
+            </div>
+            <div className="space-y-2">
+              {feedbackHistory.map((fb, index) => (
+                <div
+                  key={fb.id || index}
+                  className="flex items-center justify-between text-sm bg-background/50 border border-border/30 rounded-lg px-3 py-2"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium text-foreground">
+                      {fb.feedback_type === "triage" ? "Triage" : "Resolution"}
+                    </span>
+                    {fb.notes && (
+                      <span className="text-xs text-muted-foreground">
+                        {fb.notes}
+                      </span>
+                    )}
+                    {fb.created_at && (
+                      <span className="text-[11px] text-muted-foreground mt-0.5">
+                        {new Date(fb.created_at).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {fb.rating === "thumbs_up" && <span>👍</span>}
+                    {fb.rating === "thumbs_down" && <span>👎</span>}
+                    {!fb.rating && (
+                      <span className="text-xs text-muted-foreground">
+                        No rating
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </Card>

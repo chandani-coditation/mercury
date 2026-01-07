@@ -3,7 +3,7 @@
 import uuid
 import json
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from db.connection import get_db_connection_context
 from ai_service.core import IncidentNotFoundError, DatabaseError, get_logger
 
@@ -168,33 +168,107 @@ class IncidentRepository:
                 cur.close()
 
     @staticmethod
-    def list_all(limit: int = 50, offset: int = 0) -> List[Dict]:
+    def list_all(limit: int = 50, offset: int = 0, search: Optional[str] = None) -> Tuple[List[Dict], int]:
         """
-        List incidents.
+        List incidents with optional search and pagination.
 
         Args:
             limit: Maximum number of incidents to return
             offset: Number of incidents to skip
+            search: Optional search term to filter by incident_id or alert_id
 
         Returns:
-            List of incident dictionaries
+            Tuple of (list of incident dictionaries, total count)
 
         Raises:
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Listing incidents: limit={limit}, offset={offset}")
+        logger.debug(f"Listing incidents: limit={limit}, offset={offset}, search={search}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
             try:
-                cur.execute(
-                    "SELECT * FROM incidents ORDER BY created_at DESC LIMIT %s OFFSET %s",
-                    (limit, offset),
+                # Build WHERE clause for search
+                where_clause = ""
+                params = []
+                if search:
+                    search_term = f"%{search}%"
+                    where_clause = "WHERE (id::text ILIKE %s OR alert_id ILIKE %s)"
+                    params = [search_term, search_term]
+
+                # Get total count (alias column to ensure consistent key)
+                count_query = f"SELECT COUNT(*) AS total_count FROM incidents {where_clause}"
+                if params:
+                    cur.execute(count_query, params)
+                else:
+                    cur.execute(count_query)
+                count_row = cur.fetchone()
+                # RealDictRow can be accessed by column name
+                total_count = (
+                    count_row.get("total_count", 0) if count_row is not None else 0
                 )
+
+                # Get paginated results with metrics
+                query = f"""
+                    SELECT 
+                        *,
+                        CASE 
+                            WHEN triage_completed_at IS NOT NULL AND alert_received_at IS NOT NULL
+                            THEN EXTRACT(EPOCH FROM (triage_completed_at - alert_received_at))
+                            WHEN triage_completed_at IS NOT NULL AND created_at IS NOT NULL
+                            THEN EXTRACT(EPOCH FROM (triage_completed_at - created_at))
+                            ELSE NULL
+                        END AS triage_time_secs,
+                        CASE 
+                            WHEN resolution_proposed_at IS NOT NULL AND alert_received_at IS NOT NULL
+                            THEN EXTRACT(EPOCH FROM (resolution_proposed_at - alert_received_at))
+                            WHEN resolution_proposed_at IS NOT NULL AND created_at IS NOT NULL
+                            THEN EXTRACT(EPOCH FROM (resolution_proposed_at - created_at))
+                            ELSE NULL
+                        END AS resolution_time_secs
+                    FROM incidents 
+                    {where_clause}
+                    ORDER BY created_at DESC 
+                    LIMIT %s OFFSET %s
+                """
+                params.extend([limit, offset])
+                cur.execute(query, params)
                 rows = cur.fetchall()
-                result = [dict(row) for row in rows]
-                logger.debug(f"Listed {len(result)} incidents")
-                return result
+                
+                # Convert to dicts and extract metrics from JSONB fields
+                result = []
+                for row in rows:
+                    incident_dict = dict(row)
+                    
+                    # Extract triage confidence from triage_output JSONB
+                    triage_output = incident_dict.get("triage_output")
+                    if isinstance(triage_output, dict):
+                        incident_dict["triage_confidence"] = triage_output.get("confidence")
+                        # Prefer explicit API latency if available
+                        api_latency = triage_output.get("api_latency_secs")
+                        if api_latency is not None:
+                            incident_dict["triage_time_secs"] = api_latency
+                    else:
+                        incident_dict["triage_confidence"] = None
+                    
+                    # Extract resolution confidence from resolution_output JSONB
+                    resolution_output = incident_dict.get("resolution_output")
+                    if isinstance(resolution_output, dict):
+                        incident_dict["resolution_confidence"] = (
+                            resolution_output.get("overall_confidence") or 
+                            resolution_output.get("confidence")
+                        )
+                        # Prefer explicit API latency if available
+                        api_latency_res = resolution_output.get("api_latency_secs")
+                        if api_latency_res is not None:
+                            incident_dict["resolution_time_secs"] = api_latency_res
+                    else:
+                        incident_dict["resolution_confidence"] = None
+                    
+                    result.append(incident_dict)
+                
+                logger.debug(f"Listed {len(result)} incidents (total: {total_count})")
+                return result, total_count
             except Exception as e:
                 logger.error(f"Failed to list incidents: {str(e)}", exc_info=True)
                 raise DatabaseError(f"Failed to list incidents: {str(e)}") from e

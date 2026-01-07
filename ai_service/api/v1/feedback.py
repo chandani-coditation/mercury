@@ -297,3 +297,57 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
     except Exception as e:
         logger.error(f"Unexpected error storing feedback: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/incidents/{incident_id}/feedback")
+def list_feedback_for_incident(incident_id: str):
+    """
+    List all feedback records (including thumbs up/down ratings) for an incident.
+
+    This endpoint is used by the UI to display feedback history
+    when an analyst views an incident from history.
+    """
+    try:
+        # Validate incident_id format (should be UUID)
+        if not incident_id or len(incident_id.strip()) == 0:
+            raise HTTPException(
+                status_code=400, detail="Invalid incident_id: cannot be empty"
+            )
+        
+        feedback_service = FeedbackService()
+        records = feedback_service.list_for_incident(incident_id)
+        return {"incident_id": incident_id, "feedback": records}
+    except HTTPException:
+        raise
+    except DatabaseError as e:
+        error_msg = str(e)
+        # Check for UUID format errors
+        if "invalid input syntax for type uuid" in error_msg.lower():
+            logger.warning(
+                "Invalid UUID format for incident_id %s: %s",
+                incident_id,
+                error_msg,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid incident_id format: {incident_id}. Expected UUID format.",
+            )
+        logger.error(
+            "Database error listing feedback for incident %s: %s",
+            incident_id,
+            error_msg,
+        )
+        raise HTTPException(status_code=500, detail=f"Database error: {error_msg}")
+    except Exception as e:
+        error_msg = str(e) if str(e) else repr(e)
+        logger.error(
+            "Unexpected error listing feedback for incident %s: %s (type: %s)",
+            incident_id,
+            error_msg,
+            type(e).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Internal server error: {error_msg}"
+        )
+

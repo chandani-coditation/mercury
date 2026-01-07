@@ -1,6 +1,7 @@
 """Incident endpoints."""
 
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Query
 from ai_service.services import IncidentService
 from ai_service.core import get_logger, IncidentNotFoundError, DatabaseError
 
@@ -9,12 +10,29 @@ router = APIRouter()
 
 
 @router.get("/incidents")
-def get_incidents(limit: int = 50, offset: int = 0):
-    """List incidents."""
+def get_incidents(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None, description="Search by incident ID or alert ID")
+):
+    """
+    List incidents with optional search and pagination.
+    
+    Args:
+        limit: Maximum number of incidents to return (1-200)
+        offset: Number of incidents to skip
+        search: Optional search term to filter by incident_id or alert_id
+    """
     try:
         service = IncidentService()
-        incidents = service.list_incidents(limit=limit, offset=offset)
-        return {"incidents": incidents, "count": len(incidents)}
+        incidents, total_count = service.list_incidents(limit=limit, offset=offset, search=search)
+        return {
+            "incidents": incidents,
+            "count": len(incidents),
+            "total": total_count,
+            "limit": limit,
+            "offset": offset
+        }
     except DatabaseError as e:
         logger.error(f"Database error listing incidents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

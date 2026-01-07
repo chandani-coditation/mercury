@@ -4,73 +4,25 @@ import { TriageView } from "@/components/workflow/TriageView";
 import { PolicyView } from "@/components/workflow/PolicyView";
 import { ResolutionView } from "@/components/workflow/ResolutionView";
 import { CompleteSummary } from "@/components/workflow/CompleteSummary";
-import { Terminal, Activity, Search, Plus } from "lucide-react";
+import { Terminal, Activity, Search, Plus, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   postTriage,
   postResolution,
   putFeedback,
-  putResolutionComplete,
   getIncident,
+  listIncidents,
+  getIncidentFeedback,
 } from "@/api/client";
-
-// Sample data
-const sampleTriageData = {
-  severity: "high" as const,
-  category: "database",
-  summary:
-    "The alert indicates a failure in executing a database step due to an inability to open the step output file. This is critical as it affects the database operation in the production environment.",
-  likely_cause:
-    "The failure may be due to insufficient disk space or permission issues preventing access to the step output file.",
-  routing: "SE DBA SQL",
-  affected_services: ["Database-SQL"],
-  recommended_actions: [
-    "Check disk space on the database server.",
-    "Verify permissions for the user INT\\ClustAgtSrvc on the output file location.",
-    "Review recent changes or scheduled jobs that could have impacted database performance.",
-  ],
-  confidence: 0.9,
-};
-
-const samplePolicyData = {
-  policy_band: "PROPOSE",
-  policy_decision: {
-    policy_band: "PROPOSE",
-    can_auto_apply: false,
-    requires_approval: true,
-    notification_required: false,
-    rollback_required: false,
-    policy_reason:
-      "Matched PROPOSE band based on severity=high and confidence=0.9",
-  },
-};
-
-const sampleRetrievalData = {
-  chunks_used: 5,
-  chunk_ids: [
-    "4b72cdc8-4537-4fda-a2eb-6fcc768789f6",
-    "c431a520-b806-47be-a9aa-76a7c97acec0",
-  ],
-  chunk_sources: ["Runbook - Database Alerts", "Runbook - Database Alerts"],
-  chunks: [],
-};
-
-const sampleResolutionData = {
-  resolution_steps: [
-    "SSH into the database server (Database-SQL)",
-    "Check disk space: df -h",
-    "Verify permissions: ls -la /path/to/output",
-    "Review SQL Agent job history",
-    "Restart affected services if needed",
-    "Validate database connectivity",
-  ],
-};
 
 type WorkflowStep = "form" | "triage" | "policy" | "resolution" | "complete";
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("form");
+  const [currentView, setCurrentView] = useState<"workflow" | "incidents">(
+    "workflow",
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [incidentId, setIncidentId] = useState("");
   const [alertData, setAlertData] = useState<any>(null);
@@ -78,9 +30,17 @@ const Index = () => {
   const [policyData, setPolicyData] = useState<any>(null);
   const [retrievalData, setRetrievalData] = useState<any>(null);
   const [resolutionData, setResolutionData] = useState<any>(null);
+  const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [searchIncidentId, setSearchIncidentId] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [incidents, setIncidents] = useState<any[]>([]);
+  const [isLoadingIncidents, setIsLoadingIncidents] = useState(false);
+  const [incidentsError, setIncidentsError] = useState<string>("");
+  const [incidentsSearch, setIncidentsSearch] = useState<string>("");
+  const [incidentsPage, setIncidentsPage] = useState<number>(1);
+  const [incidentsLimit] = useState<number>(20);
+  const [incidentsTotal, setIncidentsTotal] = useState<number>(0);
   // Field-specific ratings for triage: severity, impact, urgency
   const [triageRatings, setTriageRatings] = useState<{
     severity?: string | null;
@@ -243,6 +203,50 @@ const Index = () => {
       return;
     }
 
+    // Check if resolution already exists in state - if so, just navigate to it
+    const hasResolutionInState = resolutionData && (
+      (resolutionData.steps && resolutionData.steps.length > 0) ||
+      (resolutionData.resolution_steps && resolutionData.resolution_steps.length > 0) ||
+      (resolutionData.recommendations && resolutionData.recommendations.length > 0)
+    );
+
+    if (hasResolutionInState) {
+      console.log("Resolution already exists in state, navigating to resolution view");
+      setCurrentStep("resolution");
+      return;
+    }
+
+    // Also check database - if resolution exists there, fetch it instead of regenerating
+    try {
+      const incident = await getIncident(incidentId);
+      if (incident.resolution_output) {
+        console.log("Resolution exists in database, loading from DB instead of regenerating");
+        const resolution = incident.resolution_output;
+        const stepsArray = resolution.steps || [];
+        const recommendations = resolution.recommendations || [];
+        const stepsAsStrings =
+          stepsArray.length > 0 && typeof stepsArray[0] === "object"
+            ? stepsArray.map((step: any) => step.action || step.title || "")
+            : recommendations.length > 0
+              ? recommendations.map((rec: any) => rec.action || rec.step || "")
+              : resolution.resolution_steps || [];
+
+        setResolutionData({
+          ...resolution,
+          steps: stepsArray,
+          recommendations: recommendations,
+          resolution_steps: stepsAsStrings,
+          overall_confidence:
+            resolution.overall_confidence || resolution.confidence || null,
+        });
+        setCurrentStep("resolution");
+        return;
+      }
+    } catch (dbCheckErr) {
+      console.warn("Could not check database for existing resolution, will generate new one:", dbCheckErr);
+      // Continue to generate new resolution
+    }
+
     setIsLoading(true);
     setError("");
 
@@ -338,6 +342,7 @@ const Index = () => {
   };
 
   const handleNewTicket = () => {
+    setCurrentView("workflow");
     setCurrentStep("form");
     setIncidentId("");
     setAlertData(null);
@@ -351,6 +356,7 @@ const Index = () => {
     setTriageRatings({});
     setResolutionRatings({});
     setRatingStatus({ triage: {}, resolution: {} });
+    setFeedbackHistory([]);
   };
 
   // Handler for triage field-specific rating feedback
@@ -440,8 +446,9 @@ const Index = () => {
     }
   };
 
-  const handleLoadIncident = async () => {
-    if (!searchIncidentId.trim()) {
+  const loadIncidentById = async (id: string) => {
+    const incidentKey = id.trim();
+    if (!incidentKey) {
       setError("Please enter an Incident ID or Alert ID");
       return;
     }
@@ -450,7 +457,7 @@ const Index = () => {
     setError("");
 
     try {
-      const incident = await getIncident(searchIncidentId);
+      const incident = await getIncident(incidentKey);
 
       // Extract data from incident
       setIncidentId(incident.incident_id || incident.id);
@@ -545,11 +552,28 @@ const Index = () => {
         retrieval_params: evidence.retrieval_params || {},
       });
 
-      // Set resolution data if exists
-      if (incident.resolution_output) {
-        setResolutionData(incident.resolution_output);
+      // Ensure resolution exists: if not stored yet, call resolution API once for this incident
+      let resolutionOutput = incident.resolution_output;
+      const resolvedIncidentId = incident.incident_id || incident.id;
+
+      if (!resolutionOutput && resolvedIncidentId) {
+        try {
+          const res = await postResolution(resolvedIncidentId);
+          const generated = res.resolution || res;
+          resolutionOutput = generated || null;
+        } catch (resErr) {
+          console.error(
+            "Failed to auto-generate resolution for existing incident:",
+            resErr,
+          );
+        }
+      }
+
+      // Set resolution data from stored or newly generated output
+      if (resolutionOutput) {
+        setResolutionData(resolutionOutput);
       } else {
-        // Set empty resolution data to avoid undefined errors
+        // Fallback: keep empty structure to avoid undefined errors in the UI
         setResolutionData({
           resolution_steps: [],
           rollback_plan: null,
@@ -558,10 +582,26 @@ const Index = () => {
         });
       }
 
+      // Load feedback history (thumbs up/down, notes)
+      try {
+        const feedbackResponse = await getIncidentFeedback(
+          incident.incident_id || incident.id,
+        );
+        // API returns { incident_id, feedback: [...] }
+        setFeedbackHistory(feedbackResponse.feedback || []);
+      } catch (feedbackErr) {
+        console.warn(
+          "Failed to load feedback history for incident:",
+          feedbackErr,
+        );
+        setFeedbackHistory([]);
+      }
+
       // When loading an existing incident, ALWAYS go to complete summary page
       // This shows all available data in one place, regardless of resolution status
       // The CompleteSummary component handles missing data gracefully
       setCurrentStep("complete");
+      setCurrentView("workflow");
 
       setShowSearch(false);
     } catch (err: any) {
@@ -572,6 +612,50 @@ const Index = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLoadIncident = async () => {
+    await loadIncidentById(searchIncidentId);
+  };
+
+  const handleSelectIncidentFromList = async (incidentId: string) => {
+    await loadIncidentById(incidentId);
+  };
+
+  const loadIncidents = async (page: number = 1, searchTerm: string = "") => {
+    setIsLoadingIncidents(true);
+    setIncidentsError("");
+    try {
+      const offset = (page - 1) * incidentsLimit;
+      const response = await listIncidents(incidentsLimit, offset, searchTerm || null);
+      setIncidents(response.incidents || []);
+      setIncidentsTotal(response.total || 0);
+      setIncidentsPage(page);
+    } catch (err: any) {
+      console.error("Failed to load incidents list", err);
+      const message =
+        err.response?.data?.detail ||
+        err.message ||
+        "Failed to load incidents list";
+      setIncidentsError(message);
+    } finally {
+      setIsLoadingIncidents(false);
+    }
+  };
+
+  const handleOpenIncidentsView = async () => {
+    setCurrentView("incidents");
+    if (incidents.length === 0 && !isLoadingIncidents) {
+      await loadIncidents(1, incidentsSearch);
+    }
+  };
+
+  const handleIncidentsSearch = async () => {
+    await loadIncidents(1, incidentsSearch);
+  };
+
+  const handleIncidentsPageChange = async (newPage: number) => {
+    await loadIncidents(newPage, incidentsSearch);
   };
 
   const handleMarkComplete = () => {
@@ -611,6 +695,17 @@ const Index = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Incidents List */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleOpenIncidentsView}
+                className="bg-white/5 text-white border-white/20 hover:bg-white/15 hover:text-white h-8"
+              >
+                <List className="w-4 h-4 mr-2" />
+                Incidents
+              </Button>
+
               {/* Search/Load Existing Ticket */}
               {showSearch ? (
                 <div className="flex items-center gap-2 bg-white/10 rounded px-3 py-1.5">
@@ -675,7 +770,7 @@ const Index = () => {
       </header>
 
       {/* Progress Steps - ServiceNow Style */}
-      {currentStep !== "form" && (
+      {currentView === "workflow" && currentStep !== "form" && (
         <div className="relative z-10 bg-secondary border-b border-border">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center gap-2">
@@ -696,102 +791,286 @@ const Index = () => {
       {/* Main Content */}
       <main className="relative z-10 container mx-auto px-4 py-8">
         <div className="max-w-[98%] mx-auto">
-          {/* Error Display (Global) */}
-          {error && !isLoading && (
-            <div className="mb-4 p-4 bg-destructive/10 border-l-4 border-destructive rounded text-destructive animate-fade-in">
-              <div className="flex items-start gap-2">
-                <svg
-                  className="w-5 h-5 flex-shrink-0 mt-0.5"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+          {currentView === "incidents" ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-2">
                 <div>
-                  <div className="font-semibold">Error</div>
-                  <div className="text-sm mt-1">{error}</div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Incident History
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Browse existing incidents and open their full summary. Use the{" "}
+                    <span className="font-semibold">New Ticket</span> button in the
+                    header to triage a new alert.
+                  </p>
                 </div>
               </div>
+
+              {/* Search Bar */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 border rounded-lg px-3 py-2 bg-card">
+                  <Search className="w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={incidentsSearch}
+                    onChange={(e) => setIncidentsSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleIncidentsSearch()}
+                    placeholder="Search by Incident ID or Alert ID..."
+                    className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleIncidentsSearch}
+                    disabled={isLoadingIncidents}
+                    className="h-8"
+                  >
+                    Search
+                  </Button>
+                  {incidentsSearch && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setIncidentsSearch("");
+                        loadIncidents(1, "");
+                      }}
+                      className="h-8"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {incidentsError && (
+                <div className="mb-4 p-4 bg-destructive/10 border-l-4 border-destructive rounded text-destructive animate-fade-in">
+                  <div className="font-semibold mb-1">Failed to load incidents</div>
+                  <div className="text-sm">{incidentsError}</div>
+                </div>
+              )}
+
+              {isLoadingIncidents ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  Loading incidents...
+                </div>
+              ) : incidents.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground border border-dashed rounded-lg">
+                  {incidentsSearch
+                    ? "No incidents found matching your search."
+                    : "No incidents found yet. Create a new ticket to get started."}
+                </div>
+              ) : (
+                <>
+                  <div className="border rounded-lg overflow-hidden bg-card">
+                    <div className="grid grid-cols-9 gap-2 px-4 py-2 text-xs font-medium text-muted-foreground border-b bg-muted/50">
+                      <div>Incident ID</div>
+                      <div>Alert ID</div>
+                      <div>Source</div>
+                      <div>Policy Band</div>
+                      <div>Triage Time</div>
+                      <div>Triage Confidence</div>
+                      <div>Resolution Time</div>
+                      <div>Resolution Confidence</div>
+                      <div>Created</div>
+                    </div>
+                    <div className="divide-y">
+                      {incidents.map((incident) => {
+                        const formatTime = (seconds: number | null | undefined) => {
+                          if (seconds == null) return "—";
+                          if (seconds < 60) return `${Math.round(seconds)}s`;
+                          if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+                          return `${Math.round(seconds / 3600)}h`;
+                        };
+                        const formatConfidence = (conf: number | null | undefined) => {
+                          if (conf == null) return "—";
+                          return `${(conf * 100).toFixed(0)}%`;
+                        };
+                        return (
+                          <button
+                            key={incident.id}
+                            type="button"
+                            onClick={() =>
+                              handleSelectIncidentFromList(
+                                incident.id || incident.incident_id,
+                              )
+                            }
+                            className="w-full text-left px-4 py-3 text-sm hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex items-center gap-2"
+                          >
+                            <div className="grid grid-cols-9 gap-2 w-full">
+                              <div className="font-mono text-xs truncate">
+                                {incident.id || incident.incident_id}
+                              </div>
+                              <div className="truncate">
+                                {incident.alert_id || "—"}
+                              </div>
+                              <div className="truncate">
+                                {incident.source || "—"}
+                              </div>
+                              <div className="truncate uppercase text-xs">
+                                {incident.policy_band || "—"}
+                              </div>
+                              <div className="truncate text-xs">
+                                {formatTime(incident.triage_time_secs)}
+                              </div>
+                              <div className="truncate text-xs">
+                                {formatConfidence(incident.triage_confidence)}
+                              </div>
+                              <div className="truncate text-xs">
+                                {formatTime(incident.resolution_time_secs)}
+                              </div>
+                              <div className="truncate text-xs">
+                                {formatConfidence(incident.resolution_confidence)}
+                              </div>
+                              <div className="truncate text-xs">
+                                {incident.created_at
+                                  ? new Date(incident.created_at).toLocaleString()
+                                  : "—"}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Pagination */}
+                  {incidentsTotal > incidentsLimit && (
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">
+                        Showing {(incidentsPage - 1) * incidentsLimit + 1} to{" "}
+                        {Math.min(incidentsPage * incidentsLimit, incidentsTotal)} of{" "}
+                        {incidentsTotal} incidents
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleIncidentsPageChange(incidentsPage - 1)}
+                          disabled={incidentsPage <= 1 || isLoadingIncidents}
+                        >
+                          Previous
+                        </Button>
+                        <div className="text-sm text-muted-foreground">
+                          Page {incidentsPage} of{" "}
+                          {Math.ceil(incidentsTotal / incidentsLimit)}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleIncidentsPageChange(incidentsPage + 1)}
+                          disabled={
+                            incidentsPage >= Math.ceil(incidentsTotal / incidentsLimit) ||
+                            isLoadingIncidents
+                          }
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          )}
+          ) : (
+            <>
+              {/* Error Display (Global) */}
+              {error && !isLoading && (
+                <div className="mb-4 p-4 bg-destructive/10 border-l-4 border-destructive rounded text-destructive animate-fade-in">
+                  <div className="flex items-start gap-2">
+                    <svg
+                      className="w-5 h-5 flex-shrink-0 mt-0.5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <div>
+                      <div className="font-semibold">Error</div>
+                      <div className="text-sm mt-1">{error}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          {currentStep === "form" && (
-            <TicketForm
-              onSubmit={handleSubmit}
-              isLoading={isLoading}
-              error={error}
-            />
-          )}
+              {currentStep === "form" && (
+                <TicketForm
+                  onSubmit={handleSubmit}
+                  isLoading={isLoading}
+                  error={error}
+                />
+              )}
 
-          {currentStep === "triage" &&
-            triageData &&
-            policyData &&
-            retrievalData && (
-              <TriageView
-                triageData={triageData}
-                policyData={policyData}
-                retrievalData={retrievalData}
-                onNext={handleNextToPolicy}
-                onBack={handleBack}
-                incidentId={incidentId}
-                triageRatings={triageRatings}
-                ratingStatus={ratingStatus.triage}
-                onRatingChange={handleTriageFieldRating}
-              />
-            )}
+              {currentStep === "triage" &&
+                triageData &&
+                policyData &&
+                retrievalData && (
+                  <TriageView
+                    triageData={triageData}
+                    policyData={policyData}
+                    retrievalData={retrievalData}
+                    onNext={handleNextToPolicy}
+                    onBack={handleBack}
+                    incidentId={incidentId}
+                    triageRatings={triageRatings}
+                    ratingStatus={ratingStatus.triage}
+                    onRatingChange={handleTriageFieldRating}
+                  />
+                )}
 
-          {currentStep === "policy" && policyData && (
-            <PolicyView
-              data={policyData}
-              retrievalData={retrievalData}
-              onApprove={handleApproveAndContinue}
-              onBack={handleBack}
-              isLoading={isLoading}
-              error={error}
-            />
-          )}
+              {currentStep === "policy" && policyData && (
+                <PolicyView
+                  data={policyData}
+                  retrievalData={retrievalData}
+                  onApprove={handleApproveAndContinue}
+                  onBack={handleBack}
+                  isLoading={isLoading}
+                  error={error}
+                />
+              )}
 
-          {currentStep === "resolution" && resolutionData && (
-            <ResolutionView
-              data={resolutionData}
-              onBack={handleBack}
-              onMarkComplete={handleMarkComplete}
-              incidentId={incidentId}
-              resolutionRatings={resolutionRatings}
-              ratingStatus={ratingStatus.resolution}
-              onRatingChange={handleResolutionStepRating}
-            />
-          )}
+              {currentStep === "resolution" && resolutionData && (
+                <ResolutionView
+                  data={resolutionData}
+                  onBack={handleBack}
+                  onMarkComplete={handleMarkComplete}
+                  incidentId={incidentId}
+                  resolutionRatings={resolutionRatings}
+                  ratingStatus={ratingStatus.resolution}
+                  onRatingChange={handleResolutionStepRating}
+                />
+              )}
 
-          {currentStep === "complete" && alertData && resolutionData && (
-            <CompleteSummary
-              alertData={alertData || {}}
-              triageData={triageData || {}}
-              policyData={
-                policyData || { policy_band: null, policy_decision: {} }
-              }
-              retrievalData={
-                retrievalData || {
-                  chunks_used: 0,
-                  chunk_sources: [],
-                  chunks: [],
-                }
-              }
-              resolutionData={resolutionData || { resolution_steps: [] }}
-              onNewTicket={handleNewTicket}
-              onViewTriage={() => {
-                // Just navigate - use existing state data, no API calls
-                setCurrentStep("triage");
-              }}
-              onViewResolution={() => {
-                // Just navigate - use existing state data, no API calls
-                setCurrentStep("resolution");
-              }}
-            />
+              {currentStep === "complete" && alertData && resolutionData && (
+                <CompleteSummary
+                  alertData={alertData || {}}
+                  triageData={triageData || {}}
+                  policyData={
+                    policyData || { policy_band: null, policy_decision: {} }
+                  }
+                  retrievalData={
+                    retrievalData || {
+                      chunks_used: 0,
+                      chunk_sources: [],
+                      chunks: [],
+                    }
+                  }
+                  resolutionData={resolutionData || { resolution_steps: [] }}
+                  feedbackHistory={feedbackHistory || []}
+                  onNewTicket={handleNewTicket}
+                  onViewTriage={() => {
+                    // Just navigate - use existing state data, no API calls
+                    setCurrentStep("triage");
+                  }}
+                  onViewResolution={() => {
+                    // Just navigate - use existing state data, no API calls
+                    setCurrentStep("resolution");
+                  }}
+                />
+              )}
+            </>
           )}
         </div>
       </main>

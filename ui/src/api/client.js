@@ -39,11 +39,25 @@ export function getIncident(incidentId) {
   return request(`${API_BASE}/incidents/${incidentId}`);
 }
 
+export function listIncidents(limit = 50, offset = 0, search = null) {
+  const params = new URLSearchParams();
+  if (limit != null) params.set("limit", String(limit));
+  if (offset != null) params.set("offset", String(offset));
+  if (search != null && search.trim() !== "") {
+    params.set("search", search.trim());
+  }
+  return request(`${API_BASE}/incidents?${params.toString()}`);
+}
+
 export function putFeedback(incidentId, payload) {
   return request(`${API_BASE}/incidents/${incidentId}/feedback`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export function getIncidentFeedback(incidentId) {
+  return request(`${API_BASE}/incidents/${incidentId}/feedback`);
 }
 
 export function postResolution(incidentId, payload = null) {

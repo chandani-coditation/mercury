@@ -14,12 +14,45 @@ from ai_service.core import (
 )
 from ai_service.repositories import IncidentRepository
 from ai_service.api.error_utils import format_user_friendly_error
+from ai_service.services import IncidentService
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 # Feature flag for LangGraph (can be enabled via environment variable)
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
+
+
+def _record_resolution_latency_and_update_incident(
+    result: dict, incident_id: str | None, start_time: datetime
+) -> float:
+    """
+    Attach end-to-end API latency to resolution output and persist to the incident.
+
+    This helper is intentionally defensive: failures are logged but do not
+    break the main /resolution flow.
+    """
+    latency = (datetime.utcnow() - start_time).total_seconds()
+
+    try:
+        incident_id_out = result.get("incident_id") or incident_id
+        resolution_output = result.get("resolution") or {}
+        resolution_output["api_latency_secs"] = latency
+        result["resolution"] = resolution_output
+
+        if incident_id_out:
+            IncidentService().update_resolution(
+                incident_id_out,
+                resolution_output=resolution_output,
+                resolution_evidence=result.get("evidence"),
+            )
+    except Exception as e:
+        logger.warning(
+            f"Failed to record resolution API latency/update incident: {e}",
+            exc_info=True,
+        )
+
+    return latency
 
 
 @router.post("/resolution")
@@ -47,6 +80,8 @@ async def resolution(
     logger.info(
         f"Resolution request received: incident_id={incident_id}, use_state={use_state}, use_langgraph={use_lg}"
     )
+
+    start_time = datetime.utcnow()
 
     try:
         # Convert alert to dict if provided
@@ -118,11 +153,14 @@ async def resolution(
             else:
                 result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
 
-        logger.info(
-            f"Resolution completed: incident_id={result['incident_id']}, "
-            f"risk_level={result['resolution'].get('risk_level')}, "
-            f"steps={len(result['resolution'].get('steps', result['resolution'].get('resolution_steps', [])))}"
+        # Compute latency and persist resolution output in a helper
+        latency = _record_resolution_latency_and_update_incident(
+            result=result, incident_id=incident_id, start_time=start_time
         )
+
+        resolution_data = result.get("resolution") or {}
+        steps = resolution_data.get("steps") or resolution_data.get("resolution_steps") or []
+
 
         return result
 
