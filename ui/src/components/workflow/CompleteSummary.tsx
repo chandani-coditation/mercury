@@ -464,24 +464,88 @@ export const CompleteSummary = ({
                         </div>
                       </div>
 
-                      {/* Evidence Chunks */}
+                      {/* Evidence Chunks - Separated by Type */}
                       {retrievalData.chunks &&
                         retrievalData.chunks.length > 0 && (
                           <div>
-                            <div className="text-sm font-semibold text-foreground mb-3">
-                              Evidence Chunks:
+                            <div className="text-sm font-semibold text-foreground mb-4">
+                              Evidence Details:
                             </div>
-                            <div className="space-y-3">
-                              {retrievalData.chunks.map(
-                                (chunk: any, index: number) => (
-                                  <EvidenceChunk
-                                    key={index}
-                                    chunk={chunk}
-                                    index={index}
-                                  />
-                                ),
-                              )}
-                            </div>
+                            {(() => {
+                              const allPriorIncidents = retrievalData.chunks.filter(
+                                (chunk: any) =>
+                                  chunk.provenance?.source_type ===
+                                    "incident_signature" ||
+                                  chunk.metadata?.doc_type ===
+                                    "incident_signature",
+                              );
+                              const allRunbooks = retrievalData.chunks.filter(
+                                (chunk: any) =>
+                                  chunk.provenance?.source_type === "runbook" ||
+                                  chunk.provenance?.source_type ===
+                                    "runbook_step" ||
+                                  chunk.metadata?.doc_type === "runbook",
+                              );
+                              // Limit to top 5 for each category
+                              const priorIncidents = allPriorIncidents.slice(0, 5);
+                              const runbooks = allRunbooks.slice(0, 5);
+
+                              return (
+                                <div className="space-y-6">
+                                  {/* Prior Incidents Section */}
+                                  {priorIncidents.length > 0 && (
+                                    <div className="space-y-3">
+                                      <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                                        <span className="w-1 h-4 bg-primary rounded-full" />
+                                        Prior Incidents ({priorIncidents.length}
+                                        {allPriorIncidents.length > 5
+                                          ? ` of ${allPriorIncidents.length}`
+                                          : ""}
+                                        )
+                                      </div>
+                                      <div className="space-y-3">
+                                        {priorIncidents.map(
+                                          (chunk: any, index: number) => (
+                                            <EvidenceChunk
+                                              key={chunk.chunk_id || index}
+                                              chunk={chunk}
+                                              index={index}
+                                            />
+                                          ),
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Runbooks Section */}
+                                  {runbooks.length > 0 && (
+                                    <div className="space-y-3">
+                                      <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                                        <span className="w-1 h-4 bg-primary rounded-full" />
+                                        Runbooks ({runbooks.length}
+                                        {allRunbooks.length > 5
+                                          ? ` of ${allRunbooks.length}`
+                                          : ""}
+                                        )
+                                      </div>
+                                      <div className="space-y-3">
+                                        {runbooks.map(
+                                          (chunk: any, index: number) => (
+                                            <EvidenceChunk
+                                              key={chunk.chunk_id || index}
+                                              chunk={chunk}
+                                              index={
+                                                priorIncidents.length + index
+                                              }
+                                            />
+                                          ),
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
 

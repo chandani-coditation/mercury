@@ -24,15 +24,28 @@ def derive_severity_from_impact_urgency(impact: str, urgency: str) -> str:
         mapping = severity_mapping.get("impact_urgency_to_severity", {})
         default = severity_mapping.get("default_severity", "medium")
 
-        # Extract numeric values (e.g., "3 - Low" -> "3")
+        # Extract numeric values (e.g., "3 - Low" -> "3", "1 - High" -> "1")
         impact_val = impact.split()[0] if impact and isinstance(impact, str) else "3"
         urgency_val = urgency.split()[0] if urgency and isinstance(urgency, str) else "3"
 
-        # Create key (e.g., "3-3")
+        # Create key (e.g., "3-3", "1-1")
         key = f"{impact_val}-{urgency_val}"
 
         # Look up in mapping
         severity = mapping.get(key, default)
+        
+        # Log for debugging severity mapping issues
+        logger.info(
+            f"Severity mapping: impact='{impact}' -> '{impact_val}', "
+            f"urgency='{urgency}' -> '{urgency_val}', key='{key}' -> severity='{severity}'"
+        )
+        
+        if severity == default and key not in mapping:
+            logger.warning(
+                f"Severity mapping key '{key}' not found in config. Available keys: {list(mapping.keys())[:10]}... "
+                f"Using default '{default}'"
+            )
+        
         return severity
     except Exception as e:
         logger.warning(f"Error deriving severity from impact/urgency: {e}. Using default 'medium'")
@@ -597,50 +610,48 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             f"boost={confidence_boost:.2f}, final={final_confidence:.2f}"
         )
 
-        # Generate likely_cause from evidence if LLM didn't provide it
-        if (
-            not triage_output.get("likely_cause")
-            or triage_output.get("likely_cause") == "Unknown (no matching context evidence)."
-        ):
-            if incident_signatures:
-                # Generate likely_cause from matched incident signatures
-                symptoms_list = []
-                failure_types = set()
-                error_classes = set()
-                alert_desc = alert.get("description", "").lower()
-
-                for sig in incident_signatures[:3]:  # Use top 3 signatures
-                    metadata = sig.get("metadata", {})
-                    symptoms = metadata.get("symptoms", [])
-                    if symptoms:
-                        symptoms_list.extend(symptoms[:2])  # Take first 2 symptoms from each
-                    failure_type = metadata.get("failure_type")
-                    error_class = metadata.get("error_class")
-                    if failure_type:
-                        failure_types.add(failure_type)
-                    if error_class:
-                        error_classes.add(error_class)
-
-                # Build likely_cause from evidence and alert description
-                if "disk" in alert_desc or "storage" in alert_desc or "space" in alert_desc:
-                    likely_cause = "The failure may be due to high disk usage or storage pressure on the database server, leading to I/O wait alerts and potential job failures."
-                elif symptoms_list:
-                    unique_symptoms = list(set(symptoms_list))[:3]  # Top 3 unique symptoms
-                    symptom_text = ", ".join(unique_symptoms).replace("_", " ")
-                    if failure_types or error_classes:
-                        likely_cause = f"The failure may be due to {symptom_text}, as indicated by the matched incident patterns."
-                    else:
-                        likely_cause = f"Based on historical patterns, the issue appears related to {symptom_text}."
-                elif failure_types or error_classes:
-                    failure_desc = " or ".join(
-                        [ft.replace("_", " ").lower() for ft in list(failure_types)[:2]]
-                    )
-                    likely_cause = f"The failure appears to be a {failure_desc}, based on matched incident signatures."
-                else:
-                    likely_cause = "Analysis based on alert description and matched historical incident patterns."
-
-                triage_output["likely_cause"] = likely_cause[:300]  # Limit to 300 chars
-                logger.info(f"Generated likely_cause from evidence: {likely_cause[:100]}...")
+        # Extract likely_cause DIRECTLY from RAG evidence (no LLM generation, no pattern matching)
+        # This ensures likely_cause is purely from historical data, not inferred or generated
+        likely_cause = None
+        if incident_signatures:
+            # Extract likely_cause from matched incident signatures' descriptions or symptoms
+            # Use the most common description pattern from top matched signatures
+            descriptions = []
+            symptoms_list = []
+            
+            for sig in incident_signatures[:5]:  # Use top 5 signatures for better coverage
+                metadata = sig.get("metadata", {})
+                # Try to get description from metadata (if stored from historical incidents)
+                description = metadata.get("description") or metadata.get("short_description")
+                if description and isinstance(description, str) and len(description.strip()) > 20:
+                    # Only use meaningful descriptions (at least 20 chars)
+                    descriptions.append(description.strip()[:200])  # Limit each to 200 chars
+                
+                # Also collect symptoms for fallback
+                symptoms = metadata.get("symptoms", [])
+                if symptoms and isinstance(symptoms, list):
+                    symptoms_list.extend([s for s in symptoms if isinstance(s, str) and len(s.strip()) > 3])
+            
+            # Prioritize descriptions from historical incidents (most accurate)
+            if descriptions:
+                # Use the first meaningful description (top match is most relevant)
+                likely_cause = descriptions[0][:300]
+                logger.info(f"Extracted likely_cause from incident signature description: {likely_cause[:100]}...")
+            elif symptoms_list:
+                # Fallback: use symptoms if no descriptions available
+                unique_symptoms = list(dict.fromkeys(symptoms_list))[:3]  # Preserve order, top 3 unique
+                symptom_text = ", ".join(unique_symptoms).replace("_", " ")
+                likely_cause = f"Based on historical incident patterns: {symptom_text}."
+                likely_cause = likely_cause[:300]  # Limit to 300 chars
+                logger.info(f"Extracted likely_cause from incident signature symptoms: {likely_cause[:100]}...")
+        
+        # Only set likely_cause if we have evidence-based content
+        if likely_cause:
+            triage_output["likely_cause"] = likely_cause
+        else:
+            # No evidence available - don't generate or infer
+            triage_output["likely_cause"] = "Unknown (no matching historical evidence available)."
+            logger.info("No likely_cause extracted - no matching historical evidence with descriptions or symptoms")
 
         # PREDICT impact and urgency from matched incident signatures (primary method)
         # This uses historical evidence to determine priority based on impact/urgency patterns
@@ -780,12 +791,20 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             for rb in runbook_metadata
         ]
 
-        # Add runbook metadata as chunks for UI display (with scores from relevance_score)
+        # Add runbook metadata as chunks for UI display (with scores from relevance_score + boosts)
         # Runbook metadata uses simple full-text search, not hybrid search
+        # But we include service/component match boosts in the displayed score for better UX
         for rb in runbook_metadata:
             relevance_score = rb.get("relevance_score", 0.0)
+            service_boost = rb.get("service_match_boost", 0.0)
+            component_boost = rb.get("component_match_boost", 0.0)
+            
             # Convert relevance_score (from ts_rank, typically 0-1) to fulltext_score
-            fulltext_score = float(relevance_score) if relevance_score else 0.0
+            # Include service/component boosts in the score to reflect why it's ranked high
+            # Cap at 1.0 to avoid showing >100%
+            base_fulltext_score = float(relevance_score) if relevance_score else 0.0
+            # Add boosts but cap at 1.0 (boosts are 0.15 max for service, 0.10 max for component)
+            fulltext_score = min(1.0, base_fulltext_score + service_boost + component_boost)
 
             runbook_chunk = {
                 "chunk_id": rb.get(
@@ -818,17 +837,28 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         # Add runbook steps to evidence chunks for UI display
         if runbook_metadata:
             try:
-                from retrieval.resolution_retrieval import retrieve_runbook_steps
+                from retrieval.resolution_retrieval import retrieve_runbook_chunks_by_document_id
 
-                runbook_ids_for_steps = [
-                    rb.get("tags", {}).get("runbook_id")
-                    for rb in runbook_metadata
-                    if rb.get("tags", {}).get("runbook_id")
-                ]
-                if runbook_ids_for_steps:
-                    runbook_steps = retrieve_runbook_steps(runbook_ids_for_steps)
+                # Use document_ids (preferred method) instead of runbook_ids
+                # Prioritize runbooks matching the service
+                document_ids_for_steps = []
+                # First, add runbooks matching the service
+                for rb in runbook_metadata:
+                    if rb.get("service") == service_val and rb.get("document_id"):
+                        document_ids_for_steps.append(rb.get("document_id"))
+                # Then, add other runbooks
+                for rb in runbook_metadata:
+                    if rb.get("service") != service_val and rb.get("document_id"):
+                        if rb.get("document_id") not in document_ids_for_steps:
+                            document_ids_for_steps.append(rb.get("document_id"))
+
+                if document_ids_for_steps:
+                    # Use query_text from triage for semantic search
+                    runbook_steps = retrieve_runbook_chunks_by_document_id(
+                        document_ids_for_steps, query_text=query_text, limit=5
+                    )
                     # Add runbook steps as chunks for UI display
-                    for step in runbook_steps[:5]:  # Limit to top 5 steps
+                    for step in runbook_steps:  # Already limited to 5 by retrieve function
                         # Get similarity_score from step if available (from semantic search)
                         # similarity_score is cosine similarity: 1 - (embedding <=> query_embedding), range 0-1
                         similarity_score = step.get("similarity_score")
@@ -873,6 +903,27 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                     )
             except Exception as e:
                 logger.warning(f"Failed to add runbook steps to evidence: {e}")
+
+        # Sort all chunks by unified score for proper ordering in UI
+        # Priority: RRF score > vector score > fulltext score
+        def get_unified_score(chunk):
+            scores = chunk.get("scores", {})
+            # RRF score is primary (if available)
+            if scores.get("rrf_score") is not None:
+                return scores.get("rrf_score", 0.0)
+            # Vector score is secondary (if available)
+            if scores.get("vector_score") is not None:
+                return scores.get("vector_score", 0.0)
+            # Fulltext score is tertiary (if available)
+            if scores.get("fulltext_score") is not None:
+                return scores.get("fulltext_score", 0.0)
+            # No score available
+            return 0.0
+
+        formatted_evidence["chunks"].sort(key=get_unified_score, reverse=True)
+        logger.debug(
+            f"Sorted {len(formatted_evidence['chunks'])} evidence chunks by unified score"
+        )
     else:
         # Fallback triage output with REVIEW band and confidence 0.0
         title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"

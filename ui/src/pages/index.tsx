@@ -75,11 +75,11 @@ const Index = () => {
       const summary =
         triage.summary || alert.description?.substring(0, 200) || "";
 
-      // Likely cause: Use LLM-generated value from triage output (based on evidence)
+      // Likely cause: Extracted directly from matched incident signatures' descriptions/symptoms (RAG-only, no LLM generation)
       // If not provided, use a simple fallback
       const likely_cause =
         triage.likely_cause ||
-        "Analysis based on alert description and historical patterns.";
+        "Unknown (no matching historical evidence available).";
 
       // Recommended actions: Can be derived from matched runbooks or left empty
       const recommended_actions = triage.recommended_actions || [];
@@ -491,11 +491,11 @@ const Index = () => {
       const summary =
         triageOutput.summary || rawAlert.description?.substring(0, 200) || "";
 
-      // Likely cause: Use LLM-generated value from triage output (based on evidence)
+      // Likely cause: Extracted directly from matched incident signatures' descriptions/symptoms (RAG-only, no LLM generation)
       // If not provided, use a simple fallback
       const likely_cause =
         triageOutput.likely_cause ||
-        "Analysis based on alert description and historical patterns.";
+        "Unknown (no matching historical evidence available).";
 
       safeTriageData = {
         ...triageOutput,

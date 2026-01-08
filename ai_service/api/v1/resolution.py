@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from ai_service.models import Alert
 from ai_service.agents import resolution_copilot_agent, resolution_agent
@@ -24,7 +25,7 @@ USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
 
 
 def _record_resolution_latency_and_update_incident(
-    result: dict, incident_id: str | None, start_time: datetime
+    result: dict, incident_id: Optional[str], start_time: datetime
 ) -> float:
     """
     Attach end-to-end API latency to resolution output and persist to the incident.

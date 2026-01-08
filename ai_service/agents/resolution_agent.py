@@ -63,7 +63,7 @@ def _get_problem_keyword_groups():
 
 
 from retrieval.resolution_retrieval import (
-    retrieve_runbook_steps,
+    retrieve_runbook_chunks_by_document_id,
     retrieve_historical_resolutions,
     retrieve_close_notes_from_signatures,
     get_step_success_stats,
@@ -136,12 +136,12 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 logger.warning("No runbook_metadata found in evidence")
 
-    # Retrieve runbook steps using document_id from triage (preferred) or runbook_id (fallback)
+    # Retrieve runbook steps using document_id from triage (preferred method)
     evidence = triage_output.get("evidence", {})
     runbook_metadata = evidence.get("runbook_metadata", [])
     document_ids = [rb.get("document_id") for rb in runbook_metadata if rb.get("document_id")]
 
-    # Build query text from triage signals
+    # Build query text from triage signals for semantic search
     query_text_parts = []
     if incident_signature.failure_type:
         query_text_parts.append(incident_signature.failure_type)
@@ -152,14 +152,23 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         query_text_parts.append(summary[:200])  # Limit length
     query_text = " ".join(query_text_parts) if query_text_parts else None
 
-    runbook_steps = retrieve_runbook_steps(
-        runbook_ids=runbook_ids if not document_ids else None,
-        document_ids=document_ids if document_ids else None,
-        query_text=query_text,
-        failure_type=incident_signature.failure_type,
-        error_class=incident_signature.error_class,
-        limit=20,
-    )
+    # Use document_ids (preferred) - chunks contain full recommendations
+    if document_ids:
+        runbook_steps = retrieve_runbook_chunks_by_document_id(
+            document_ids=document_ids,
+            query_text=query_text,
+            limit=20,
+        )
+    elif runbook_ids:
+        # Fallback: if no document_ids, log warning and return empty
+        logger.warning(
+            f"No document_ids available, only runbook_ids. "
+            f"Runbook steps retrieval requires document_ids from triage evidence. "
+            f"runbook_ids={runbook_ids}"
+        )
+        runbook_steps = []
+    else:
+        runbook_steps = []
 
     if not runbook_steps:
         logger.warning("No runbook steps found")

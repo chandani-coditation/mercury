@@ -211,8 +211,20 @@ def hybrid_search(
                 COALESCE(v.doc_title, f.doc_title) as doc_title,
                 COALESCE(v.doc_type, f.doc_type) as doc_type,
                 COALESCE(v.vector_score, 0.0) as vector_score,
-                COALESCE(f.fulltext_score, 0.0) as fulltext_score,
+                -- Calculate fulltext_score: use from fulltext_results if available,
+                -- otherwise calculate ts_rank for chunks that have tsv but didn't match the query
+                COALESCE(
+                    f.fulltext_score,
+                    CASE 
+                        WHEN v.id IS NOT NULL AND c.tsv IS NOT NULL 
+                             AND length(plainto_tsquery('english', %s)::text) > 0
+                        THEN ts_rank(c.tsv, plainto_tsquery('english', %s))
+                        ELSE 0.0
+                    END
+                ) as fulltext_score,
                 COALESCE(v.vector_rank, 999) as vector_rank,
+                -- Calculate fulltext_rank: use from fulltext_results if available,
+                -- otherwise assign a high rank (999) for non-matching chunks
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
                 -- RRF: 1/(k + rank) where k is configurable (default 60)
                 {HybridSearchQueryBuilder.build_rrf_score_formula(vector_weight, fulltext_weight, rrf_k)} as rrf_score,
@@ -221,6 +233,7 @@ def hybrid_search(
                 {HybridSearchQueryBuilder.build_component_boost_case()} as component_match_boost
             FROM vector_results v
             FULL OUTER JOIN fulltext_results f ON v.id = f.id
+            LEFT JOIN chunks c ON COALESCE(v.id, f.id) = c.id
         )
         SELECT 
             id,
@@ -256,7 +269,8 @@ def hybrid_search(
             # 9: text (ORDER BY)
             # 10: limit (fulltext_results)
             # 11-16: Service/component match boost params (service_val check, service_val exact, service_val partial, component_val check, component_val exact, component_val partial)
-            # 17: final limit
+            # 17-18: fulltext_query for combined_results (ts_rank calculation for non-matching chunks)
+            # 19: final limit
             exec_params = []
 
             # Calculate RRF candidate limit (higher multiplier for better fusion results)
@@ -281,17 +295,22 @@ def hybrid_search(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
             )  # 11-16: Service and component boost params
 
+            # Combined results params - fulltext query for calculating ts_rank for non-matching chunks
+            exec_params.append(fulltext_query)  # 17: fulltext_query for length check in combined_results
+            exec_params.append(fulltext_query)  # 18: fulltext_query for ts_rank in combined_results
+
             # Final limit
-            exec_params.append(limit)  # 17: final limit
+            exec_params.append(limit)  # 19: final limit
 
             # CRITICAL: Verify we have exactly the right number of parameters
-            # Base: 17 params (10 for search + 6 for soft filter boosts + 1 for final limit)
+            # Base: 19 params (10 for search + 6 for soft filter boosts + 2 for combined_results fulltext + 1 for final limit)
             # Vector: 3 (score, rank, order by) + 1 (limit) = 4
             # Fulltext: 5 (score, rank, empty check, @@, order by) + 1 (limit) = 6
             # Service boost: 3 params, Component boost: 3 params = 6
+            # Combined results fulltext: 2 params (length check, ts_rank)
             # Final limit: 1
-            # Total: 4 + 6 + 6 + 1 = 17
-            expected_params = 17
+            # Total: 4 + 6 + 6 + 2 + 1 = 19
+            expected_params = 19
 
             if len(exec_params) != expected_params:
                 raise ValueError(
@@ -303,7 +322,7 @@ def hybrid_search(
 
             # Validate parameter count using centralized validator
             is_valid, error_msg = HybridSearchQueryBuilder.validate_parameter_count(
-                query, exec_params, expected_count=17
+                query, exec_params, expected_count=19
             )
             if not is_valid:
                 logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
@@ -672,8 +691,20 @@ def triage_retrieval(
                 COALESCE(v.doc_title, f.doc_title) as doc_title,
                 COALESCE(v.doc_type, f.doc_type) as doc_type,
                 COALESCE(v.vector_score, 0.0) as vector_score,
-                COALESCE(f.fulltext_score, 0.0) as fulltext_score,
+                -- Calculate fulltext_score: use from fulltext_results if available,
+                -- otherwise calculate ts_rank for incident signatures that have tsv but didn't match the query
+                COALESCE(
+                    f.fulltext_score,
+                    CASE 
+                        WHEN v.id IS NOT NULL AND s.tsv IS NOT NULL 
+                             AND length(plainto_tsquery('english', %s::text)::text) > 0
+                        THEN ts_rank(s.tsv, plainto_tsquery('english', %s::text))
+                        ELSE 0.0
+                    END
+                ) as fulltext_score,
                 COALESCE(v.vector_rank, 999) as vector_rank,
+                -- Calculate fulltext_rank: use from fulltext_results if available,
+                -- otherwise assign a high rank (999) for non-matching signatures
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
                 {HybridSearchQueryBuilder.build_rrf_score_formula(vector_weight, fulltext_weight, rrf_k)} as rrf_score,
                 -- PHASE 1: Soft filter boosts for service/component matching
@@ -683,6 +714,7 @@ def triage_retrieval(
                 {HybridSearchQueryBuilder.build_component_boost_case(allow_null_boost=True)} as component_match_boost
             FROM vector_results v
             FULL OUTER JOIN fulltext_results f ON v.id = f.id
+            LEFT JOIN incident_signatures s ON COALESCE(v.id, f.id) = s.id
         )
         SELECT 
             id,
@@ -728,8 +760,11 @@ def triage_retrieval(
                     service_val, component_val
                 )
             )  # 11-18: Service (dual) and component boost params
+            # Combined results params - fulltext query for calculating ts_rank for non-matching signatures
+            sig_params.append(str(fulltext_query))  # 19: fulltext_query for length check in combined_results
+            sig_params.append(str(fulltext_query))  # 20: fulltext_query for ts_rank in combined_results
             # Final limit
-            sig_params.append(limit)  # 19: final limit
+            sig_params.append(limit)  # 21: final limit
             print("incident_sig_query: ", incident_sig_query)
             print("sig_params: ", sig_params)
             # Execute incident signatures query

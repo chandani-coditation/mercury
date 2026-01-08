@@ -1,4 +1,4 @@
-import { Database, FileSearch } from "lucide-react";
+import { Database, FileSearch, Info } from "lucide-react";
 import { EvidenceChunk } from "./EvidenceChunk";
 
 interface Chunk {
@@ -28,16 +28,49 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
   const chunkSources = data?.chunk_sources || [];
   const chunks = data?.chunks || [];
 
+  // Calculate breakdown of chunks by source type
+  const chunkBreakdown = (() => {
+    const priorIncidents = chunks.filter(
+      (c: any) =>
+        c.provenance?.source_type === "incident_signature" ||
+        c.metadata?.doc_type === "incident_signature",
+    ).length;
+    const runbookMetadata = chunks.filter(
+      (c: any) =>
+        c.provenance?.source_type === "runbook" ||
+        c.metadata?.doc_type === "runbook",
+    ).length;
+    const runbookSteps = chunks.filter(
+      (c: any) => c.provenance?.source_type === "runbook_step",
+    ).length;
+    return { priorIncidents, runbookMetadata, runbookSteps };
+  })();
+
+  // Get unique source types with friendly names
+  const sourceTypes = Array.from(
+    new Set(
+      chunks
+        .map((c: any) => c.provenance?.source_type || "unknown")
+        .filter(Boolean),
+    ),
+  );
+  const sourceTypeNames: Record<string, string> = {
+    incident_signature: "Prior Incidents",
+    runbook: "Runbook Metadata",
+    runbook_step: "Runbook Steps",
+    unknown: "Unknown",
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Stats Header - Highlighted for Demo */}
+      {/* Stats Header - Simplified */}
       <div className="flex flex-wrap gap-4">
         <div className="glass-card px-5 py-4 flex items-center gap-3 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
           <div className="absolute -inset-0.5 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
           <div className="p-2 rounded-lg bg-primary/10 relative z-10">
             <Database className="w-5 h-5 text-primary" />
           </div>
-          <div className="relative z-10">
+          <div className="relative z-10 flex-1">
             <p className="text-xs text-muted-foreground">Chunks Retrieved</p>
             <p className="text-2xl font-bold font-mono text-foreground">
               {chunksUsed}
@@ -50,28 +83,72 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
           <div className="p-2 rounded-lg bg-primary/10 relative z-10">
             <FileSearch className="w-5 h-5 text-primary" />
           </div>
-          <div className="relative z-10">
-            <p className="text-xs text-muted-foreground">Unique Sources</p>
+          <div className="relative z-10 flex-1">
+            <p className="text-xs text-muted-foreground">Unique Source Types</p>
             <p className="text-2xl font-bold font-mono text-foreground">
-              {(() => {
-                const sourceTypes = new Set(
-                  chunks
-                    .map((c: any) => c.provenance?.source_type || "unknown")
-                    .filter(Boolean),
-                );
-                return sourceTypes.size || 0;
-              })()}
+              {sourceTypes.length || 0}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Sources List */}
+      {/* Consolidated Source Breakdown - Shows the 3 unique source types with counts */}
+      {chunksUsed > 0 && sourceTypes.length > 0 && (
+        <div className="glass-card p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-foreground">
+              The {sourceTypes.length} Unique Source Types
+            </h4>
+            <div className="group relative inline-block align-middle">
+              <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+              <div className="hidden group-hover:block absolute z-20 w-80 p-2 text-xs text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
+                <p className="font-semibold mb-1">Total: {chunksUsed} chunks retrieved</p>
+                <p className="mb-1">
+                  Breakdown: {chunkBreakdown.priorIncidents} Prior Incidents,{" "}
+                  {chunkBreakdown.runbookMetadata} Runbook Metadata,{" "}
+                  {chunkBreakdown.runbookSteps} Runbook Steps
+                </p>
+                <p className="text-muted-foreground mt-2">
+                  Only the top 5 from each category are displayed in the evidence details below.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {sourceTypes.map((sourceType, index) => {
+              const count =
+                sourceType === "incident_signature"
+                  ? chunkBreakdown.priorIncidents
+                  : sourceType === "runbook"
+                    ? chunkBreakdown.runbookMetadata
+                    : sourceType === "runbook_step"
+                      ? chunkBreakdown.runbookSteps
+                      : 0;
+              return (
+                <div
+                  key={index}
+                  className="px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm font-medium flex items-center gap-2"
+                >
+                  <span>{sourceTypeNames[sourceType] || sourceType}</span>
+                  <span className="text-xs font-bold text-primary/70">
+                    ({count})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Knowledge Sources (Document Titles) - Different from Source Types */}
       {chunkSources.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Knowledge Sources
+            Knowledge Sources ({[...new Set(chunkSources)].length} documents)
           </h4>
+          <p className="text-xs text-muted-foreground">
+            Specific documents and runbooks retrieved from the knowledge base
+          </p>
           <div className="flex flex-wrap gap-2">
             {[...new Set(chunkSources)].map((source, index) => (
               <div
@@ -85,17 +162,106 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
         </div>
       )}
 
-      {/* Evidence Chunks */}
+      {/* Evidence Chunks - Separated by Type */}
       {chunks.length > 0 ? (
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Evidence Details
-          </h4>
-          <div className="space-y-3">
-            {chunks.map((chunk, index) => (
-              <EvidenceChunk key={chunk.chunk_id} chunk={chunk} index={index} />
-            ))}
-          </div>
+        <div className="space-y-6">
+          {/* Separate chunks into Prior Incidents and Runbooks */}
+          {(() => {
+            const priorIncidents = chunks
+              .filter(
+                (chunk: any) =>
+                  chunk.provenance?.source_type === "incident_signature" ||
+                  chunk.metadata?.doc_type === "incident_signature",
+              )
+              .slice(0, 5); // Limit to top 5
+            const runbooks = chunks
+              .filter(
+                (chunk: any) =>
+                  chunk.provenance?.source_type === "runbook" ||
+                  chunk.provenance?.source_type === "runbook_step" ||
+                  chunk.metadata?.doc_type === "runbook",
+              )
+              .slice(0, 5); // Limit to top 5
+
+            return (
+              <>
+                {/* Prior Incidents Section */}
+                {priorIncidents.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                      <span className="w-1 h-4 bg-primary rounded-full" />
+                      Prior Incidents ({priorIncidents.length}
+                      {chunks.filter(
+                        (chunk: any) =>
+                          chunk.provenance?.source_type === "incident_signature" ||
+                          chunk.metadata?.doc_type === "incident_signature",
+                      ).length > 5
+                        ? ` of ${chunks.filter(
+                            (chunk: any) =>
+                              chunk.provenance?.source_type ===
+                                "incident_signature" ||
+                              chunk.metadata?.doc_type === "incident_signature",
+                          ).length}`
+                        : ""}
+                      )
+                    </h4>
+                    <div className="space-y-3">
+                      {priorIncidents.map((chunk, index) => (
+                        <EvidenceChunk
+                          key={chunk.chunk_id}
+                          chunk={chunk}
+                          index={index}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Runbooks Section */}
+                {runbooks.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                      <span className="w-1 h-4 bg-primary rounded-full" />
+                      Runbooks ({runbooks.length}
+                      {chunks.filter(
+                        (chunk: any) =>
+                          chunk.provenance?.source_type === "runbook" ||
+                          chunk.provenance?.source_type === "runbook_step" ||
+                          chunk.metadata?.doc_type === "runbook",
+                      ).length > 5
+                        ? ` of ${chunks.filter(
+                            (chunk: any) =>
+                              chunk.provenance?.source_type === "runbook" ||
+                              chunk.provenance?.source_type === "runbook_step" ||
+                              chunk.metadata?.doc_type === "runbook",
+                          ).length}`
+                        : ""}
+                      )
+                    </h4>
+                    <div className="space-y-3">
+                      {runbooks.map((chunk, index) => (
+                        <EvidenceChunk
+                          key={chunk.chunk_id}
+                          chunk={chunk}
+                          index={priorIncidents.length + index}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Show message if no chunks match either category */}
+                {priorIncidents.length === 0 && runbooks.length === 0 && (
+                  <div className="glass-card p-8 text-center">
+                    <FileSearch className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                    <p className="text-muted-foreground">
+                      No categorized evidence chunks available
+                    </p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       ) : (
         <div className="glass-card p-8 text-center">

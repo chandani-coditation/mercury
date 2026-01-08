@@ -161,9 +161,8 @@ export const TriageTab = ({
           <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
             <span>
-              Based on the alert details and knowledge base, the AI has
-              identified the most probable root cause. This helps you understand
-              why the problem occurred and where to focus your investigation.
+              Extracted directly from matched historical incident descriptions or symptoms (RAG-only, not AI-generated).
+              This helps you understand why the problem occurred and where to focus your investigation.
             </span>
           </p>
         </div>

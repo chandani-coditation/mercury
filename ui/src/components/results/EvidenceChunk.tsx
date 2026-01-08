@@ -42,15 +42,19 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
     (scores.rrf_score !== undefined && scores.rrf_score !== null);
   const metadata = chunk.metadata || {};
 
-  // Calculate overall relevance percentage (using RRF score as primary, or vector as fallback)
+  // Calculate overall relevance percentage (using RRF score as primary, or vector as fallback, or fulltext as tertiary)
   // RRF score is typically 0.0x (e.g., 0.0118), so we multiply by 1000 to get percentage-like value
   // Vector score is 0-1 range, so multiply by 100 to get percentage
+  // Fulltext score is 0-1 range (ts_rank), so multiply by 100 to get percentage
+  // Note: fulltext_score can be very small (1e-20) when there's no keyword match - treat as 0
   const relevanceScore =
     scores.rrf_score !== undefined && scores.rrf_score !== null
       ? Math.round(scores.rrf_score * 1000) // RRF is typically 0.0x (e.g., 0.0118 -> 11.8)
       : scores.vector_score !== undefined && scores.vector_score !== null
         ? Math.round(scores.vector_score * 100) // Vector is 0-1 (e.g., 0.489 -> 48.9)
-        : null;
+        : scores.fulltext_score !== undefined && scores.fulltext_score !== null && scores.fulltext_score > 1e-10
+          ? Math.round(scores.fulltext_score * 100) // Fulltext is 0-1 (e.g., 0.076 -> 7.6), ignore tiny values like 1e-20
+          : null;
 
   const getRelevanceColor = (score: number) => {
     if (score >= 80) return "text-success";
