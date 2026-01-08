@@ -80,3 +80,4 @@ export function putResolutionComplete(incidentId, payload = {}) {
     body: JSON.stringify(payload),
   });
 }
+
