@@ -14,7 +14,7 @@
     "max_recommended_actions": 50
   },
   "resolution": {
-    "required_fields": ["steps", "estimated_time_minutes", "risk_level", "requires_approval"],
+    "required_fields": ["steps"],
     "risk_level_values": ["low", "medium", "high"],
     "min_estimated_time_minutes": 1,
     "max_estimated_time_minutes": 1440,

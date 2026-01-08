@@ -137,38 +137,63 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
                 logger.warning("No runbook_metadata found in evidence")
 
     # Retrieve runbook steps using document_id from triage (preferred method)
+    # IMPORTANT: Use only the TOP runbook (highest score) from triage to ensure steps are from a single runbook
     evidence = triage_output.get("evidence", {})
     runbook_metadata = evidence.get("runbook_metadata", [])
-    document_ids = [rb.get("document_id") for rb in runbook_metadata if rb.get("document_id")]
-
-    # Build query text from triage signals for semantic search
-    query_text_parts = []
-    if incident_signature.failure_type:
-        query_text_parts.append(incident_signature.failure_type)
-    if incident_signature.error_class:
-        query_text_parts.append(incident_signature.error_class)
-    summary = triage_output.get("summary", "")
-    if summary:
-        query_text_parts.append(summary[:200])  # Limit length
-    query_text = " ".join(query_text_parts) if query_text_parts else None
-
-    # Use document_ids (preferred) - chunks contain full recommendations
-    if document_ids:
-        runbook_steps = retrieve_runbook_chunks_by_document_id(
-            document_ids=document_ids,
-            query_text=query_text,
-            limit=20,
+    
+    # Select the top runbook based on highest combined score (relevance_score + service_match_boost + component_match_boost)
+    # This ensures we use the best match from triage, not just the first one
+    if runbook_metadata:
+        # Calculate combined score for each runbook and sort by it
+        for rb in runbook_metadata:
+            relevance_score = float(rb.get("relevance_score", 0.0))
+            service_boost = float(rb.get("service_match_boost", 0.0))
+            component_boost = float(rb.get("component_match_boost", 0.0))
+            rb["combined_score"] = relevance_score + service_boost + component_boost
+            logger.debug(
+                f"Runbook '{rb.get('title', 'Unknown')}': "
+                f"relevance={relevance_score:.3f}, service_boost={service_boost:.3f}, "
+                f"component_boost={component_boost:.3f}, combined={rb['combined_score']:.3f}"
+            )
+        
+        # Sort by combined score (descending) to get the highest scoring runbook first
+        runbook_metadata = sorted(runbook_metadata, key=lambda x: x.get("combined_score", 0.0), reverse=True)
+        logger.info(
+            f"Sorted {len(runbook_metadata)} runbooks by score. Top runbook: "
+            f"{runbook_metadata[0].get('title', 'Unknown')} "
+            f"(score: {runbook_metadata[0].get('combined_score', 0.0):.3f})"
         )
-    elif runbook_ids:
-        # Fallback: if no document_ids, log warning and return empty
-        logger.warning(
-            f"No document_ids available, only runbook_ids. "
-            f"Runbook steps retrieval requires document_ids from triage evidence. "
-            f"runbook_ids={runbook_ids}"
-        )
+    
+    top_runbook = runbook_metadata[0] if runbook_metadata else None
+    if not top_runbook:
+        logger.warning("No runbook_metadata found in evidence")
         runbook_steps = []
     else:
-        runbook_steps = []
+        top_document_id = top_runbook.get("document_id")
+        if not top_document_id:
+            logger.warning(f"Top runbook has no document_id: {top_runbook}")
+            runbook_steps = []
+        else:
+            # Use only the top runbook's document_id
+            logger.info(f"Using single runbook: {top_runbook.get('title', 'Unknown')} (document_id: {top_document_id})")
+            
+            # Build query text from triage signals for semantic search
+            query_text_parts = []
+            if incident_signature.failure_type:
+                query_text_parts.append(incident_signature.failure_type)
+            if incident_signature.error_class:
+                query_text_parts.append(incident_signature.error_class)
+            summary = triage_output.get("summary", "")
+            if summary:
+                query_text_parts.append(summary[:200])  # Limit length
+            query_text = " ".join(query_text_parts) if query_text_parts else None
+
+            # Retrieve steps from only the top runbook
+            runbook_steps = retrieve_runbook_chunks_by_document_id(
+                document_ids=[top_document_id],  # Single document_id only
+                query_text=query_text,
+                limit=20,
+            )
 
     if not runbook_steps:
         logger.warning("No runbook steps found")
@@ -327,39 +352,10 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         ui_step = transform_step_for_ui(step, idx)
         ui_steps.append(ui_step)
 
-    # 9. Use LLM to enhance step titles and actions if available
-    try:
-        llm_recommendations = _call_llm_for_ranking(
-            triage_output=triage_output,
-            runbook_steps=selected_steps,
-            historical_resolutions=historical_resolutions,
-            close_notes_list=close_notes_list,
-            ranked_recommendations=selected_steps,
-        )
-
-        llm_recs = llm_recommendations.get("recommendations", [])
-        if llm_recs:
-            # Create lookup by step_id
-            llm_lookup = {rec.get("step_id"): rec for rec in llm_recs if rec.get("step_id")}
-
-            # Enhance UI steps with LLM output
-            for ui_step in ui_steps:
-                step_id = ui_step.get("provenance", {}).get("step_id")
-                if step_id and step_id in llm_lookup:
-                    llm_rec = llm_lookup[step_id]
-                    # Use LLM-enhanced title if available
-                    if llm_rec.get("title"):
-                        ui_step["title"] = llm_rec["title"]
-                    # Use LLM-enhanced action if available and better
-                    if llm_rec.get("action") and len(llm_rec.get("action", "")) > len(
-                        ui_step.get("action", "")
-                    ):
-                        ui_step["action"] = clean_action_for_ui(llm_rec["action"])
-                    # Use LLM-enhanced expected_outcome if available
-                    if llm_rec.get("expected_outcome"):
-                        ui_step["expected_outcome"] = llm_rec["expected_outcome"]
-    except Exception as e:
-        logger.warning(f"LLM enhancement failed, using algorithmic output: {e}")
+    # 9. LLM enhancement disabled - Pure RAG mode
+    # All steps come directly from runbook chunks (RAG retrieval only)
+    # No LLM generation or enhancement is used
+    logger.debug("RAG-only mode: Using runbook steps directly without LLM enhancement")
 
     final_steps = ui_steps
 

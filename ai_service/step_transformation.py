@@ -24,14 +24,16 @@ def _load_step_classification_config():
     global _STEP_CLASSIFICATION_CONFIG
     if _STEP_CLASSIFICATION_CONFIG is None:
         try:
-            project_root = Path(__file__).parent.parent.parent
+            # Path resolution: __file__ is in ai_service/, so parent.parent is project root
+            project_root = Path(__file__).parent.parent
             config_path = project_root / "config" / "step_classification.json"
             if config_path.exists():
                 with open(config_path, "r") as f:
                     _STEP_CLASSIFICATION_CONFIG = json.load(f)
+                logger.debug(f"Loaded step_classification.json from {config_path}")
             else:
                 _STEP_CLASSIFICATION_CONFIG = {}
-                logger.warning("step_classification.json not found, using defaults")
+                logger.warning(f"step_classification.json not found at {config_path}, using defaults")
         except Exception as e:
             logger.warning(f"Failed to load step_classification.json: {e}")
             _STEP_CLASSIFICATION_CONFIG = {}
@@ -59,17 +61,19 @@ def _get_filtered_step_types():
 def _get_documentation_phrases():
     """Get documentation phrases from config."""
     config = _load_step_classification_config()
-    return config.get("documentation_phrases", {}).get(
-        "phrases",
-        [
-            "actions taken",
-            "actions that were",
-            "actions which were",
-            "record all actions",
-            "document all actions",
-            "log all actions",
-        ],
-    )
+    return config.get("documentation_phrases", {}).get("phrases", [])
+
+
+def _get_actionable_indicators():
+    """Get actionable indicators from config."""
+    config = _load_step_classification_config()
+    return config.get("actionable_indicators", {}).get("indicators", [])
+
+
+def _get_step_type_keywords(step_type: str):
+    """Get keywords for a specific step type from config."""
+    config = _load_step_classification_config()
+    return config.get("step_type_keywords", {}).get(step_type, [])
 
 
 def _get_risk_level_keywords():
@@ -109,51 +113,28 @@ def classify_step_type(step: Dict) -> str:
     condition_lower = condition.lower()
 
     # Hard filter: If action is primarily about documenting/recording/impact assessment
-    doc_phrases = [
-        "document actions",
-        "record actions",
-        "document all actions",
-        "documentation",
-        "for future reference",
-        "for audits",
-        "for accountability",
-        "documentation will",
-        "documentation is",
-        "impact assessment",
-        "assess impact",
-        "evaluate impact",
-        "conduct impact",
-        "impact evaluation",
-        "follow-up tasks",
-        "follow up tasks",
-        "follow-up",
-        "follow up",
-    ]
+    # BUT: Allow if step contains actionable content (like "Action:", "Restart", "Fix", etc.)
+    doc_phrases = _get_documentation_phrases()
 
     # Check if action contains documentation/impact phrases
     if any(phrase in action_lower for phrase in doc_phrases):
-        return "documentation"
+        # Check if step also contains actionable content - if yes, don't filter as documentation
+        actionable_indicators = _get_actionable_indicators()
+        # If it contains actionable content, don't filter as documentation
+        if not any(indicator in action_lower for indicator in actionable_indicators):
+            return "documentation"
 
     # Check if action starts with document/record/log/note and is ONLY about that
+    # BUT: Allow if it contains actionable content (like "Actions taken", "Restart", etc.)
     if action_lower.startswith(("document", "record", "log", "note", "track")):
-        # Only allow if it also has a corrective action (not just documenting)
-        corrective_words = [
-            "check",
-            "verify",
-            "analyze",
-            "review",
-            "identify",
-            "fix",
-            "resolve",
-            "reduce",
-            "clean",
-            "remove",
-            "clear",
-            "gather",
-            "collect",
-            "examine",
-        ]
-        if not any(word in action_lower for word in corrective_words):
+        # Check for actionable content - if present, don't filter as documentation
+        actionable_indicators = _get_actionable_indicators()
+        # If it contains actionable content, don't filter as documentation
+        if any(indicator in action_lower for indicator in actionable_indicators):
+            # Continue to classification (don't return "documentation")
+            pass
+        else:
+            # Only documenting, no actionable content
             return "documentation"
 
     # Also check if action contains "record all actions" or "document all actions" - these are always documentation
@@ -161,121 +142,60 @@ def classify_step_type(step: Dict) -> str:
         return "documentation"
 
     # Check if action is about recording/documenting actions taken (past tense indicates documentation)
+    # BUT: Allow if step contains actionable content (like "Action:", "Restart", "Fix", etc.)
     documentation_phrases = _get_documentation_phrases()
     if any(phrase in action_lower for phrase in documentation_phrases):
-        return "documentation"
+        # Check if step also contains actionable content - if yes, don't filter as documentation
+        actionable_indicators = _get_actionable_indicators()
+        # If it contains actionable content, don't filter as documentation
+        if not any(indicator in action_lower for indicator in actionable_indicators):
+            return "documentation"
 
     # Check for "assess impact" or "impact assessment" patterns
+    # BUT: Allow if step contains actionable content (like "Action:", "Restart", "Fix", etc.)
     if (
         "assess impact" in action_lower
         or "impact assessment" in action_lower
         or "evaluate impact" in action_lower
     ):
-        return "documentation"
-
-    # Check for "follow-up" patterns that are just administrative
-    if "follow-up" in action_lower or "follow up" in action_lower:
-        if "identify" in action_lower or "assess" in action_lower:
+        # Check if step also contains actionable content - if yes, don't filter as documentation
+        actionable_indicators = _get_actionable_indicators()
+        # If it contains actionable content, don't filter as documentation
+        if not any(indicator in action_lower for indicator in actionable_indicators):
             return "documentation"
 
+    # Check for "follow-up" patterns that are just administrative
+    # BUT: Allow if step contains actionable content (like "Action:", "Restart", "Fix", etc.)
+    if "follow-up" in action_lower or "follow up" in action_lower:
+        if "identify" in action_lower or "assess" in action_lower:
+            # Check if step also contains actionable content - if yes, don't filter as documentation
+            actionable_indicators = _get_actionable_indicators()
+            # If it contains actionable content, don't filter as documentation
+            if not any(indicator in action_lower for indicator in actionable_indicators):
+                return "documentation"
+
     # Investigation steps
-    investigation_keywords = [
-        "check",
-        "verify",
-        "review",
-        "examine",
-        "analyze",
-        "identify",
-        "inspect",
-        "assess",
-        "evaluate",
-        "gather evidence",
-        "collect data",
-        "monitor",
-        "observe",
-        "trace",
-        "diagnose",
-    ]
+    investigation_keywords = _get_step_type_keywords("investigation")
     if any(keyword in combined for keyword in investigation_keywords):
         return "investigation"
 
     # Mitigation steps (quick relief) - PRIORITIZE THESE
-    mitigation_keywords = [
-        "reduce",
-        "decrease",
-        "lower",
-        "minimize",
-        "alleviate",
-        "ease",
-        "temporary",
-        "quick fix",
-        "stop",
-        "pause",
-        "suspend",
-        "disable",
-        "clean up",
-        "free up",
-        "release",
-        "terminate",
-        "kill",
-        "clear",
-        "remove",
-        "delete",
-        "archive",
-        "clean",
-        "purge",
-        "backup",
-        "truncate",
-        "shrink",
-        "compress",
-        "expand",
-    ]
+    mitigation_keywords = _get_step_type_keywords("mitigation")
     if any(keyword in combined for keyword in mitigation_keywords):
         return "mitigation"
 
     # Resolution steps (root fix) - PRIORITIZE THESE
-    resolution_keywords = [
-        "fix",
-        "resolve",
-        "repair",
-        "correct",
-        "restore",
-        "recover",
-        "reconfigure",
-        "restart",
-        "reboot",
-        "reinstall",
-        "update",
-        "upgrade",
-        "patch",
-        "apply",
-        "implement",
-        "deploy",
-        "re-run",
-        "rerun",
-        "execute",
-        "run",
-        "perform",
-    ]
+    resolution_keywords = _get_step_type_keywords("resolution")
     if any(keyword in combined for keyword in resolution_keywords):
         return "resolution"
 
     # Verification steps
-    verification_keywords = [
-        "confirm",
-        "validate",
-        "test",
-        "ensure",
-        "verify success",
-        "check status",
-        "monitor stability",
-        "observe results",
-    ]
+    verification_keywords = _get_step_type_keywords("verification")
     if any(keyword in combined for keyword in verification_keywords):
         return "verification"
 
     # Rollback steps
-    rollback_keywords = ["rollback", "revert", "undo", "restore previous", "roll back"]
+    rollback_keywords = _get_step_type_keywords("rollback")
     if any(keyword in combined for keyword in rollback_keywords):
         return "rollback"
 
@@ -297,13 +217,24 @@ def filter_steps(steps: List[Dict]) -> List[Dict]:
     filtered_types = _get_filtered_step_types()
     for step in steps:
         step_type = classify_step_type(step)
+        action_preview = (step.get("action") or "")[:100]  # First 100 chars for logging
         if step_type not in filtered_types:
             step["_inferred_step_type"] = step_type
             filtered.append(step)
         else:
-            logger.debug(f"Filtered out {step_type} step: {step.get('step_id')}")
+            logger.warning(
+                f"Filtered out {step_type} step (step_id: {step.get('step_id', 'unknown')}): "
+                f"{action_preview}..."
+            )
 
     logger.info(f"Filtered {len(steps)} steps to {len(filtered)} actionable steps")
+    if len(filtered) == 0 and len(steps) > 0:
+        # Log details about why all steps were filtered
+        logger.warning(f"All {len(steps)} steps were filtered. Sample step actions:")
+        for i, step in enumerate(steps[:3], 1):  # Show first 3 steps
+            action = step.get("action", "")[:200]
+            step_type = classify_step_type(step)
+            logger.warning(f"  Step {i} (type: {step_type}): {action}...")
     return filtered
 
 
@@ -356,16 +287,49 @@ def order_steps_by_type(steps: List[Dict]) -> List[Dict]:
 def generate_step_title(action: str, step_type: str) -> str:
     """
     Generate a short, UI-friendly title from action text.
+    
+    Title should be concise (max 80 chars) to save space in UI.
+    Full action text is shown separately in the action field.
 
     Args:
         action: Action text
         step_type: Inferred step type
 
     Returns:
-        Short title (3-6 words)
+        Short title (max 80 characters, typically 3-8 words)
     """
     if not action:
         return "Execute step"
+
+    # FIRST: Try to extract the actual action (after "Action:" marker) instead of prerequisites
+    # Many runbook steps have format: "Prerequisites: ... Action: <actual action>"
+    # Handle both "Action:" and "\nAction:" formats
+    action_marker = "Action:"
+    if action_marker in action:
+        # Split on action marker (handles both "Action:" and "\nAction:")
+        parts = action.split(action_marker, 1)
+        if len(parts) > 1:
+            action_part = parts[1].strip()
+            # Remove any trailing service/component info
+            if "\nService:" in action_part:
+                action_part = action_part.split("\nService:")[0].strip()
+            if action_part:
+                # Truncate to first sentence or 80 chars for title
+                # Extract first sentence (up to period, comma, or newline)
+                first_sentence = action_part.split('.')[0].split(',')[0].split('\n')[0].strip()
+                if len(first_sentence) <= 80:
+                    title = first_sentence
+                else:
+                    # Truncate to 80 chars at word boundary
+                    truncated = action_part[:77]
+                    last_space = truncated.rfind(' ')
+                    if last_space > 50:  # Only truncate at word if reasonable
+                        title = truncated[:last_space] + "..."
+                    else:
+                        title = truncated + "..."
+                # Capitalize first letter
+                title = title[0].upper() + title[1:] if title else title
+                return title
 
     # Remove common prefixes
     action_clean = action.strip()
@@ -385,12 +349,12 @@ def generate_step_title(action: str, step_type: str) -> str:
             action_clean = action_clean[len(prefix) :].strip()
             if action_clean.startswith(":"):
                 action_clean = action_clean[1:].strip()
-
-    # Extract key phrases
-    # Look for imperative verbs at the start
+    
+    # Extract key phrases - look for imperative verbs at the start
+    # Limit to first sentence or 80 chars for title
     imperative_patterns = [
-        r"^(check|verify|review|examine|analyze|identify|fix|resolve|repair|restore|reduce|decrease|clean|monitor|confirm|validate)\s+([^.]{0,60})",
-        r"^([A-Z][^.]{0,60})",  # Capitalized sentence start
+        r"^(check|verify|review|examine|analyze|identify|fix|resolve|repair|restore|reduce|decrease|clean|monitor|confirm|validate)\s+([^.]+)",
+        r"^([A-Z][^.]+)",  # Capitalized sentence start
     ]
 
     for pattern in imperative_patterns:
@@ -399,18 +363,33 @@ def generate_step_title(action: str, step_type: str) -> str:
             title = match.group(1 if len(match.groups()) == 1 else 2)
             # Clean up title
             title = title.strip()
+            # Extract first sentence or truncate to 80 chars
+            first_sentence = title.split('.')[0].split(',')[0].split('\n')[0].strip()
+            if len(first_sentence) <= 80:
+                title = first_sentence
+            else:
+                truncated = title[:77]
+                last_space = truncated.rfind(' ')
+                if last_space > 50:
+                    title = truncated[:last_space] + "..."
+                else:
+                    title = truncated + "..."
             # Capitalize first letter
             title = title[0].upper() + title[1:] if title else title
-            # Limit length
-            if len(title) > 60:
-                title = title[:57] + "..."
             return title
 
-    # Fallback: use first 50 characters
-    title = action_clean[:50].strip()
-    if len(action_clean) > 50:
-        title += "..."
-    return title
+    # Fallback: use first sentence or truncate to 80 chars
+    title = action_clean.strip()
+    first_sentence = title.split('.')[0].split(',')[0].split('\n')[0].strip()
+    if len(first_sentence) <= 80:
+        return first_sentence
+    else:
+        truncated = title[:77]
+        last_space = truncated.rfind(' ')
+        if last_space > 50:
+            return truncated[:last_space] + "..."
+        else:
+            return truncated + "..."
 
 
 def clean_action_for_ui(action: str) -> str:

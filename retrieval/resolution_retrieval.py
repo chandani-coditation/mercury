@@ -219,11 +219,32 @@ def retrieve_runbook_chunks_by_document_id(
                     metadata = (
                         row.get("metadata", {}) if isinstance(row.get("metadata"), dict) else {}
                     )
+                    # IMPORTANT: Use metadata.action (structured) instead of content (embedding text with prerequisites)
+                    # The content field contains full embedding text: "Prerequisites: ... Condition: ... Action: ..."
+                    # The metadata.action field contains just the action text that should be displayed
+                    action_text = metadata.get("action") or ""
+                    if not action_text and row.get("content"):
+                        # Fallback: extract action from content if metadata doesn't have it
+                        content = row.get("content", "")
+                        if "Action:" in content:
+                            # Extract action part from content
+                            action_parts = content.split("Action:", 1)
+                            if len(action_parts) > 1:
+                                action_text = action_parts[1].strip()
+                                # Remove trailing Service/Component info
+                                if "\nService:" in action_text:
+                                    action_text = action_text.split("\nService:")[0].strip()
+                                if "\nComponent:" in action_text:
+                                    action_text = action_text.split("\nComponent:")[0].strip()
+                        else:
+                            # Use content as fallback if no Action: marker
+                            action_text = content
+                    
                     step = {
                         "step_id": metadata.get("step_id") or f"chunk-{row['id']}",
                         "runbook_id": row.get("runbook_id") or metadata.get("runbook_id"),
                         "condition": metadata.get("condition") or "Step applies",
-                        "action": row.get("content") or metadata.get("action") or "",
+                        "action": action_text,
                         "expected_outcome": metadata.get("expected_outcome"),
                         "rollback": metadata.get("rollback"),
                         "service": metadata.get("service"),
@@ -249,6 +270,24 @@ def retrieve_runbook_chunks_by_document_id(
                     steps.append(step)
                 else:
                     metadata = row[4] if isinstance(row[4], dict) else {}
+                    # IMPORTANT: Use metadata.action (structured) instead of content (embedding text with prerequisites)
+                    action_text = ""
+                    if isinstance(metadata, dict) and metadata.get("action"):
+                        action_text = metadata.get("action")
+                    elif row[3]:  # row[3] is content
+                        # Fallback: extract action from content if metadata doesn't have it
+                        content = row[3]
+                        if "Action:" in content:
+                            action_parts = content.split("Action:", 1)
+                            if len(action_parts) > 1:
+                                action_text = action_parts[1].strip()
+                                if "\nService:" in action_text:
+                                    action_text = action_text.split("\nService:")[0].strip()
+                                if "\nComponent:" in action_text:
+                                    action_text = action_text.split("\nComponent:")[0].strip()
+                        else:
+                            action_text = content
+                    
                     step = {
                         "step_id": (
                             metadata.get("step_id")
@@ -262,8 +301,7 @@ def retrieve_runbook_chunks_by_document_id(
                             if isinstance(metadata, dict)
                             else "Step applies"
                         ),
-                        "action": row[3]
-                        or (metadata.get("action") if isinstance(metadata, dict) else ""),
+                        "action": action_text,
                         "expected_outcome": (
                             metadata.get("expected_outcome") if isinstance(metadata, dict) else None
                         ),

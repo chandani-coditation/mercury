@@ -126,15 +126,17 @@ def validate_resolution_output(
                 runbook_chunk_ids.add(chunk.get("chunk_id"))
 
     # Check required fields
+    # Note: risk_level, estimated_time_minutes, and requires_approval are deprecated
+    # They are not based on historical data and should not be LLM-generated
+    # Allow None values for deprecated fields
+    deprecated_fields = {"estimated_time_minutes", "risk_level", "requires_approval"}
     required_fields = config.get("required_fields", [])
     for field in required_fields:
         if field not in resolution_output:
             errors.append(f"Missing required field: {field}")
-        elif resolution_output[field] is None:
+        elif resolution_output[field] is None and field not in deprecated_fields:
+            # Allow None for deprecated fields, but not for other required fields
             errors.append(f"Required field is None: {field}")
-
-    # Note: risk_level, estimated_time_minutes, and requires_approval are removed
-    # They are not based on historical data and should not be LLM-generated
 
     # Validate steps (preferred) or resolution_steps (legacy)
     steps = resolution_output.get("steps", resolution_output.get("resolution_steps", []))

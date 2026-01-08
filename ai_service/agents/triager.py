@@ -787,6 +787,10 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 "title": rb.get("title"),
                 "service": rb.get("service"),
                 "component": rb.get("component"),
+                # Include scores for resolution agent to select top runbook
+                "relevance_score": rb.get("relevance_score", 0.0),
+                "service_match_boost": rb.get("service_match_boost", 0.0),
+                "component_match_boost": rb.get("component_match_boost", 0.0),
             }
             for rb in runbook_metadata
         ]

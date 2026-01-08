@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from ai_service.models import Alert
-from ai_service.agents import resolution_copilot_agent, resolution_agent
+from ai_service.agents import resolution_agent
 from ai_service.agents.resolution_copilot_state import resolution_agent_state
 from ai_service.core import (
     get_logger,
@@ -136,6 +136,29 @@ async def resolution(
                             logger.error(f"Failed to parse triage_output JSON: {e}")
                             raise ValueError(f"Invalid triage_output format: {e}")
 
+                    # CRITICAL: Get triage_evidence from database and merge into triage_output
+                    # The evidence (runbook_metadata) is stored separately as triage_evidence, not inside triage_output
+                    triage_evidence = incident.get("triage_evidence")
+                    if triage_evidence:
+                        if isinstance(triage_evidence, str):
+                            try:
+                                triage_evidence = json.loads(triage_evidence)
+                            except json.JSONDecodeError as e:
+                                logger.warning(f"Failed to parse triage_evidence JSON: {e}")
+                                triage_evidence = {}
+                        
+                        # Merge evidence into triage_output so resolution_agent can access runbook_metadata
+                        if isinstance(triage_output, dict):
+                            triage_output["evidence"] = triage_evidence
+                            logger.debug(
+                                f"Merged triage_evidence into triage_output: "
+                                f"{len(triage_evidence.get('runbook_metadata', []))} runbook(s) found"
+                            )
+                        else:
+                            logger.warning("triage_output is not a dict, cannot merge evidence")
+                    else:
+                        logger.warning(f"No triage_evidence found for incident {incident_id}")
+
                     resolution_result = resolution_agent(triage_output)
 
                     metadata = resolution_result.get("_metadata", {})
@@ -144,20 +167,38 @@ async def resolution(
                     if "_metadata" in resolution_result:
                         del resolution_result["_metadata"]
 
+                    # RAG-only mode: Use only runbook steps from RAG, NO LLM fallback
+                    steps = resolution_result.get("steps", [])
+                    
+                    # Always return RAG result, even if empty (no LLM fallback)
                     result = {
                         "incident_id": incident_id,
                         "resolution": resolution_result,
                         "evidence": {
                             "retrieval_method": "resolution_retrieval",
                             "runbook_steps": original_runbook_steps_count,
-                            "steps_retrieved": len(resolution_result.get("steps", [])),
+                            "steps_retrieved": len(steps),
                         },
                     }
+                    
+                    if not steps or len(steps) == 0:
+                        logger.warning(
+                            f"Resolution agent returned empty steps from RAG (runbook retrieval). "
+                            f"Retrieved {original_runbook_steps_count} runbook steps, but all were filtered. "
+                            f"RAG-only mode: No LLM fallback. Returning empty steps."
+                        )
                 except IncidentNotFoundError as e:
                     error_msg = format_user_friendly_error(e, error_type="not_found")
                     raise HTTPException(status_code=404, detail=error_msg)
             else:
-                result = resolution_copilot_agent(incident_id=incident_id, alert=alert_dict)
+                # RAG-only mode: incident_id is required for resolution (needs triage_output)
+                error_msg = format_user_friendly_error(
+                    ValueError(
+                        "incident_id is required for resolution. Please triage the alert first to get an incident_id."
+                    ),
+                    error_type="validation",
+                )
+                raise HTTPException(status_code=400, detail=error_msg)
 
         # Compute latency and persist resolution output in a helper
         latency = _record_resolution_latency_and_update_incident(

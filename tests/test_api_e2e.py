@@ -139,10 +139,26 @@ def test_triage(alert: Dict, retries: int = 3) -> Dict:
             chunks_count = evidence_chunks.get('chunks_used', 0) if isinstance(evidence_chunks, dict) else len(evidence_chunks) if isinstance(evidence_chunks, list) else 0
             print(f"     Evidence Chunks: {chunks_count}")
             
+            # Check for runbook metadata in evidence (triage agent returns 'evidence' field)
+            evidence = result.get('evidence', {})
+            runbook_metadata = evidence.get('runbook_metadata', []) if isinstance(evidence, dict) else []
+            matched_evidence = triage_data.get('matched_evidence', {})
+            runbook_refs = matched_evidence.get('runbook_refs', []) if isinstance(matched_evidence, dict) else []
+            
+            if runbook_metadata:
+                print(f"     Runbook Metadata Found: {len(runbook_metadata)} runbook(s)")
+            elif runbook_refs:
+                print(f"     Runbook Refs Found: {len(runbook_refs)} runbook ID(s)")
+            
             policy_decision = result.get('policy_decision', {})
             if policy_decision:
                 print(f"     Requires Approval: {policy_decision.get('requires_approval', 'N/A')}")
                 print(f"     Can Auto Apply: {policy_decision.get('can_auto_apply', 'N/A')}")
+            
+            # Store evidence and runbook info in result for later validation
+            result['_triage_evidence'] = evidence
+            result['_triage_runbook_metadata'] = runbook_metadata
+            result['_triage_runbook_refs'] = runbook_refs
             
             return result  # Success, exit retry loop
             
@@ -211,7 +227,30 @@ def test_resolution(incident_id: str) -> Dict:
         
         evidence = result.get('evidence', {})
         if evidence:
-            print(f"     Runbook Steps Retrieved: {evidence.get('runbook_steps', 0)}")
+            runbook_steps = evidence.get('runbook_steps', 0)
+            steps_retrieved = evidence.get('steps_retrieved', 0)
+            print(f"     Runbook Steps Retrieved: {runbook_steps}")
+            if steps_retrieved != runbook_steps:
+                print(f"     Steps Retrieved (after filtering): {steps_retrieved}")
+        
+        # Print reasoning if no steps
+        if not steps:
+            reasoning = resolution_data.get('reasoning', '')
+            if reasoning:
+                print(f"     Reasoning: {reasoning[:150]}...")
+            else:
+                print(f"     ⚠️  No reasoning provided for empty steps")
+        
+        # Validate resolution agent response structure
+        if not isinstance(resolution_data, dict):
+            print(f"     ❌ Invalid resolution data structure: expected dict, got {type(resolution_data)}")
+        else:
+            required_fields = ['steps', 'confidence', 'reasoning']
+            missing_fields = [f for f in required_fields if f not in resolution_data]
+            if missing_fields:
+                print(f"     ⚠️  Missing required fields in resolution: {missing_fields}")
+            else:
+                print(f"     ✅ Resolution response structure is valid")
         
         return result
         
@@ -251,14 +290,67 @@ def test_incident_end_to_end(incident: Dict, incident_num: int) -> bool:
         print(f"\n✅ TEST {incident_num} PASSED: Triage successful, resolution requires approval (expected)")
         return True
     
-    # Validation
-    steps = resolution_result.get('resolution', {}).get('steps', [])
-    if not steps:
-        print(f"\n⚠️  TEST {incident_num} WARNING: No resolution steps generated")
-        return True  # Not a failure, but worth noting
+    # Validate resolution agent response
+    resolution_data = resolution_result.get('resolution', {})
+    steps = resolution_data.get('steps', [])
+    confidence = resolution_data.get('confidence', 0.0)
+    reasoning = resolution_data.get('reasoning', '')
+    evidence = resolution_result.get('evidence', {})
+    runbook_steps_retrieved = evidence.get('runbook_steps', 0)
     
-    print(f"\n✅ TEST {incident_num} PASSED: End-to-end flow completed successfully")
-    return True
+    # Check if triage found runbook metadata or runbook refs
+    runbook_metadata = triage_result.get('_triage_runbook_metadata', [])
+    runbook_refs = triage_result.get('_triage_runbook_refs', [])
+    has_runbook_metadata = len(runbook_metadata) > 0
+    has_runbook_refs = len(runbook_refs) > 0
+    has_any_runbook_info = has_runbook_metadata or has_runbook_refs
+    
+    # Validation logic
+    validation_errors = []
+    
+    # If triage found runbook metadata or refs, resolution should attempt to retrieve steps
+    if has_any_runbook_info:
+        if runbook_steps_retrieved == 0:
+            validation_errors.append(
+                f"Triage found runbook info ({len(runbook_metadata)} metadata, {len(runbook_refs)} refs) "
+                f"but resolution retrieved 0 runbook steps. This suggests a retrieval issue."
+            )
+        if not steps and confidence == 0.0:
+            # Check if reasoning indicates a real problem vs expected no-data scenario
+            if "Cannot generate recommendations" in reasoning or "No runbook steps found" in reasoning:
+                # This is expected if there's no data in DB, but we should still validate
+                if has_runbook_metadata:
+                    validation_errors.append(
+                        f"Triage found {len(runbook_metadata)} runbook metadata but resolution couldn't retrieve steps. "
+                        f"Reasoning: {reasoning[:150]}"
+                    )
+    
+    # If no runbook info at all, empty steps with 0 confidence is acceptable
+    if not has_any_runbook_info:
+        if not steps:
+            print(f"\n⚠️  TEST {incident_num} INFO: No runbook metadata in triage, so empty resolution steps is expected")
+            print(f"     Reasoning: {reasoning[:150] if reasoning else 'N/A'}")
+        else:
+            print(f"\n✅ TEST {incident_num} PASSED: Resolution generated steps even without runbook metadata")
+            return True
+    else:
+        # We have runbook metadata, so we should have steps
+        if validation_errors:
+            print(f"\n❌ TEST {incident_num} FAILED: Resolution agent validation errors:")
+            for error in validation_errors:
+                print(f"     - {error}")
+            return False
+        elif not steps:
+            print(f"\n⚠️  TEST {incident_num} WARNING: Runbook metadata found but no steps generated")
+            print(f"     Runbook steps retrieved: {runbook_steps_retrieved}")
+            print(f"     Confidence: {confidence}")
+            print(f"     Reasoning: {reasoning[:150] if reasoning else 'N/A'}")
+            # This is a warning, not a failure - might be due to filtering or no matching steps
+            return True
+        else:
+            print(f"\n✅ TEST {incident_num} PASSED: End-to-end flow completed successfully")
+            print(f"     Generated {len(steps)} resolution steps with confidence {confidence:.2f}")
+            return True
 
 
 def main():

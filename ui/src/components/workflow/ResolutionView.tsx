@@ -321,14 +321,28 @@ export const ResolutionView = ({
                             ) : null}
                           </div>
                         </div>
-                        <div>
-                          <span className="text-xs font-semibold text-muted-foreground">
-                            Action:{" "}
-                          </span>
-                          <p className="text-sm text-foreground leading-relaxed">
-                            {stepAction}
-                          </p>
-                        </div>
+                        {/* Only show action if it's different from title (to avoid redundancy) */}
+                        {stepAction && stepTitle && stepAction.trim() !== stepTitle.trim() && (
+                          <div>
+                            <span className="text-xs font-semibold text-muted-foreground">
+                              Action:{" "}
+                            </span>
+                            <p className="text-sm text-foreground leading-relaxed">
+                              {stepAction}
+                            </p>
+                          </div>
+                        )}
+                        {/* If no title but we have action, show action */}
+                        {stepAction && !stepTitle && (
+                          <div>
+                            <span className="text-xs font-semibold text-muted-foreground">
+                              Action:{" "}
+                            </span>
+                            <p className="text-sm text-foreground leading-relaxed">
+                              {stepAction}
+                            </p>
+                          </div>
+                        )}
                         {stepExpectedOutcome && (
                           <div>
                             <span className="text-xs font-semibold text-muted-foreground">
