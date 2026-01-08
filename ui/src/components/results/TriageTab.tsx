@@ -1,19 +1,18 @@
+import { useState } from "react";
 import {
   FileText,
+  Info,
   Lightbulb,
+  ListChecks,
   Route,
   Server,
-  ListChecks,
-  AlertCircle,
-  Target,
   TrendingUp,
-  Info,
 } from "lucide-react";
-import { SeverityBadge } from "./SeverityBadge";
+import { ActionItem } from "./ActionItem";
 import { ConfidenceMeter } from "./ConfidenceMeter";
 import { InfoCard } from "./InfoCard";
 import { ServiceTag } from "./ServiceTag";
-import { ActionItem } from "./ActionItem";
+import { SeverityBadge } from "./SeverityBadge";
 
 interface TriageData {
   severity: "high" | "medium" | "low";
@@ -55,6 +54,39 @@ interface TriageTabProps {
   ) => void;
 }
 
+// Helper function to truncate text by character count
+const truncateByChars = (text: string, charLimit: number) => {
+  if (text.length <= charLimit) {
+    return { truncated: text, isTruncated: false };
+  }
+  return {
+    truncated: text.substring(0, charLimit) + "...",
+    isTruncated: true,
+  };
+};
+
+// Expandable text component with Read more/less functionality
+const ExpandableText = ({ text, charLimit = 200 }: { text: string; charLimit?: number }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { truncated, isTruncated } = truncateByChars(text, charLimit);
+
+  if (!isTruncated) {
+    return <span>{text}</span>;
+  }
+
+  return (
+    <div>
+      <span>{isExpanded ? text : truncated}</span>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="ml-2 text-primary hover:underline text-xs font-medium"
+      >
+        {isExpanded ? "Read less" : "Read more"}
+      </button>
+    </div>
+  );
+};
+
 // Rating buttons component
 const RatingButtons = ({
   field,
@@ -66,7 +98,10 @@ const RatingButtons = ({
   field: "severity" | "impact" | "urgency";
   rating?: string | null;
   ratingStatus?: string;
-  onRatingChange?: (field: "severity" | "impact" | "urgency", rating: "thumbs_up" | "thumbs_down") => void;
+  onRatingChange?: (
+    field: "severity" | "impact" | "urgency",
+    rating: "thumbs_up" | "thumbs_down"
+  ) => void;
   disabled?: boolean;
 }) => {
   if (!onRatingChange) return null;
@@ -81,7 +116,11 @@ const RatingButtons = ({
           rating === "thumbs_up"
             ? "border-success bg-success/20 text-success"
             : "border-border/50 bg-background/50 hover:bg-secondary/50 text-muted-foreground"
-        } ${ratingStatus === "loading" || disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+        } ${
+          ratingStatus === "loading" || disabled
+            ? "opacity-50 cursor-not-allowed"
+            : "cursor-pointer"
+        }`}
         title="Thumbs up"
       >
         <span className="text-sm">👍</span>
@@ -94,7 +133,11 @@ const RatingButtons = ({
           rating === "thumbs_down"
             ? "border-destructive bg-destructive/20 text-destructive"
             : "border-border/50 bg-background/50 hover:bg-secondary/50 text-muted-foreground"
-        } ${ratingStatus === "loading" || disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+        } ${
+          ratingStatus === "loading" || disabled
+            ? "opacity-50 cursor-not-allowed"
+            : "cursor-pointer"
+        }`}
         title="Thumbs down"
       >
         <span className="text-sm">👎</span>
@@ -121,7 +164,7 @@ export const TriageTab = ({
       {/* Header with Severity and Category */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-        <SeverityBadge severity={data.severity} />
+          <SeverityBadge severity={data.severity} />
           {incidentId && onRatingChange && (
             <RatingButtons
               field="severity"
@@ -142,15 +185,11 @@ export const TriageTab = ({
       {data.summary && (
         <div className="space-y-2">
           <InfoCard icon={FileText} title="Summary" variant="highlighted">
-            {data.summary}
+            <ExpandableText text={data.summary} charLimit={200} />
           </InfoCard>
           <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>
-              This is the AI's analysis of your alert. It summarizes what the
-              problem is, when it started, and what impact it might have on your
-              systems.
-            </span>
+            <span>This is the summary of your alert.</span>
           </p>
         </div>
       )}
@@ -164,8 +203,10 @@ export const TriageTab = ({
           <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
             <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
             <span>
-              Extracted directly from matched historical incident descriptions or symptoms (RAG-only, not AI-generated).
-              This helps you understand why the problem occurred and where to focus your investigation.
+              Extracted directly from matched historical incident descriptions
+              or symptoms (RAG-only, not AI-generated). This helps you
+              understand why the problem occurred and where to focus your
+              investigation.
             </span>
           </p>
         </div>
@@ -194,9 +235,9 @@ export const TriageTab = ({
                   )}
                 </div>
                 <div className="text-sm text-foreground leading-relaxed">
-                <span className="text-sm font-semibold text-primary">
-                  {data.impact}
-                </span>
+                  <span className="text-sm font-semibold text-primary">
+                    {data.impact}
+                  </span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
@@ -228,9 +269,9 @@ export const TriageTab = ({
                   )}
                 </div>
                 <div className="text-sm text-foreground leading-relaxed">
-                <span className="text-sm font-semibold text-primary">
-                  {data.urgency}
-                </span>
+                  <span className="text-sm font-semibold text-primary">
+                    {data.urgency}
+                  </span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">

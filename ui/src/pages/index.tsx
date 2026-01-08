@@ -71,9 +71,9 @@ const Index = () => {
       const triage = data.triage || {};
 
       // Derive summary and likely_cause from alert if not in triage output
-      // Summary: Use alert description (first 200 chars) if no summary in triage
+      // Summary: Use alert description if no summary in triage
       const summary =
-        triage.summary || alert.description?.substring(0, 200) || "";
+        triage.summary || alert.description || "";
 
       // Likely cause: Extracted directly from matched incident signatures' descriptions/symptoms (RAG-only, no LLM generation)
       // If not provided, use a simple fallback
@@ -491,7 +491,7 @@ const Index = () => {
 
       // Derive summary and likely_cause if missing
       const summary =
-        triageOutput.summary || rawAlert.description?.substring(0, 200) || "";
+        triageOutput.summary || rawAlert.description || "";
 
       // Likely cause: Extracted directly from matched incident signatures' descriptions/symptoms (RAG-only, no LLM generation)
       // If not provided, use a simple fallback
