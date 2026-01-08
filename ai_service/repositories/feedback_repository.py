@@ -161,7 +161,7 @@ class FeedbackRepository:
 
         The notes field typically contains patterns like:
         - "Rating for severity: thumbs_up"
-        - "Rating for resolution step 1: thumbs_down"
+        - "Rating for resolution step <step_title>: thumbs_down"
 
         Args:
             incident_id: Incident ID

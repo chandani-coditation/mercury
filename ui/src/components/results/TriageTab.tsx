@@ -99,8 +99,11 @@ const RatingButtons = ({
       >
         <span className="text-sm">👎</span>
       </button>
-      {ratingStatus === "success" && (
+      {ratingStatus === "success" && rating === "thumbs_up" && (
         <span className="text-xs text-success">✓</span>
+      )}
+      {ratingStatus === "success" && rating === "thumbs_down" && (
+        <span className="text-xs text-destructive">✕</span>
       )}
     </div>
   );

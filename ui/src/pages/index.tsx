@@ -403,9 +403,10 @@ const Index = () => {
   // Handler for resolution step-specific rating feedback
   const handleResolutionStepRating = async (
     stepIndex: number,
-    rating: "thumbs_up" | "thumbs_down"
+    rating: "thumbs_up" | "thumbs_down",
+    stepTitle?: string
   ) => {
-    console.log("handleResolutionStepRating called:", { stepIndex, rating, incidentId, hasResolutionData: !!resolutionData });
+    console.log("handleResolutionStepRating called:", { stepIndex, rating, stepTitle, incidentId, hasResolutionData: !!resolutionData });
     if (!incidentId || !resolutionData) {
       console.warn("Missing incidentId or resolutionData:", { incidentId, hasResolutionData: !!resolutionData });
       return;
@@ -420,11 +421,12 @@ const Index = () => {
 
     // Try to submit to API, but don't let failures break the UI
     try {
+      const stepIdentifier = stepTitle || `Step ${stepIndex + 1}`;
       await putFeedback(incidentId, {
         feedback_type: "resolution",
         user_edited: resolutionData.resolution || resolutionData,
         rating: rating,
-        notes: `Rating for resolution step ${stepIndex + 1}: ${rating}`,
+        notes: `Rating for resolution step, ${stepIdentifier}: ${rating}`,
       });
       // Update status to success after API call succeeds
       setRatingStatus(prev => ({

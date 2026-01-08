@@ -29,7 +29,7 @@ interface ResolutionViewProps {
   incidentId?: string;
   resolutionRatings?: Record<number, string | null>;
   ratingStatus?: Record<number, string>;
-  onRatingChange?: (stepIndex: number, rating: "thumbs_up" | "thumbs_down") => void;
+  onRatingChange?: (stepIndex: number, rating: "thumbs_up" | "thumbs_down", stepTitle?: string) => void;
 }
 
 // Rating buttons component for resolution steps
@@ -39,12 +39,14 @@ const StepRatingButtons = ({
   ratingStatus,
   onRatingChange,
   disabled,
+  stepTitle,
 }: {
   stepIndex: number;
   rating?: string | null;
   ratingStatus?: string;
-  onRatingChange?: (stepIndex: number, rating: "thumbs_up" | "thumbs_down") => void;
+  onRatingChange?: (stepIndex: number, rating: "thumbs_up" | "thumbs_down", stepTitle?: string) => void;
   disabled?: boolean;
+  stepTitle?: string;
 }) => {
   if (!onRatingChange) {
     console.warn("StepRatingButtons: onRatingChange is not provided for step", stepIndex);
@@ -52,10 +54,10 @@ const StepRatingButtons = ({
   }
 
   const handleClick = (ratingType: "thumbs_up" | "thumbs_down") => {
-    console.log(`🔥 Button clicked: ${ratingType} for step ${stepIndex}`);
+    console.log(`🔥 Button clicked: ${ratingType} for step ${stepIndex}`, stepTitle);
     if (onRatingChange) {
       // Call the handler - it will handle optimistic updates and API calls
-      onRatingChange(stepIndex, ratingType);
+      onRatingChange(stepIndex, ratingType, stepTitle);
       console.log("✅ onRatingChange called successfully");
     } else {
       console.warn("❌ onRatingChange is not available");
@@ -121,8 +123,11 @@ const StepRatingButtons = ({
       >
         <span style={{ fontSize: "16px" }}>👎</span>
       </Button>
-      {ratingStatus === "success" && (
+      {ratingStatus === "success" && rating === "thumbs_up" && (
         <span className="text-xs text-success ml-1">✓</span>
+      )}
+      {ratingStatus === "success" && rating === "thumbs_down" && (
+        <span className="text-xs text-destructive ml-1">✕</span>
       )}
     </div>
   );
@@ -311,6 +316,7 @@ export const ResolutionView = ({
                                 rating={resolutionRatings?.[ratingIndex] ?? null}
                                 ratingStatus={ratingStatus?.[ratingIndex]}
                                 onRatingChange={onRatingChange}
+                                stepTitle={stepTitle}
                               />
                             ) : null}
                           </div>
