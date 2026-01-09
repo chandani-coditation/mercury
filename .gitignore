@@ -81,3 +81,15 @@ ui/node_modules/*
 
 docs/
 docs/*
+
+# ignore all files in the scripts/data/tickets_data directory
+scripts/data/tickets_data/
+scripts/data/tickets_data/*
+tickets_data/*
+tickets_data
+
+# ignore all files in the scripts/data/runbooks directory
+scripts/data/runbooks/
+scripts/data/runbooks/*
+runbooks/*
+runbooks/

@@ -140,7 +140,7 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     # IMPORTANT: Use only the TOP runbook (highest score) from triage to ensure steps are from a single runbook
     evidence = triage_output.get("evidence", {})
     runbook_metadata = evidence.get("runbook_metadata", [])
-    
+
     # Select the top runbook based on highest combined score (relevance_score + service_match_boost + component_match_boost)
     # This ensures we use the best match from triage, not just the first one
     if runbook_metadata:
@@ -155,15 +155,17 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
                 f"relevance={relevance_score:.3f}, service_boost={service_boost:.3f}, "
                 f"component_boost={component_boost:.3f}, combined={rb['combined_score']:.3f}"
             )
-        
+
         # Sort by combined score (descending) to get the highest scoring runbook first
-        runbook_metadata = sorted(runbook_metadata, key=lambda x: x.get("combined_score", 0.0), reverse=True)
+        runbook_metadata = sorted(
+            runbook_metadata, key=lambda x: x.get("combined_score", 0.0), reverse=True
+        )
         logger.info(
             f"Sorted {len(runbook_metadata)} runbooks by score. Top runbook: "
             f"{runbook_metadata[0].get('title', 'Unknown')} "
             f"(score: {runbook_metadata[0].get('combined_score', 0.0):.3f})"
         )
-    
+
     top_runbook = runbook_metadata[0] if runbook_metadata else None
     if not top_runbook:
         logger.warning("No runbook_metadata found in evidence")
@@ -175,8 +177,10 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
             runbook_steps = []
         else:
             # Use only the top runbook's document_id
-            logger.info(f"Using single runbook: {top_runbook.get('title', 'Unknown')} (document_id: {top_document_id})")
-            
+            logger.info(
+                f"Using single runbook: {top_runbook.get('title', 'Unknown')} (document_id: {top_document_id})"
+            )
+
             # Build query text from triage signals for semantic search
             query_text_parts = []
             if incident_signature.failure_type:

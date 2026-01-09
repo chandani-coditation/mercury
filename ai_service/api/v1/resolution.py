@@ -146,7 +146,7 @@ async def resolution(
                             except json.JSONDecodeError as e:
                                 logger.warning(f"Failed to parse triage_evidence JSON: {e}")
                                 triage_evidence = {}
-                        
+
                         # Merge evidence into triage_output so resolution_agent can access runbook_metadata
                         if isinstance(triage_output, dict):
                             triage_output["evidence"] = triage_evidence
@@ -169,7 +169,7 @@ async def resolution(
 
                     # RAG-only mode: Use only runbook steps from RAG, NO LLM fallback
                     steps = resolution_result.get("steps", [])
-                    
+
                     # Always return RAG result, even if empty (no LLM fallback)
                     result = {
                         "incident_id": incident_id,
@@ -180,7 +180,7 @@ async def resolution(
                             "steps_retrieved": len(steps),
                         },
                     }
-                    
+
                     if not steps or len(steps) == 0:
                         logger.warning(
                             f"Resolution agent returned empty steps from RAG (runbook retrieval). "

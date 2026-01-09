@@ -239,7 +239,7 @@ def retrieve_runbook_chunks_by_document_id(
                         else:
                             # Use content as fallback if no Action: marker
                             action_text = content
-                    
+
                     step = {
                         "step_id": metadata.get("step_id") or f"chunk-{row['id']}",
                         "runbook_id": row.get("runbook_id") or metadata.get("runbook_id"),
@@ -256,7 +256,9 @@ def retrieve_runbook_chunks_by_document_id(
                     }
                     if "similarity_score" in row:
                         similarity = (
-                            float(row["similarity_score"]) if row["similarity_score"] is not None else None
+                            float(row["similarity_score"])
+                            if row["similarity_score"] is not None
+                            else None
                         )
                         # Validate similarity score - 1.0 is suspicious (perfect match)
                         if similarity is not None and similarity >= 0.999:
@@ -287,7 +289,7 @@ def retrieve_runbook_chunks_by_document_id(
                                     action_text = action_text.split("\nComponent:")[0].strip()
                         else:
                             action_text = content
-                    
+
                     step = {
                         "step_id": (
                             metadata.get("step_id")

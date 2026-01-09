@@ -33,7 +33,9 @@ def _load_step_classification_config():
                 logger.debug(f"Loaded step_classification.json from {config_path}")
             else:
                 _STEP_CLASSIFICATION_CONFIG = {}
-                logger.warning(f"step_classification.json not found at {config_path}, using defaults")
+                logger.warning(
+                    f"step_classification.json not found at {config_path}, using defaults"
+                )
         except Exception as e:
             logger.warning(f"Failed to load step_classification.json: {e}")
             _STEP_CLASSIFICATION_CONFIG = {}
@@ -287,7 +289,7 @@ def order_steps_by_type(steps: List[Dict]) -> List[Dict]:
 def generate_step_title(action: str, step_type: str) -> str:
     """
     Generate a short, UI-friendly title from action text.
-    
+
     Title should be concise (max 80 chars) to save space in UI.
     Full action text is shown separately in the action field.
 
@@ -316,13 +318,13 @@ def generate_step_title(action: str, step_type: str) -> str:
             if action_part:
                 # Truncate to first sentence or 80 chars for title
                 # Extract first sentence (up to period, comma, or newline)
-                first_sentence = action_part.split('.')[0].split(',')[0].split('\n')[0].strip()
+                first_sentence = action_part.split(".")[0].split(",")[0].split("\n")[0].strip()
                 if len(first_sentence) <= 80:
                     title = first_sentence
                 else:
                     # Truncate to 80 chars at word boundary
                     truncated = action_part[:77]
-                    last_space = truncated.rfind(' ')
+                    last_space = truncated.rfind(" ")
                     if last_space > 50:  # Only truncate at word if reasonable
                         title = truncated[:last_space] + "..."
                     else:
@@ -349,7 +351,7 @@ def generate_step_title(action: str, step_type: str) -> str:
             action_clean = action_clean[len(prefix) :].strip()
             if action_clean.startswith(":"):
                 action_clean = action_clean[1:].strip()
-    
+
     # Extract key phrases - look for imperative verbs at the start
     # Limit to first sentence or 80 chars for title
     imperative_patterns = [
@@ -364,12 +366,12 @@ def generate_step_title(action: str, step_type: str) -> str:
             # Clean up title
             title = title.strip()
             # Extract first sentence or truncate to 80 chars
-            first_sentence = title.split('.')[0].split(',')[0].split('\n')[0].strip()
+            first_sentence = title.split(".")[0].split(",")[0].split("\n")[0].strip()
             if len(first_sentence) <= 80:
                 title = first_sentence
             else:
                 truncated = title[:77]
-                last_space = truncated.rfind(' ')
+                last_space = truncated.rfind(" ")
                 if last_space > 50:
                     title = truncated[:last_space] + "..."
                 else:
@@ -380,12 +382,12 @@ def generate_step_title(action: str, step_type: str) -> str:
 
     # Fallback: use first sentence or truncate to 80 chars
     title = action_clean.strip()
-    first_sentence = title.split('.')[0].split(',')[0].split('\n')[0].strip()
+    first_sentence = title.split(".")[0].split(",")[0].split("\n")[0].strip()
     if len(first_sentence) <= 80:
         return first_sentence
     else:
         truncated = title[:77]
-        last_space = truncated.rfind(' ')
+        last_space = truncated.rfind(" ")
         if last_space > 50:
             return truncated[:last_space] + "..."
         else:

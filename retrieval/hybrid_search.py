@@ -296,7 +296,9 @@ def hybrid_search(
             )  # 11-16: Service and component boost params
 
             # Combined results params - fulltext query for calculating ts_rank for non-matching chunks
-            exec_params.append(fulltext_query)  # 17: fulltext_query for length check in combined_results
+            exec_params.append(
+                fulltext_query
+            )  # 17: fulltext_query for length check in combined_results
             exec_params.append(fulltext_query)  # 18: fulltext_query for ts_rank in combined_results
 
             # Final limit
@@ -761,8 +763,12 @@ def triage_retrieval(
                 )
             )  # 11-18: Service (dual) and component boost params
             # Combined results params - fulltext query for calculating ts_rank for non-matching signatures
-            sig_params.append(str(fulltext_query))  # 19: fulltext_query for length check in combined_results
-            sig_params.append(str(fulltext_query))  # 20: fulltext_query for ts_rank in combined_results
+            sig_params.append(
+                str(fulltext_query)
+            )  # 19: fulltext_query for length check in combined_results
+            sig_params.append(
+                str(fulltext_query)
+            )  # 20: fulltext_query for ts_rank in combined_results
             # Final limit
             sig_params.append(limit)  # 21: final limit
             print("incident_sig_query: ", incident_sig_query)

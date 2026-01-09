@@ -20,9 +20,9 @@ logger = get_logger(__name__)
 
 
 def resolution_copilot_agent(
-    incident_id: Optional[str] = None, 
+    incident_id: Optional[str] = None,
     alert: Optional[Dict[str, Any]] = None,
-    skip_approval_check: bool = False
+    skip_approval_check: bool = False,
 ) -> Dict[str, Any]:
     """
     Resolution Copilot Agent - Generates resolution steps for an incident.
@@ -40,12 +40,14 @@ def resolution_copilot_agent(
 
 
 def _resolution_copilot_agent_internal(
-    incident_id: Optional[str] = None, 
+    incident_id: Optional[str] = None,
     alert: Optional[Dict[str, Any]] = None,
-    skip_approval_check: bool = False
+    skip_approval_check: bool = False,
 ) -> Dict[str, Any]:
     """Internal resolution copilot agent implementation (called by resolution_copilot_agent with metrics)."""
-    logger.info(f"Starting resolution: incident_id={incident_id}, skip_approval_check={skip_approval_check}")
+    logger.info(
+        f"Starting resolution: incident_id={incident_id}, skip_approval_check={skip_approval_check}"
+    )
 
     # Initialize warning variables
     evidence_warning = None

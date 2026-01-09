@@ -25,7 +25,15 @@ from typing import List
 from dotenv import load_dotenv
 
 
-ALL_TARGETS = ["documents", "chunks", "incidents", "feedback", "runbook_steps", "incident_signatures", "agent_state"]
+ALL_TARGETS = [
+    "documents",
+    "chunks",
+    "incidents",
+    "feedback",
+    "runbook_steps",
+    "incident_signatures",
+    "agent_state",
+]
 
 # Load .env file from project root
 project_root = Path(__file__).parent.parent.parent

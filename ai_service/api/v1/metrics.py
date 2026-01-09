@@ -70,4 +70,3 @@ def reset_retrieval_metrics():
     except Exception as e:
         logger.error(f"Error resetting metrics: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to reset metrics: {str(e)}")
-

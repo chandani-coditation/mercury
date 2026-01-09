@@ -542,27 +542,31 @@ def main():
         logger.info("\nVerifying embeddings in database...")
         try:
             from db.connection import get_db_connection_context
-            
+
             with get_db_connection_context() as conn:
                 cur = conn.cursor()
-                
+
                 # Count runbook documents
                 cur.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'runbook';")
                 doc_result = cur.fetchone()
                 doc_count = doc_result["count"] if isinstance(doc_result, dict) else doc_result[0]
-                
+
                 # Count runbook steps
                 cur.execute("SELECT COUNT(*) FROM runbook_steps;")
                 step_result = cur.fetchone()
-                step_count = step_result["count"] if isinstance(step_result, dict) else step_result[0]
-                
+                step_count = (
+                    step_result["count"] if isinstance(step_result, dict) else step_result[0]
+                )
+
                 # Count runbook steps with embeddings
                 cur.execute("SELECT COUNT(*) FROM runbook_steps WHERE embedding IS NOT NULL;")
                 embed_result = cur.fetchone()
-                embed_count = embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
-                
+                embed_count = (
+                    embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
+                )
+
                 cur.close()
-            
+
             print(f"\nDatabase Verification:")
             print(f"   Runbook documents stored: {doc_count}")
             print(f"   Runbook steps created: {step_count}")
@@ -571,17 +575,19 @@ def main():
             logger.info(f"   Runbook documents stored: {doc_count}")
             logger.info(f"   Runbook steps created: {step_count}")
             logger.info(f"   Steps with embeddings: {embed_count}/{step_count}")
-            
+
             if embed_count == step_count and step_count > 0:
                 print(f"\n   SUCCESS: All {step_count} runbook steps have embeddings!")
                 logger.info(f"\n   SUCCESS: All {step_count} runbook steps have embeddings!")
             elif embed_count < step_count:
                 print(f"\n   WARNING: {step_count - embed_count} steps are missing embeddings!")
-                logger.warning(f"\n   WARNING: {step_count - embed_count} steps are missing embeddings!")
+                logger.warning(
+                    f"\n   WARNING: {step_count - embed_count} steps are missing embeddings!"
+                )
             else:
                 print(f"\n   WARNING: No runbook steps found in database!")
                 logger.warning(f"\n   WARNING: No runbook steps found in database!")
-                
+
         except Exception as e:
             print(f"\n   Could not verify embeddings: {str(e)}")
             print(f"   You can manually verify using: python scripts/db/verify_db.py")

@@ -542,27 +542,29 @@ def main():
         logger.info("\nVerifying embeddings in database...")
         try:
             from db.connection import get_db_connection_context
-            
+
             with get_db_connection_context() as conn:
                 cur = conn.cursor()
-                
+
                 # Count incident signatures
                 cur.execute("SELECT COUNT(*) FROM incident_signatures;")
                 sig_result = cur.fetchone()
                 sig_count = sig_result["count"] if isinstance(sig_result, dict) else sig_result[0]
-                
+
                 # Count incident signatures with embeddings
                 cur.execute("SELECT COUNT(*) FROM incident_signatures WHERE embedding IS NOT NULL;")
                 embed_result = cur.fetchone()
-                embed_count = embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
-                
+                embed_count = (
+                    embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
+                )
+
                 # Count incident signatures with tsv
                 cur.execute("SELECT COUNT(*) FROM incident_signatures WHERE tsv IS NOT NULL;")
                 tsv_result = cur.fetchone()
                 tsv_count = tsv_result["count"] if isinstance(tsv_result, dict) else tsv_result[0]
-                
+
                 cur.close()
-            
+
             print(f"\nDatabase Verification:")
             print(f"   Incident signatures created: {sig_count}")
             print(f"   Signatures with embeddings: {embed_count}/{sig_count}")
@@ -571,19 +573,27 @@ def main():
             logger.info(f"   Incident signatures created: {sig_count}")
             logger.info(f"   Signatures with embeddings: {embed_count}/{sig_count}")
             logger.info(f"   Signatures with tsvector: {tsv_count}/{sig_count}")
-            
+
             if embed_count == sig_count and sig_count > 0 and tsv_count == sig_count:
-                print(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!")
-                logger.info(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!")
+                print(
+                    f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!"
+                )
+                logger.info(
+                    f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!"
+                )
             elif embed_count < sig_count or tsv_count < sig_count:
                 missing_embed = sig_count - embed_count
                 missing_tsv = sig_count - tsv_count
-                print(f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!")
-                logger.warning(f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!")
+                print(
+                    f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!"
+                )
+                logger.warning(
+                    f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!"
+                )
             else:
                 print(f"\n   WARNING: No incident signatures found in database!")
                 logger.warning(f"\n   WARNING: No incident signatures found in database!")
-                
+
         except Exception as e:
             print(f"\n   Could not verify embeddings: {str(e)}")
             print(f"   You can manually verify using: python scripts/db/verify_db.py")

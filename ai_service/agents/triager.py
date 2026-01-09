@@ -33,19 +33,19 @@ def derive_severity_from_impact_urgency(impact: str, urgency: str) -> str:
 
         # Look up in mapping
         severity = mapping.get(key, default)
-        
+
         # Log for debugging severity mapping issues
         logger.info(
             f"Severity mapping: impact='{impact}' -> '{impact_val}', "
             f"urgency='{urgency}' -> '{urgency_val}', key='{key}' -> severity='{severity}'"
         )
-        
+
         if severity == default and key not in mapping:
             logger.warning(
                 f"Severity mapping key '{key}' not found in config. Available keys: {list(mapping.keys())[:10]}... "
                 f"Using default '{default}'"
             )
-        
+
         return severity
     except Exception as e:
         logger.warning(f"Error deriving severity from impact/urgency: {e}. Using default 'medium'")
@@ -618,7 +618,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             # Use the most common description pattern from top matched signatures
             descriptions = []
             symptoms_list = []
-            
+
             for sig in incident_signatures[:5]:  # Use top 5 signatures for better coverage
                 metadata = sig.get("metadata", {})
                 # Try to get description from metadata (if stored from historical incidents)
@@ -626,32 +626,42 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 if description and isinstance(description, str) and len(description.strip()) > 20:
                     # Only use meaningful descriptions (at least 20 chars)
                     descriptions.append(description.strip()[:200])  # Limit each to 200 chars
-                
+
                 # Also collect symptoms for fallback
                 symptoms = metadata.get("symptoms", [])
                 if symptoms and isinstance(symptoms, list):
-                    symptoms_list.extend([s for s in symptoms if isinstance(s, str) and len(s.strip()) > 3])
-            
+                    symptoms_list.extend(
+                        [s for s in symptoms if isinstance(s, str) and len(s.strip()) > 3]
+                    )
+
             # Prioritize descriptions from historical incidents (most accurate)
             if descriptions:
                 # Use the first meaningful description (top match is most relevant)
                 likely_cause = descriptions[0][:300]
-                logger.info(f"Extracted likely_cause from incident signature description: {likely_cause[:100]}...")
+                logger.info(
+                    f"Extracted likely_cause from incident signature description: {likely_cause[:100]}..."
+                )
             elif symptoms_list:
                 # Fallback: use symptoms if no descriptions available
-                unique_symptoms = list(dict.fromkeys(symptoms_list))[:3]  # Preserve order, top 3 unique
+                unique_symptoms = list(dict.fromkeys(symptoms_list))[
+                    :3
+                ]  # Preserve order, top 3 unique
                 symptom_text = ", ".join(unique_symptoms).replace("_", " ")
                 likely_cause = f"Based on historical incident patterns: {symptom_text}."
                 likely_cause = likely_cause[:300]  # Limit to 300 chars
-                logger.info(f"Extracted likely_cause from incident signature symptoms: {likely_cause[:100]}...")
-        
+                logger.info(
+                    f"Extracted likely_cause from incident signature symptoms: {likely_cause[:100]}..."
+                )
+
         # Only set likely_cause if we have evidence-based content
         if likely_cause:
             triage_output["likely_cause"] = likely_cause
         else:
             # No evidence available - don't generate or infer
             triage_output["likely_cause"] = "Unknown (no matching historical evidence available)."
-            logger.info("No likely_cause extracted - no matching historical evidence with descriptions or symptoms")
+            logger.info(
+                "No likely_cause extracted - no matching historical evidence with descriptions or symptoms"
+            )
 
         # PREDICT impact and urgency from matched incident signatures (primary method)
         # This uses historical evidence to determine priority based on impact/urgency patterns
@@ -793,11 +803,11 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             relevance_score = rb.get("relevance_score", 0.0)
             service_boost = rb.get("service_match_boost", 0.0)
             component_boost = rb.get("component_match_boost", 0.0)
-            
+
             # Calculate fulltext_score (same logic as below)
             base_fulltext_score = float(relevance_score) if relevance_score else 0.0
             fulltext_score = min(1.0, base_fulltext_score + service_boost + component_boost)
-            
+
             # Only include runbooks that meet the threshold
             if fulltext_score >= runbook_threshold:
                 filtered_runbook_metadata.append(rb)
@@ -837,7 +847,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             relevance_score = rb.get("relevance_score", 0.0)
             service_boost = rb.get("service_match_boost", 0.0)
             component_boost = rb.get("component_match_boost", 0.0)
-            
+
             # Convert relevance_score (from ts_rank, typically 0-1) to fulltext_score
             # Include service/component boosts in the score to reflect why it's ranked high
             # Cap at 1.0 to avoid showing >100%
@@ -978,9 +988,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             return 0.0
 
         formatted_evidence["chunks"].sort(key=get_unified_score, reverse=True)
-        logger.debug(
-            f"Sorted {len(formatted_evidence['chunks'])} evidence chunks by unified score"
-        )
+        logger.debug(f"Sorted {len(formatted_evidence['chunks'])} evidence chunks by unified score")
     else:
         # Fallback triage output with REVIEW band and confidence 0.0
         title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"
