@@ -1,15 +1,14 @@
 import { useState } from "react";
 import {
-  FileText,
-  Lightbulb,
   ListChecks,
   Route,
   Server,
   TrendingUp,
 } from "lucide-react";
 import { ActionItem } from "./ActionItem";
-import { ServiceTag } from "./ServiceTag";
 import { SeverityBadge } from "./SeverityBadge";
+import { ImpactBadge } from "./ImpactBadge";
+import { UrgencyBadge } from "./UrgencyBadge";
 import { cn } from "@/lib/utils";
 import { ExpandableText } from "@/components/ui/ExpandableText";
 import { KeyValueDisplay } from "@/components/ui/KeyValueDisplay";
@@ -137,19 +136,13 @@ export const TriageTab = ({
           <KeyValueDisplay
             label="Severity"
             value={
-              <div className="flex items-center gap-1 flex-wrap">
-                <SeverityBadge severity={data.severity} />
-                {data.category && (
-                  <span className="px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold font-sans">
-                    {data.category}
-                  </span>
-                )}
-              </div>
+              <SeverityBadge severity={data.severity} />
             }
             valueType="severity"
+            labelClassName="text-muted-foreground"
           />
           {incidentId && onRatingChange && (
-            <div className="absolute top-1 right-1">
+            <div className="absolute top-1/2 -translate-y-1/2 right-1">
               <RatingButtons
                 field="severity"
                 rating={triageRatings?.severity}
@@ -166,9 +159,11 @@ export const TriageTab = ({
             label="Routing"
             value={data.routing}
             valueType="routing"
+            labelClassName="text-muted-foreground"
+            valueClassName="text-foreground"
           />
         ) : (
-          <KeyValueDisplay label="Routing" value="N/A" valueType="routing" />
+          <KeyValueDisplay label="Routing" value="N/A" valueType="routing" labelClassName="text-muted-foreground" valueClassName="text-foreground" />
         )}
 
         {/* Affected Services - Using KeyValueDisplay */}
@@ -176,15 +171,12 @@ export const TriageTab = ({
           label="Affected Services"
           value={
             data.affected_services && data.affected_services.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {data.affected_services.map((service, index) => (
-                  <ServiceTag key={index} service={service} />
-                ))}
-              </div>
+              <span className="text-foreground">{data.affected_services.join(", ")}</span>
             ) : (
               "N/A"
             )
           }
+          labelClassName="text-muted-foreground"
         />
       </div>
 
@@ -195,11 +187,12 @@ export const TriageTab = ({
           <div className="relative">
             <KeyValueDisplay
               label="Impact"
-              value={data.impact}
+              value={<ImpactBadge impact={data.impact} />}
               valueType="impact"
+              labelClassName="text-muted-foreground"
             />
             {incidentId && onRatingChange && (
-              <div className="absolute top-1 right-1">
+              <div className="absolute top-1/2 -translate-y-1/2 right-1">
                 <RatingButtons
                   field="impact"
                   rating={triageRatings?.impact}
@@ -210,7 +203,7 @@ export const TriageTab = ({
             )}
           </div>
         ) : (
-          <KeyValueDisplay label="Impact" value="N/A" valueType="impact" />
+          <KeyValueDisplay label="Impact" value="N/A" valueType="impact" labelClassName="text-muted-foreground" />
         )}
 
         {/* Urgency - Using KeyValueDisplay with rating buttons */}
@@ -218,11 +211,12 @@ export const TriageTab = ({
           <div className="relative">
             <KeyValueDisplay
               label="Urgency"
-              value={data.urgency}
+              value={<UrgencyBadge urgency={data.urgency} />}
               valueType="urgency"
+              labelClassName="text-muted-foreground"
             />
             {incidentId && onRatingChange && (
-              <div className="absolute top-1 right-1">
+              <div className="absolute top-1/2 -translate-y-1/2 right-1">
                 <RatingButtons
                   field="urgency"
                   rating={triageRatings?.urgency}
@@ -233,7 +227,7 @@ export const TriageTab = ({
             )}
           </div>
         ) : (
-          <KeyValueDisplay label="Urgency" value="N/A" valueType="urgency" />
+          <KeyValueDisplay label="Urgency" value="N/A" valueType="urgency" labelClassName="text-muted-foreground" />
         )}
 
         {/* AI Confidence - Using KeyValueDisplay */}
@@ -241,6 +235,7 @@ export const TriageTab = ({
           label="AI Confidence"
           value={data.confidence !== undefined && data.confidence !== null ? data.confidence : 0}
           valueType="confidence"
+          labelClassName="text-muted-foreground"
         />
       </div>
 
@@ -248,8 +243,7 @@ export const TriageTab = ({
       {data.likely_cause && (
         <div className="glass-card p-2.5 space-y-1.5">
           <div className="flex items-center gap-1.5">
-            <Lightbulb className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs font-semibold text-foreground">Likely Cause</span>
+            <span className="text-xs font-semibold text-muted-foreground">Likely Cause</span>
           </div>
           <ExpandableText
             text={data.likely_cause}
@@ -262,19 +256,8 @@ export const TriageTab = ({
       {/* Summary - Full Width */}
       {data.summary && (
         <div className="glass-card p-2.5 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-semibold text-foreground">Summary</span>
-            </div>
-            {/* Compact Confidence Display */}
-            <KeyValueDisplay
-              label="Confidence"
-              value={data.confidence}
-              valueType="confidence"
-              inline={true}
-              className="p-0 border-0 shadow-none bg-transparent"
-            />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">Summary</span>
           </div>
           <ExpandableText
             text={data.summary}
