@@ -9,12 +9,14 @@ This directory contains the centralized design system for the NOC Agent AI front
 To change font sizes across the entire application:
 
 1. Open `theme.ts`
-2. Update the `font` section:
+2. Update the `font.size` section:
    ```typescript
    font: {
-     xs: "0.875rem",  // Changed from 0.75rem (12px → 14px)
-     sm: "1rem",      // Changed from 0.875rem (14px → 16px)
-     // ... etc
+     size: {
+       xs: "0.875rem",  // Changed from 0.75rem (12px → 14px)
+       sm: "1rem",      // Changed from 0.875rem (14px → 16px)
+       // ... etc
+     }
    }
    ```
 3. Update `tailwind.config.js` to match (if using custom font sizes)
@@ -57,7 +59,9 @@ import { theme } from "@/design-system";
 
 // Access theme values
 const cardPadding = theme.spacing.cardPadding; // "0.625rem"
-const fontSize = theme.font.xs; // "0.75rem"
+const fontSize = theme.font.size.xs; // "0.75rem"
+const fontFamily = theme.font.family.sans; // "Inter, system-ui, ..."
+const fontWeight = theme.font.weight.semibold; // "600"
 ```
 
 ### Using Pre-defined Component Classes
@@ -115,7 +119,7 @@ When migrating components to use the design system:
 1. **Replace hardcoded font sizes:**
    - `text-xs` → Keep as is (already uses theme)
    - `text-sm` → Keep as is
-   - Custom sizes → Use `theme.font.*` values
+   - Custom sizes → Use `theme.font.size.*` values
 
 2. **Replace hardcoded spacing:**
    - `p-1.5` → `componentClasses.cardSmall` or keep if consistent

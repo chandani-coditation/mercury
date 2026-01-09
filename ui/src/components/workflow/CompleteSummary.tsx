@@ -7,6 +7,8 @@ import {
   Download,
   FileJson,
   ListChecks,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,9 @@ export const CompleteSummary = ({
 }: CompleteSummaryProps) => {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  // State for collapsible sections in evidence dialog - collapsed by default
+  const [isPriorIncidentsExpanded, setIsPriorIncidentsExpanded] = useState(false);
+  const [isRunbooksExpanded, setIsRunbooksExpanded] = useState(false);
 
   const getBandColor = (band: string | null | undefined) => {
     if (!band) {
@@ -505,7 +510,15 @@ export const CompleteSummary = ({
                                   {/* Prior Incidents Section */}
                                   {priorIncidents.length > 0 && (
                                     <div className="space-y-2">
-                                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                                      <div
+                                        className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors"
+                                        onClick={() => setIsPriorIncidentsExpanded(!isPriorIncidentsExpanded)}
+                                      >
+                                        {isPriorIncidentsExpanded ? (
+                                          <ChevronDown className="w-4 h-4 text-primary" />
+                                        ) : (
+                                          <ChevronRight className="w-4 h-4 text-primary" />
+                                        )}
                                         <span className="w-1 h-4 bg-primary rounded-full" />
                                         Prior Incidents ({priorIncidents.length}
                                         {allPriorIncidents.length > 5
@@ -513,24 +526,34 @@ export const CompleteSummary = ({
                                           : ""}
                                         )
                                       </div>
-                                      <div className="space-y-3">
-                                        {priorIncidents.map(
-                                          (chunk: any, index: number) => (
-                                            <EvidenceChunk
-                                              key={chunk.chunk_id || index}
-                                              chunk={chunk}
-                                              index={index}
-                                            />
-                                          ),
-                                        )}
-                                      </div>
+                                      {isPriorIncidentsExpanded && (
+                                        <div className="space-y-3">
+                                          {priorIncidents.map(
+                                            (chunk: any, index: number) => (
+                                              <EvidenceChunk
+                                                key={chunk.chunk_id || index}
+                                                chunk={chunk}
+                                                index={index}
+                                              />
+                                            ),
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   )}
 
                                   {/* Runbooks Section */}
                                   {runbooks.length > 0 && (
                                     <div className="space-y-3">
-                                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                                      <div
+                                        className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors"
+                                        onClick={() => setIsRunbooksExpanded(!isRunbooksExpanded)}
+                                      >
+                                        {isRunbooksExpanded ? (
+                                          <ChevronDown className="w-4 h-4 text-primary" />
+                                        ) : (
+                                          <ChevronRight className="w-4 h-4 text-primary" />
+                                        )}
                                         <span className="w-1 h-4 bg-primary rounded-full" />
                                         Runbooks ({runbooks.length}
                                         {allRunbooks.length > 5
@@ -538,19 +561,21 @@ export const CompleteSummary = ({
                                           : ""}
                                         )
                                       </div>
-                                      <div className="space-y-3">
-                                        {runbooks.map(
-                                          (chunk: any, index: number) => (
-                                            <EvidenceChunk
-                                              key={chunk.chunk_id || index}
-                                              chunk={chunk}
-                                              index={
-                                                priorIncidents.length + index
-                                              }
-                                            />
-                                          ),
-                                        )}
-                                      </div>
+                                      {isRunbooksExpanded && (
+                                        <div className="space-y-3">
+                                          {runbooks.map(
+                                            (chunk: any, index: number) => (
+                                              <EvidenceChunk
+                                                key={chunk.chunk_id || index}
+                                                chunk={chunk}
+                                                index={
+                                                  priorIncidents.length + index
+                                                }
+                                              />
+                                            ),
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>

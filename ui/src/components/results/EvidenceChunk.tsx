@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, FileText, Hash, TrendingUp, Info } from "lucide-react";
 import { ExpandableText } from "@/components/ui/ExpandableText";
 import { cn } from "@/lib/utils";
+import retrievalConfig from "@/config/retrieval.json";
 
 interface EvidenceChunkProps {
   chunk: {
@@ -42,6 +43,12 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
     (scores.fulltext_score !== undefined && scores.fulltext_score !== null) ||
     (scores.rrf_score !== undefined && scores.rrf_score !== null);
   const metadata = chunk.metadata || {};
+
+  // Determine if this is a runbook (threshold applies) or prior incident (always show score)
+  const isRunbook =
+    chunk.provenance?.source_type === "runbook" ||
+    chunk.provenance?.source_type === "runbook_step" ||
+    chunk.metadata?.doc_type === "runbook";
 
   // Calculate overall relevance percentage (using RRF score as primary, or vector as fallback, or fulltext as tertiary)
   // RRF score is typically 0.0x (e.g., 0.0118), so we multiply by 1000 to get percentage-like value
@@ -141,19 +148,21 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          {relevanceScore !== null && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-background/50 border border-border/30">
-              <TrendingUp className="w-3 h-3 text-muted-foreground" />
-              <span
-                className={cn(
-                  "text-sm font-semibold font-mono",
-                  getRelevanceColor(relevanceScore),
-                )}
-              >
-                {relevanceScore}%
-              </span>
-            </div>
-          )}
+          {relevanceScore !== null &&
+            // For runbooks, only show if above threshold; for prior incidents, always show
+            (!isRunbook || relevanceScore >= (retrievalConfig.ui_relevance_threshold || 0)) && (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-background/50 border border-border/30">
+                <TrendingUp className="w-3 h-3 text-muted-foreground" />
+                <span
+                  className={cn(
+                    "text-sm font-semibold font-mono",
+                    getRelevanceColor(relevanceScore),
+                  )}
+                >
+                  {relevanceScore}%
+                </span>
+              </div>
+            )}
           <ChevronDown
             className={cn(
               "w-5 h-5 text-muted-foreground transition-transform duration-200",

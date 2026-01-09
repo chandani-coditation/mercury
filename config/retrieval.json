@@ -32,7 +32,9 @@
     "rrf_k": 60,
     "_note_rrf_k": "RRF parameter k (default 60). Lower values give more weight to top results, higher values flatten the ranking.",
     "runbook_score_threshold": 0.1,
-    "_note_runbook_threshold": "Minimum fulltext_score (0-1) for runbooks to be displayed in UI. Runbooks with scores below this threshold will be filtered out. Default: 0.1 (10%)"
+    "_note_runbook_threshold": "Minimum fulltext_score (0-1) for runbooks to be displayed in UI. Runbooks with scores below this threshold will be filtered out. Default: 0.1 (10%)",
+    "ui_relevance_threshold": 50,
+    "_note_ui_relevance_threshold": "Minimum relevance score percentage (0-100) to display in UI. Scores below this threshold will be hidden. Default: 50 (50%)"
   },
   "resolution": {
     "method": "hybrid_search",

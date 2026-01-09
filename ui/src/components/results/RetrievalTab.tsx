@@ -1,5 +1,7 @@
-import { Database, FileSearch, Info } from "lucide-react";
+import { useState } from "react";
+import { Database, FileSearch, Info, ChevronDown, ChevronRight } from "lucide-react";
 import { EvidenceChunk } from "./EvidenceChunk";
+import retrievalConfig from "@/config/retrieval.json";
 
 interface Chunk {
   chunk_id: string;
@@ -23,10 +25,32 @@ interface RetrievalTabProps {
 }
 
 export const RetrievalTab = ({ data }: RetrievalTabProps) => {
+  // State for collapsible sections - collapsed by default
+  const [isPriorIncidentsExpanded, setIsPriorIncidentsExpanded] = useState(false);
+  const [isRunbooksExpanded, setIsRunbooksExpanded] = useState(false);
+
   // Handle cases where data might be undefined or have different structure
   const chunksUsed = data?.chunks_used || 0;
   const chunkSources = data?.chunk_sources || [];
   const chunks = data?.chunks || [];
+
+  // Helper function to calculate relevance score (same logic as EvidenceChunk)
+  const calculateRelevanceScore = (chunk: any): number | null => {
+    const scores = chunk.scores || {};
+    if (scores.rrf_score !== undefined && scores.rrf_score !== null) {
+      return Math.round(scores.rrf_score * 1000);
+    }
+    if (scores.vector_score !== undefined && scores.vector_score !== null) {
+      return Math.round(scores.vector_score * 100);
+    }
+    if (scores.fulltext_score !== undefined && scores.fulltext_score !== null && scores.fulltext_score > 1e-10) {
+      return Math.round(scores.fulltext_score * 100);
+    }
+    return null;
+  };
+
+  // Get threshold from config
+  const relevanceThreshold = retrievalConfig.ui_relevance_threshold || 0;
 
   // Calculate breakdown of chunks by source type
   const chunkBreakdown = (() => {
@@ -179,21 +203,40 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
                   chunk.metadata?.doc_type === "incident_signature",
               )
               .slice(0, 5); // Limit to top 5
-            const runbooks = chunks
-              .filter(
-                (chunk: any) =>
-                  chunk.provenance?.source_type === "runbook" ||
-                  chunk.provenance?.source_type === "runbook_step" ||
-                  chunk.metadata?.doc_type === "runbook",
-              )
-              .slice(0, 5); // Limit to top 5
+            
+            // Filter runbooks by source type, then filter by relevance threshold
+            const allRunbooks = chunks.filter(
+              (chunk: any) =>
+                chunk.provenance?.source_type === "runbook" ||
+                chunk.provenance?.source_type === "runbook_step" ||
+                chunk.metadata?.doc_type === "runbook",
+            );
+            
+            // Filter out runbooks below relevance threshold
+            const filteredRunbooks = allRunbooks.filter((chunk: any) => {
+              const relevanceScore = calculateRelevanceScore(chunk);
+              // If no score, include it (don't filter out chunks without scores)
+              // If score exists, only include if it meets threshold
+              return relevanceScore === null || relevanceScore >= relevanceThreshold;
+            });
+            
+            const runbooks = filteredRunbooks.slice(0, 5); // Limit to top 5
+            const totalFilteredRunbooks = filteredRunbooks.length;
 
             return (
               <>
                 {/* Prior Incidents Section */}
                 {priorIncidents.length > 0 && (
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    <h4
+                      className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => setIsPriorIncidentsExpanded(!isPriorIncidentsExpanded)}
+                    >
+                      {isPriorIncidentsExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-primary" />
+                      )}
                       <span className="w-1 h-4 bg-primary rounded-full" />
                       Prior Incidents ({priorIncidents.length}
                       {chunks.filter(
@@ -210,48 +253,50 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
                         : ""}
                       )
                     </h4>
-                    <div className="space-y-2">
-                      {priorIncidents.map((chunk, index) => (
-                        <EvidenceChunk
-                          key={chunk.chunk_id}
-                          chunk={chunk}
-                          index={index}
-                        />
-                      ))}
-                    </div>
+                    {isPriorIncidentsExpanded && (
+                      <div className="space-y-2">
+                        {priorIncidents.map((chunk, index) => (
+                          <EvidenceChunk
+                            key={chunk.chunk_id}
+                            chunk={chunk}
+                            index={index}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* Runbooks Section */}
                 {runbooks.length > 0 && (
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    <h4
+                      className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => setIsRunbooksExpanded(!isRunbooksExpanded)}
+                    >
+                      {isRunbooksExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-primary" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-primary" />
+                      )}
                       <span className="w-1 h-4 bg-primary rounded-full" />
                       Runbooks ({runbooks.length}
-                      {chunks.filter(
-                        (chunk: any) =>
-                          chunk.provenance?.source_type === "runbook" ||
-                          chunk.provenance?.source_type === "runbook_step" ||
-                          chunk.metadata?.doc_type === "runbook",
-                      ).length > 5
-                        ? ` of ${chunks.filter(
-                            (chunk: any) =>
-                              chunk.provenance?.source_type === "runbook" ||
-                              chunk.provenance?.source_type === "runbook_step" ||
-                              chunk.metadata?.doc_type === "runbook",
-                          ).length}`
+                      {totalFilteredRunbooks > runbooks.length
+                        ? ` of ${totalFilteredRunbooks}`
                         : ""}
                       )
                     </h4>
-                    <div className="space-y-3">
-                      {runbooks.map((chunk, index) => (
-                        <EvidenceChunk
-                          key={chunk.chunk_id}
-                          chunk={chunk}
-                          index={priorIncidents.length + index}
-                        />
-                      ))}
-                    </div>
+                    {isRunbooksExpanded && (
+                      <div className="space-y-3">
+                        {runbooks.map((chunk, index) => (
+                          <EvidenceChunk
+                            key={chunk.chunk_id}
+                            chunk={chunk}
+                            index={priorIncidents.length + index}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

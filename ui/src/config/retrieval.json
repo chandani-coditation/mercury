@@ -1,0 +1,4 @@
+{
+  "ui_relevance_threshold": 50,
+  "_note": "Minimum relevance score percentage (0-100) to display in UI. Scores below this threshold will be hidden. This should match the value in config/retrieval.json"
+}

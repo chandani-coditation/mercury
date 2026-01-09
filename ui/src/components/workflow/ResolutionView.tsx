@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ExpandableText } from "@/components/ui/ExpandableText";
 
 interface ResolutionViewProps {
   data: any;
@@ -232,9 +233,14 @@ export const ResolutionView = ({
         <Card className="p-2 bg-primary/5 border-primary/20">
           <div className="flex items-start gap-1">
             <Info className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {reasoning}
-            </p>
+            <div className="flex-1">
+              <ExpandableText
+                text={reasoning}
+                charLimit={200}
+                className="text-xs text-muted-foreground leading-relaxed"
+                showButtonText={{ more: "Read more", less: "Read less" }}
+              />
+            </div>
           </div>
         </Card>
       )}

@@ -132,15 +132,12 @@ const Index = () => {
         try {
           // Use the comprehensive loadIncidentById function which handles all data transformation
           // This will set all the state (alertData, triageData, policyData, etc.)
-          await loadIncidentById(urlIncidentId);
-          
-          // Also set step and view from URL if they're different from current state
-          if (urlStep && ["form", "triage", "policy", "resolution", "complete"].includes(urlStep)) {
-            if (urlStep !== currentStep) {
-              setCurrentStep(urlStep);
-            }
-          }
-          
+          // Pass the URL step to preserve it on refresh (e.g., stay on triage when refreshing)
+          const validStep = urlStep && ["form", "triage", "policy", "resolution", "complete"].includes(urlStep) ? urlStep : undefined;
+          await loadIncidentById(urlIncidentId, validStep);
+
+          // Step is already set by loadIncidentById, no need to set it again
+          // Just update view from URL if needed
           if (urlView && ["workflow", "incidents"].includes(urlView)) {
             if (urlView !== currentView) {
               setCurrentView(urlView);
@@ -151,13 +148,22 @@ const Index = () => {
           setError("Failed to load incident from URL");
         }
       } else if (urlStep || urlView) {
-        // Even if no incidentId, update step/view from URL
-        if (urlStep && ["form", "triage", "policy", "resolution", "complete"].includes(urlStep)) {
+        // Steps that require incident data: triage, policy, resolution, complete
+        // If we're trying to load one of these steps without an incidentId, redirect to form
+        const stepsRequiringIncident = ["triage", "policy", "resolution", "complete"];
+
+        if (urlStep && stepsRequiringIncident.includes(urlStep)) {
+          console.warn(`Step "${urlStep}" requires an incidentId but none found in URL. Redirecting to form.`);
+          setCurrentStep("form");
+          setCurrentView("workflow");
+          updateURL("form", "workflow", "", "triage"); // Form step doesn't have tabs, use default
+        } else if (urlStep && ["form"].includes(urlStep)) {
+          // Only form step is allowed without incidentId
           if (urlStep !== currentStep) {
             setCurrentStep(urlStep);
           }
         }
-        
+
         if (urlView && ["workflow", "incidents"].includes(urlView)) {
           if (urlView !== currentView) {
             setCurrentView(urlView);
@@ -165,19 +171,30 @@ const Index = () => {
         }
       }
     };
-    
+
     loadIncidentFromURL();
   }, []); // Only run on mount
 
   // Wrapper functions that update both state and URL
   const setStep = (step: WorkflowStep) => {
     setCurrentStep(step);
-    updateURL(step, currentView, incidentId, activeTab);
+    // Only "triage" step has tabs, clear tab parameter for other steps
+    const tabParam = step === "triage" ? activeTab : "triage"; // "triage" is default, will be deleted by updateURL
+    updateURL(step, currentView, incidentId, tabParam);
   };
 
   const setView = (view: "workflow" | "incidents") => {
     setCurrentView(view);
-    updateURL(currentStep, view, incidentId, activeTab);
+
+    // When switching to incidents view, clear step, incidentId, and tab from URL
+    // The incidents list doesn't need these workflow-specific parameters
+    // Pass "form" to delete step param, "" to delete incidentId, and "triage" to delete tab
+    if (view === "incidents") {
+      updateURL("form", view, "", "triage");
+    } else {
+      // For workflow view, keep current step and incidentId
+      updateURL(currentStep, view, incidentId, activeTab);
+    }
   };
 
   const setIncidentIdAndUpdateURL = (id: string) => {
@@ -198,7 +215,9 @@ const Index = () => {
     try {
       const data = await postTriage(alert);
 
-      setIncidentIdAndUpdateURL(data.incident_id);
+      // Store the incident_id for use in URL update
+      const newIncidentId = data.incident_id;
+      setIncidentId(newIncidentId);
 
       // Extract triage data with new fields
       const triage = data.triage || {};
@@ -300,7 +319,10 @@ const Index = () => {
       // Reset ratings when new triage is generated
       setTriageRatings({});
       setRatingStatus(prev => ({ ...prev, triage: {} }));
-      setStep("triage");
+      // Navigate to triage step with the new incident ID
+      // Use the actual returned incident_id instead of relying on state to avoid race conditions
+      setCurrentStep("triage");
+      updateURL("triage", currentView, newIncidentId, activeTab);
     } catch (err: any) {
       console.error("❌ Triage FAILED!");
       console.error("Error object:", err);
@@ -475,8 +497,7 @@ const Index = () => {
   };
 
   const handleNewTicket = () => {
-    setView("workflow");
-    setStep("form");
+    // Clear all state
     setIncidentId("");
     setAlertData(null);
     setTriageData(null);
@@ -490,6 +511,12 @@ const Index = () => {
     setResolutionRatings({});
     setRatingStatus({ triage: {}, resolution: {} });
     setFeedbackHistory([]);
+
+    // Set view and step, then update URL with empty incidentId
+    setCurrentView("workflow");
+    setCurrentStep("form");
+    // updateURL will delete both step (when "form"), incidentId (when empty), and tab (when "triage"), resulting in clean URL "/"
+    updateURL("form", "workflow", "", "triage");
   };
 
   // Handler for triage field-specific rating feedback
@@ -581,7 +608,7 @@ const Index = () => {
     }
   };
 
-  const loadIncidentById = async (id: string) => {
+  const loadIncidentById = async (id: string, targetStep?: WorkflowStep) => {
     const incidentKey = id.trim();
     if (!incidentKey) {
       setError("Please enter an Incident ID or Alert ID");
@@ -815,14 +842,18 @@ const Index = () => {
         setFeedbackHistory([]);
       }
 
-      // When loading an existing incident, ALWAYS go to complete summary page
-      // This shows all available data in one place, regardless of resolution status
+      // When loading an existing incident, navigate to the target step (default: complete summary page)
+      // If targetStep is provided (e.g., from URL on refresh), preserve that step
+      // Otherwise, default to complete page which shows all available data in one place
       // The CompleteSummary component handles missing data gracefully
       // Update state first, then update URL in a single call to avoid race conditions
-      setCurrentStep("complete");
+      const stepToNavigate = targetStep || "complete";
+      setCurrentStep(stepToNavigate);
       setCurrentView("workflow");
       // Update URL with all values at once
-      updateURL("complete", "workflow", extractedIncidentId || "", activeTab);
+      // Only preserve tab parameter if going to triage step (which has tabs)
+      const tabParam = stepToNavigate === "triage" ? activeTab : "triage";
+      updateURL(stepToNavigate, "workflow", extractedIncidentId || "", tabParam);
 
       setShowSearch(false);
     } catch (err: any) {
@@ -883,11 +914,17 @@ const Index = () => {
     }
   };
 
+  // Load incidents when switching to incidents view (including on page load)
+  useEffect(() => {
+    if (currentView === "incidents" && incidents.length === 0 && !isLoadingIncidents) {
+      loadIncidents(1, incidentsSearch);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView]); // Only run when view changes, not when incidents/search changes
+
   const handleOpenIncidentsView = async () => {
     setView("incidents");
-    if (incidents.length === 0 && !isLoadingIncidents) {
-      await loadIncidents(1, incidentsSearch);
-    }
+    // No need to call loadIncidents here anymore - the useEffect above will handle it
   };
 
   const handleIncidentsSearch = async () => {
