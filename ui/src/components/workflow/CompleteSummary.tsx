@@ -254,16 +254,7 @@ export const CompleteSummary = ({
               {triageData.severity ? (
                 <KeyValueDisplay
                   label="Severity"
-                  value={
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <SeverityBadge severity={triageData.severity} />
-                      {triageData.category && (
-                        <span className="px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold font-sans">
-                          {triageData.category}
-                        </span>
-                      )}
-                    </div>
-                  }
+                  value={<SeverityBadge severity={triageData.severity} />}
                   valueType="severity"
                 />
               ) : (

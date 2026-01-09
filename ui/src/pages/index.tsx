@@ -1028,11 +1028,6 @@ const Index = () => {
 
               <div className="h-6 w-px bg-white/20" />
 
-              <div className="flex items-center gap-2 text-sm">
-                <Activity className="w-4 h-4 text-green-400" />
-                <span className="text-white/90">Active</span>
-              </div>
-
               <Button
                 size="sm"
                 onClick={handleNewTicket}
