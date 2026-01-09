@@ -780,6 +780,39 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             }
             for sig in incident_signatures
         ]
+        # Get runbook score threshold from config
+        retrieval_config = get_retrieval_config()
+        triage_config = retrieval_config.get("triage", {})
+        runbook_threshold = float(triage_config.get("runbook_score_threshold", 0.1))
+        logger.debug(f"Runbook score threshold: {runbook_threshold}")
+
+        # Filter runbooks based on score threshold before adding to evidence
+        # Calculate fulltext_score for each runbook and filter
+        filtered_runbook_metadata = []
+        for rb in runbook_metadata:
+            relevance_score = rb.get("relevance_score", 0.0)
+            service_boost = rb.get("service_match_boost", 0.0)
+            component_boost = rb.get("component_match_boost", 0.0)
+            
+            # Calculate fulltext_score (same logic as below)
+            base_fulltext_score = float(relevance_score) if relevance_score else 0.0
+            fulltext_score = min(1.0, base_fulltext_score + service_boost + component_boost)
+            
+            # Only include runbooks that meet the threshold
+            if fulltext_score >= runbook_threshold:
+                filtered_runbook_metadata.append(rb)
+            else:
+                logger.debug(
+                    f"Filtering out runbook '{rb.get('title', 'Unknown')}' "
+                    f"with score {fulltext_score:.3f} (below threshold {runbook_threshold:.3f})"
+                )
+
+        logger.info(
+            f"Filtered runbooks: {len(filtered_runbook_metadata)} of {len(runbook_metadata)} "
+            f"meet the threshold of {runbook_threshold:.1%}"
+        )
+
+        # Store filtered runbook metadata for resolution agent
         formatted_evidence["runbook_metadata"] = [
             {
                 "document_id": rb.get("document_id"),
@@ -792,13 +825,15 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 "service_match_boost": rb.get("service_match_boost", 0.0),
                 "component_match_boost": rb.get("component_match_boost", 0.0),
             }
-            for rb in runbook_metadata
+            for rb in filtered_runbook_metadata
         ]
 
         # Add runbook metadata as chunks for UI display (with scores from relevance_score + boosts)
         # Runbook metadata uses simple full-text search, not hybrid search
         # But we include service/component match boosts in the displayed score for better UX
-        for rb in runbook_metadata:
+        # Only include runbooks that meet the minimum score threshold
+        filtered_runbook_count = 0
+        for rb in filtered_runbook_metadata:
             relevance_score = rb.get("relevance_score", 0.0)
             service_boost = rb.get("service_match_boost", 0.0)
             component_boost = rb.get("component_match_boost", 0.0)
@@ -810,6 +845,15 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             # Add boosts but cap at 1.0 (boosts are 0.15 max for service, 0.10 max for component)
             fulltext_score = min(1.0, base_fulltext_score + service_boost + component_boost)
 
+            # Filter out runbooks below the threshold
+            if fulltext_score < runbook_threshold:
+                logger.debug(
+                    f"Filtering out runbook '{rb.get('title', 'Unknown')}' "
+                    f"with score {fulltext_score:.3f} (below threshold {runbook_threshold:.3f})"
+                )
+                continue
+
+            filtered_runbook_count += 1
             runbook_chunk = {
                 "chunk_id": rb.get(
                     "document_id"
@@ -837,23 +881,32 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 },
             }
             formatted_evidence["chunks"].append(runbook_chunk)
+            filtered_runbook_count += 1
 
         # Add runbook steps to evidence chunks for UI display
-        if runbook_metadata:
+        # Only use filtered runbooks for step retrieval
+        if filtered_runbook_metadata:
             try:
                 from retrieval.resolution_retrieval import retrieve_runbook_chunks_by_document_id
 
                 # Use document_ids (preferred method) instead of runbook_ids
-                # Prioritize runbooks matching the service
+                # Prioritize runbooks matching the service (from filtered list)
                 document_ids_for_steps = []
-                # First, add runbooks matching the service
-                for rb in runbook_metadata:
-                    if rb.get("service") == service_val and rb.get("document_id"):
-                        document_ids_for_steps.append(rb.get("document_id"))
-                # Then, add other runbooks
-                for rb in runbook_metadata:
-                    if rb.get("service") != service_val and rb.get("document_id"):
-                        if rb.get("document_id") not in document_ids_for_steps:
+                service_val = alert.get("labels", {}).get("service") or alert.get("service")
+                if service_val:
+                    # First, add runbooks matching the service (from filtered list)
+                    for rb in filtered_runbook_metadata:
+                        if rb.get("service") == service_val and rb.get("document_id"):
+                            document_ids_for_steps.append(rb.get("document_id"))
+                    # Then, add other runbooks (from filtered list)
+                    for rb in filtered_runbook_metadata:
+                        if rb.get("service") != service_val and rb.get("document_id"):
+                            if rb.get("document_id") not in document_ids_for_steps:
+                                document_ids_for_steps.append(rb.get("document_id"))
+                else:
+                    # No service filter, add all filtered runbooks
+                    for rb in filtered_runbook_metadata:
+                        if rb.get("document_id"):
                             document_ids_for_steps.append(rb.get("document_id"))
 
                 if document_ids_for_steps:

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   FileText,
-  Info,
   Lightbulb,
   ListChecks,
   Route,
@@ -9,10 +8,11 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { ActionItem } from "./ActionItem";
-import { ConfidenceMeter } from "./ConfidenceMeter";
-import { InfoCard } from "./InfoCard";
 import { ServiceTag } from "./ServiceTag";
 import { SeverityBadge } from "./SeverityBadge";
+import { cn } from "@/lib/utils";
+import { ExpandableText } from "@/components/ui/ExpandableText";
+import { KeyValueDisplay } from "@/components/ui/KeyValueDisplay";
 
 interface TriageData {
   severity: "high" | "medium" | "low";
@@ -54,38 +54,7 @@ interface TriageTabProps {
   ) => void;
 }
 
-// Helper function to truncate text by character count
-const truncateByChars = (text: string, charLimit: number) => {
-  if (text.length <= charLimit) {
-    return { truncated: text, isTruncated: false };
-  }
-  return {
-    truncated: text.substring(0, charLimit) + "...",
-    isTruncated: true,
-  };
-};
-
-// Expandable text component with Read more/less functionality
-const ExpandableText = ({ text, charLimit = 200 }: { text: string; charLimit?: number }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { truncated, isTruncated } = truncateByChars(text, charLimit);
-
-  if (!isTruncated) {
-    return <span>{text}</span>;
-  }
-
-  return (
-    <div>
-      <span>{isExpanded ? text : truncated}</span>
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="ml-2 text-primary hover:underline text-xs font-medium"
-      >
-        {isExpanded ? "Read less" : "Read more"}
-      </button>
-    </div>
-  );
-};
+// Using shared ExpandableText component from ui/ExpandableText
 
 // Rating buttons component
 const RatingButtons = ({
@@ -160,223 +129,178 @@ export const TriageTab = ({
   onRatingChange,
 }: TriageTabProps) => {
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header with Severity and Category */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <SeverityBadge severity={data.severity} />
+    <div className="space-y-2.5 animate-fade-in">
+      {/* TOP PRIORITY: Severity, Routing, Affected Services - Consistent Format */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {/* Severity - Using KeyValueDisplay with rating buttons */}
+        <div className="relative">
+          <KeyValueDisplay
+            label="Severity"
+            value={
+              <div className="flex items-center gap-1 flex-wrap">
+                <SeverityBadge severity={data.severity} />
+                {data.category && (
+                  <span className="px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold font-sans">
+                    {data.category}
+                  </span>
+                )}
+              </div>
+            }
+            valueType="severity"
+          />
           {incidentId && onRatingChange && (
-            <RatingButtons
-              field="severity"
-              rating={triageRatings?.severity}
-              ratingStatus={ratingStatus?.severity}
-              onRatingChange={onRatingChange}
-            />
+            <div className="absolute top-1 right-1">
+              <RatingButtons
+                field="severity"
+                rating={triageRatings?.severity}
+                ratingStatus={ratingStatus?.severity}
+                onRatingChange={onRatingChange}
+              />
+            </div>
           )}
         </div>
-        {data.category && (
-          <div className="px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-sm font-medium">
-            {data.category}
-          </div>
+
+        {/* Routing - Using KeyValueDisplay */}
+        {data.routing ? (
+          <KeyValueDisplay
+            label="Routing"
+            value={data.routing}
+            valueType="routing"
+          />
+        ) : (
+          <KeyValueDisplay label="Routing" value="N/A" valueType="routing" />
         )}
+
+        {/* Affected Services - Using KeyValueDisplay */}
+        <KeyValueDisplay
+          label="Affected Services"
+          value={
+            data.affected_services && data.affected_services.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {data.affected_services.map((service, index) => (
+                  <ServiceTag key={index} service={service} />
+                ))}
+              </div>
+            ) : (
+              "N/A"
+            )
+          }
+        />
       </div>
 
-      {/* Summary */}
-      {data.summary && (
-        <div className="space-y-2">
-          <InfoCard icon={FileText} title="Summary" variant="highlighted">
-            <ExpandableText text={data.summary} charLimit={200} />
-          </InfoCard>
-          <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
-            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>This is the summary of your alert.</span>
-          </p>
-        </div>
-      )}
+      {/* SECOND ROW: Impact, Urgency, Confidence - Consistent Format */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {/* Impact - Using KeyValueDisplay with rating buttons */}
+        {data.impact ? (
+          <div className="relative">
+            <KeyValueDisplay
+              label="Impact"
+              value={data.impact}
+              valueType="impact"
+            />
+            {incidentId && onRatingChange && (
+              <div className="absolute top-1 right-1">
+                <RatingButtons
+                  field="impact"
+                  rating={triageRatings?.impact}
+                  ratingStatus={ratingStatus?.impact}
+                  onRatingChange={onRatingChange}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <KeyValueDisplay label="Impact" value="N/A" valueType="impact" />
+        )}
 
-      {/* Likely Cause */}
+        {/* Urgency - Using KeyValueDisplay with rating buttons */}
+        {data.urgency ? (
+          <div className="relative">
+            <KeyValueDisplay
+              label="Urgency"
+              value={data.urgency}
+              valueType="urgency"
+            />
+            {incidentId && onRatingChange && (
+              <div className="absolute top-1 right-1">
+                <RatingButtons
+                  field="urgency"
+                  rating={triageRatings?.urgency}
+                  ratingStatus={ratingStatus?.urgency}
+                  onRatingChange={onRatingChange}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <KeyValueDisplay label="Urgency" value="N/A" valueType="urgency" />
+        )}
+
+        {/* AI Confidence - Using KeyValueDisplay */}
+        <KeyValueDisplay
+          label="AI Confidence"
+          value={data.confidence !== undefined && data.confidence !== null ? data.confidence : 0}
+          valueType="confidence"
+        />
+      </div>
+
+      {/* Likely Cause - Full Width */}
       {data.likely_cause && (
-        <div className="space-y-2">
-          <InfoCard icon={Lightbulb} title="Likely Cause">
-            {data.likely_cause}
-          </InfoCard>
-          <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
-            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>
-              Extracted directly from matched historical incident descriptions
-              or symptoms (RAG-only, not AI-generated). This helps you
-              understand why the problem occurred and where to focus your
-              investigation.
-            </span>
-          </p>
-        </div>
-      )}
-
-      {/* Impact and Urgency - New fields added (between Likely Cause and Routing) */}
-      {(data.impact || data.urgency) && (
-        <div className="grid grid-cols-2 gap-3">
-          {data.impact && (
-            <div className="space-y-2">
-              <div className="glass-card p-5 space-y-3 animate-slide-up">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <TrendingUp className="w-4 h-4 text-primary" />
-                    </div>
-                    <h4 className="font-semibold text-foreground">Impact</h4>
-                  </div>
-                  {incidentId && onRatingChange && (
-                    <RatingButtons
-                      field="impact"
-                      rating={triageRatings?.impact}
-                      ratingStatus={ratingStatus?.impact}
-                      onRatingChange={onRatingChange}
-                    />
-                  )}
-                </div>
-                <div className="text-sm text-foreground leading-relaxed">
-                  <span className="text-sm font-semibold text-primary">
-                    {data.impact}
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
-                <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <span>
-                  The extent of the impact on business operations. Higher impact
-                  means more users or critical systems are affected.
-                </span>
-              </p>
-            </div>
-          )}
-          {data.urgency && (
-            <div className="space-y-2">
-              <div className="glass-card p-5 space-y-3 animate-slide-up">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <TrendingUp className="w-4 h-4 text-primary" />
-                    </div>
-                    <h4 className="font-semibold text-foreground">Urgency</h4>
-                  </div>
-                  {incidentId && onRatingChange && (
-                    <RatingButtons
-                      field="urgency"
-                      rating={triageRatings?.urgency}
-                      ratingStatus={ratingStatus?.urgency}
-                      onRatingChange={onRatingChange}
-                    />
-                  )}
-                </div>
-                <div className="text-sm text-foreground leading-relaxed">
-                  <span className="text-sm font-semibold text-primary">
-                    {data.urgency}
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
-                <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <span>
-                  How quickly the issue needs to be resolved. Higher urgency
-                  means immediate action is required.
-                </span>
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Routing - Highlighted for Demo */}
-      {data.routing && (
-        <div className="space-y-2">
-          <InfoCard
-            icon={Route}
-            title="Routing Assignment"
-            variant="highlighted"
-          >
-            <div className="relative">
-              <span className="font-mono text-primary font-semibold text-lg">
-                {data.routing}
-              </span>
-              <div className="absolute -inset-1 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
-            </div>
-          </InfoCard>
-          <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
-            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>
-              This is the team or person who should handle this incident. The AI
-              automatically routes tickets based on the type of issue, affected
-              services, and your organization's routing rules. This ensures the
-              right experts get the ticket.
-            </span>
-          </p>
-        </div>
-      )}
-
-      {/* Affected Services */}
-      {data.affected_services && data.affected_services.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Server className="w-4 h-4 text-primary" />
-            </div>
-            <h4 className="font-semibold text-foreground">Affected Services</h4>
+        <div className="glass-card p-2.5 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <Lightbulb className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-semibold text-foreground">Likely Cause</span>
           </div>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {data.affected_services.map((service, index) => (
-              <ServiceTag key={index} service={service} />
-            ))}
+          <ExpandableText
+            text={data.likely_cause}
+            lineLimit={3}
+            className="text-xs font-semibold font-sans text-foreground leading-relaxed"
+          />
+        </div>
+      )}
+
+      {/* Summary - Full Width */}
+      {data.summary && (
+        <div className="glass-card p-2.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-semibold text-foreground">Summary</span>
+            </div>
+            {/* Compact Confidence Display */}
+            <KeyValueDisplay
+              label="Confidence"
+              value={data.confidence}
+              valueType="confidence"
+              inline={true}
+              className="p-0 border-0 shadow-none bg-transparent"
+            />
           </div>
-          <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-            <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <span>
-              These are the services, databases, or systems that are impacted by
-              this alert. Knowing which services are affected helps you
-              understand the scope of the issue and who might need to be
-              notified.
-            </span>
-          </p>
+          <ExpandableText
+            text={data.summary}
+            charLimit={200}
+            className="text-xs font-semibold font-sans text-foreground leading-relaxed"
+            showButtonText={{ more: "Read more", less: "Read less" }}
+          />
         </div>
       )}
 
       {/* Recommended Actions */}
       {data.recommended_actions && data.recommended_actions.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <ListChecks className="w-4 h-4 text-primary" />
-            </div>
-            <h4 className="font-semibold text-foreground">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <ListChecks className="w-3.5 h-3.5 text-primary" />
+            <h4 className="text-xs font-semibold text-foreground">
               Recommended Actions
             </h4>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {data.recommended_actions.map((action, index) => (
               <ActionItem key={index} action={action} index={index} />
             ))}
           </div>
         </div>
       )}
-
-      {/* Confidence Meter - Highlighted for Demo */}
-      <div className="space-y-2">
-        <div className="glass-card p-5 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
-          <div className="absolute -inset-0.5 bg-primary/10 rounded-lg blur opacity-30" />
-          <div className="relative">
-            <ConfidenceMeter confidence={data.confidence} />
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground px-1 flex items-start gap-1.5">
-          <Info className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-          <span>
-            This shows how confident the AI is in its analysis. Higher
-            confidence (80%+) means the AI found strong matches in the knowledge
-            base and is very sure about its assessment. Lower confidence means
-            you should review the analysis more carefully, as the AI may need
-            more information or the issue might be unusual.
-          </span>
-        </p>
-      </div>
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, FileText, Hash, TrendingUp, Info } from "lucide-react";
+import { ExpandableText } from "@/components/ui/ExpandableText";
 import { cn } from "@/lib/utils";
 
 interface EvidenceChunkProps {
@@ -70,16 +71,16 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
+        className="w-full flex items-center justify-between p-3 hover:bg-secondary/30 transition-colors"
       >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
-            <FileText className="w-4 h-4 text-primary" />
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="p-1.5 rounded-lg bg-primary/10 flex-shrink-0">
+            <FileText className="w-3.5 h-3.5 text-primary" />
           </div>
           <div className="text-left flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className="font-medium text-foreground text-sm truncate">
-                {chunk.doc_title}
+              <h4 className="font-medium text-foreground text-sm">
+                <ExpandableText text={chunk.doc_title} charLimit={40} />
               </h4>
               {metadata.doc_type && (
                 <span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary font-medium flex-shrink-0">
@@ -117,8 +118,8 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
               ) : (
                 <div className="flex items-center gap-1">
                   <Hash className="w-3 h-3 text-muted-foreground" />
-                  <span className="text-xs font-mono text-muted-foreground truncate max-w-[150px]">
-                    {chunk.chunk_id.slice(0, 8)}...
+                  <span className="text-xs font-mono text-muted-foreground">
+                    <ExpandableText text={chunk.chunk_id} charLimit={8} />
                   </span>
                 </div>
               )}
@@ -168,11 +169,11 @@ export const EvidenceChunk = ({ chunk, index }: EvidenceChunkProps) => {
           expanded ? "max-h-[600px]" : "max-h-0",
         )}
       >
-        <div className="p-4 pt-0 space-y-3">
+        <div className="p-3 pt-0 space-y-2">
           {/* Relevance Scores Breakdown */}
           {hasScores && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-background/50 border border-border/30">
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-3 gap-2 p-2 rounded-lg bg-background/50 border border-border/30">
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <span className="text-xs text-muted-foreground">Vector</span>

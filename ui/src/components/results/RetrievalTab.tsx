@@ -62,30 +62,30 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-2.5 animate-fade-in">
       {/* Stats Header - Simplified */}
-      <div className="flex flex-wrap gap-4">
-        <div className="glass-card px-5 py-4 flex items-center gap-3 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
+      <div className="flex flex-wrap gap-2.5">
+        <div className="glass-card px-3 py-2.5 flex items-center gap-2 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
           <div className="absolute -inset-0.5 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
-          <div className="p-2 rounded-lg bg-primary/10 relative z-10">
-            <Database className="w-5 h-5 text-primary" />
+          <div className="p-1.5 rounded-lg bg-primary/10 relative z-10">
+            <Database className="w-3.5 h-3.5 text-primary" />
           </div>
           <div className="relative z-10 flex-1">
             <p className="text-xs text-muted-foreground">Chunks Retrieved</p>
-            <p className="text-2xl font-bold font-mono text-foreground">
+            <p className="text-lg font-bold font-mono text-foreground">
               {chunksUsed}
             </p>
           </div>
         </div>
 
-        <div className="glass-card px-5 py-4 flex items-center gap-3 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
+        <div className="glass-card px-3 py-2.5 flex items-center gap-2 relative border-2 border-primary/30 shadow-lg shadow-primary/10">
           <div className="absolute -inset-0.5 bg-primary/20 rounded-lg blur-sm opacity-50 animate-pulse" />
-          <div className="p-2 rounded-lg bg-primary/10 relative z-10">
-            <FileSearch className="w-5 h-5 text-primary" />
+          <div className="p-1.5 rounded-lg bg-primary/10 relative z-10">
+            <FileSearch className="w-3.5 h-3.5 text-primary" />
           </div>
           <div className="relative z-10 flex-1">
             <p className="text-xs text-muted-foreground">Unique Source Types</p>
-            <p className="text-2xl font-bold font-mono text-foreground">
+            <p className="text-lg font-bold font-mono text-foreground">
               {sourceTypes.length || 0}
             </p>
           </div>
@@ -94,13 +94,13 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
 
       {/* Consolidated Source Breakdown - Shows the 3 unique source types with counts */}
       {chunksUsed > 0 && sourceTypes.length > 0 && (
-        <div className="glass-card p-4 space-y-3">
+        <div className="glass-card p-2.5 space-y-1.5">
           <div className="flex items-center gap-2">
-            <h4 className="text-sm font-semibold text-foreground">
+            <h4 className="text-xs font-semibold text-foreground">
               The {sourceTypes.length} Unique Source Types
             </h4>
             <div className="group relative inline-block align-middle">
-              <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+              <Info className="w-3 h-3 text-muted-foreground hover:text-primary cursor-help transition-colors" />
               <div className="hidden group-hover:block absolute z-20 w-80 p-2 text-xs text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
                 <p className="font-semibold mb-1">Total: {chunksUsed} chunks retrieved</p>
                 <p className="mb-1">
@@ -114,7 +114,7 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {sourceTypes.map((sourceType, index) => {
               const count =
                 sourceType === "incident_signature"
@@ -127,7 +127,7 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
               return (
                 <div
                   key={index}
-                  className="px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-primary text-sm font-medium flex items-center gap-2"
+                  className="px-2 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-medium flex items-center gap-1.5"
                 >
                   <span>{sourceTypeNames[sourceType] || sourceType}</span>
                   <span className="text-xs font-bold text-primary/70">
@@ -142,18 +142,23 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
 
       {/* Knowledge Sources (Document Titles) - Different from Source Types */}
       {chunkSources.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Knowledge Sources ({[...new Set(chunkSources)].length} documents)
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            Specific documents and runbooks retrieved from the knowledge base
-          </p>
-          <div className="flex flex-wrap gap-2">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Knowledge Sources ({[...new Set(chunkSources)].length})
+            </h4>
+            <div className="group relative inline-block align-middle">
+              <Info className="w-3 h-3 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+              <div className="hidden group-hover:block absolute z-20 w-64 p-2 text-xs text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
+                Specific documents and runbooks retrieved from the knowledge base
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
             {[...new Set(chunkSources)].map((source, index) => (
               <div
                 key={index}
-                className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium"
+                className="px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium"
               >
                 {source}
               </div>
@@ -164,7 +169,7 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
 
       {/* Evidence Chunks - Separated by Type */}
       {chunks.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-3">
           {/* Separate chunks into Prior Incidents and Runbooks */}
           {(() => {
             const priorIncidents = chunks
@@ -187,8 +192,8 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
               <>
                 {/* Prior Incidents Section */}
                 {priorIncidents.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                       <span className="w-1 h-4 bg-primary rounded-full" />
                       Prior Incidents ({priorIncidents.length}
                       {chunks.filter(
@@ -205,7 +210,7 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
                         : ""}
                       )
                     </h4>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {priorIncidents.map((chunk, index) => (
                         <EvidenceChunk
                           key={chunk.chunk_id}
@@ -219,8 +224,8 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
 
                 {/* Runbooks Section */}
                 {runbooks.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                       <span className="w-1 h-4 bg-primary rounded-full" />
                       Runbooks ({runbooks.length}
                       {chunks.filter(
@@ -252,9 +257,9 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
 
                 {/* Show message if no chunks match either category */}
                 {priorIncidents.length === 0 && runbooks.length === 0 && (
-                  <div className="glass-card p-8 text-center">
-                    <FileSearch className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                    <p className="text-muted-foreground">
+                  <div className="glass-card p-4 text-center">
+                    <FileSearch className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                    <p className="text-sm text-muted-foreground">
                       No categorized evidence chunks available
                     </p>
                   </div>
@@ -264,9 +269,9 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
           })()}
         </div>
       ) : (
-        <div className="glass-card p-8 text-center">
-          <FileSearch className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-          <p className="text-muted-foreground">No evidence chunks available</p>
+        <div className="glass-card p-4 text-center">
+          <FileSearch className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+          <p className="text-sm text-muted-foreground">No evidence chunks available</p>
           <p className="text-xs text-muted-foreground mt-1">
             {chunksUsed > 0
               ? "Chunk details were not returned by the API"

@@ -232,17 +232,17 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
   };
 
   return (
-    <Card className="p-6 glass-card glow-border relative">
+    <Card className="p-4 glass-card glow-border relative">
       {/* Loading Overlay */}
       {isLoading && (
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-            <div className="space-y-2">
-              <p className="text-lg font-semibold text-foreground">
+          <div className="text-center space-y-3">
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="space-y-1.5">
+              <p className="text-base font-semibold text-foreground">
                 Analyzing Alert...
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 AI is processing your ticket. Please wait.
               </p>
             </div>
@@ -250,13 +250,13 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
         </div>
       )}
 
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <AlertCircle className="w-5 h-5 text-primary" />
+      <div className="flex items-center gap-2 mb-4">
+        <div className="p-1.5 rounded-lg bg-primary/10">
+          <AlertCircle className="w-4 h-4 text-primary" />
         </div>
         <div className="flex-1">
-          <h2 className="text-xl font-semibold text-foreground">New Ticket</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-lg font-semibold text-foreground">New Ticket</h2>
+          <p className="text-xs text-muted-foreground">
             Submit an alert for AI triage analysis
           </p>
         </div>
@@ -270,9 +270,9 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
           )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Alert ID and Source */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Alert ID, Source, and Timestamp */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <FormField
             label="Alert ID"
             id="alert_id"
@@ -301,10 +301,19 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             }
             tooltip="Alert source system (e.g., prometheus, datadog, splunk)"
           />
+          <FormField
+            label="Timestamp"
+            id="timestamp"
+            value={alert.ts}
+            onChange={(value) => handleAlertChange("ts", value)}
+            placeholder={new Date().toISOString()}
+            disabled={isLoading}
+            tooltip="ISO 8601 timestamp (auto-generated if not provided)"
+          />
         </div>
 
-        {/* Service and Component */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Service, Component, and CMDB CI */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <FormField
             label="Service"
             id="service"
@@ -337,10 +346,6 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             }
             tooltip="Specific component within the service"
           />
-        </div>
-
-        {/* CMDB CI and Category */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             label="CMDB CI"
             id="cmdb_ci"
@@ -350,6 +355,10 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             disabled={isLoading}
             tooltip="Configuration Item from your CMDB"
           />
+        </div>
+
+        {/* Category */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Label htmlFor="category">Category *</Label>
@@ -399,7 +408,7 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             onChange={(e) => handleAlertChange("description", e.target.value)}
             required
             disabled={isLoading}
-            rows={5}
+            rows={4}
             className={cn(
               "bg-secondary/50 border-border/50 resize-none transition-all",
               touchedFields.has("description") &&
@@ -424,23 +433,12 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
           </p>
         </div>
 
-        {/* Timestamp */}
-        <FormField
-          label="Timestamp"
-          id="timestamp"
-          value={alert.ts}
-          onChange={(value) => handleAlertChange("ts", value)}
-          placeholder={new Date().toISOString()}
-          disabled={isLoading}
-          tooltip="ISO 8601 timestamp (auto-generated if not provided)"
-        />
-
         {/* Submit Buttons */}
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-2 pt-3">
           <Button
             type="submit"
             disabled={isLoading || Object.keys(validationErrors).length > 0}
-            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 transition-all"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 transition-all min-w-[140px]"
           >
             {isLoading ? (
               <>
@@ -460,6 +458,7 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             onClick={handleReset}
             disabled={isLoading}
             className="bg-secondary hover:bg-secondary/80 transition-all"
+            size="default"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
             Reset

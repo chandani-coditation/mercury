@@ -10,7 +10,7 @@ export const ServiceTag = ({ service, className }: ServiceTagProps) => {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-border/50 text-sm font-mono",
+        "inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-secondary/50 border border-border/50 text-xs font-semibold font-sans",
         className,
       )}
     >

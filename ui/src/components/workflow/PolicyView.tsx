@@ -44,7 +44,7 @@ const getBandColor = (band: string) => {
 
 export const PolicyView = ({
   data,
-  retrievalData,
+  retrievalData: _retrievalData,
   onApprove,
   onBack,
   isLoading,
@@ -73,78 +73,75 @@ export const PolicyView = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2.5">
       {/* Analysis Results Header */}
       <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-        <h2 className="text-xl font-semibold text-foreground">
+        <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+        <h2 className="text-base font-semibold text-foreground">
           Analysis Results
         </h2>
       </div>
 
-      {/* Policy Content */}
-      <Card className="p-6 glass-card glow-border space-y-6">
-        {/* Policy Band */}
-        <div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Shield className="w-5 h-5 text-primary" />
-            </div>
-            <h3 className="text-sm text-muted-foreground">Policy Band</h3>
+      {/* TOP PRIORITY: Policy Band */}
+      <Card className="p-3 glass-card glow-border border-2 border-primary/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" />
+            <span className="text-xs font-semibold text-muted-foreground">Policy Band</span>
           </div>
           <div
             className={cn(
-              "inline-flex items-center px-6 py-3 rounded-lg border text-xl font-bold font-mono",
+              "inline-flex items-center px-3 py-1.5 rounded-lg border text-base font-bold font-mono",
               getBandColor(policyBand),
             )}
           >
             {policyBand}
           </div>
         </div>
-
-        {/* Decision Indicators Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <DecisionIndicator
-            label="Can Auto-Apply"
-            value={decision.can_auto_apply}
-          />
-          <DecisionIndicator
-            label="Requires Approval"
-            value={decision.requires_approval}
-            highlight
-          />
-          <DecisionIndicator
-            label="Notification Required"
-            value={decision.notification_required}
-          />
-          <DecisionIndicator
-            label="Rollback Required"
-            value={decision.rollback_required}
-          />
-        </div>
-
-        {/* Policy Reason */}
-        <div className="glass-card p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <h4 className="font-semibold text-sm text-foreground">
-              Policy Reason
-            </h4>
-          </div>
-          <p className="text-sm text-muted-foreground pl-3">
-            {decision.policy_reason}
-          </p>
-        </div>
       </Card>
 
-      {/* Approval Message */}
+      {/* Decision Indicators Grid - Compact 2x2 */}
+      <div className="grid grid-cols-2 gap-2">
+        <DecisionIndicator
+          label="Can Auto-Apply"
+          value={decision.can_auto_apply}
+        />
+        <DecisionIndicator
+          label="Requires Approval"
+          value={decision.requires_approval}
+          highlight
+        />
+        <DecisionIndicator
+          label="Notification Required"
+          value={decision.notification_required}
+        />
+        <DecisionIndicator
+          label="Rollback Required"
+          value={decision.rollback_required}
+        />
+      </div>
+
+      {/* Policy Reason - Compact */}
+      <div className="glass-card p-2.5 space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <div className="w-1 h-3 bg-primary rounded-full" />
+          <h4 className="font-semibold text-xs text-foreground">
+            Policy Reason
+          </h4>
+        </div>
+        <p className="text-xs text-muted-foreground pl-2.5 leading-relaxed">
+          {decision.policy_reason}
+        </p>
+      </div>
+
+      {/* Approval Message - Compact */}
       {requiresConfirmation && (
-        <Card className="p-6 bg-warning/10 border-warning/30">
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground">
+        <Card className="p-2.5 bg-warning/10 border-warning/30">
+          <div className="space-y-1">
+            <h3 className="text-xs font-semibold text-foreground">
               Policy Decision Required
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Review the policy band and approve to proceed with resolution
             </p>
           </div>
@@ -152,26 +149,26 @@ export const PolicyView = ({
       )}
 
       {!requiresConfirmation && (
-        <Card className="p-6 bg-success/10 border-success/30">
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground">
+        <Card className="p-2.5 bg-success/10 border-success/30">
+          <div className="space-y-1">
+            <h3 className="text-xs font-semibold text-foreground">
               Auto-Approved Policy
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               This policy band allows automatic progression to resolution
             </p>
           </div>
         </Card>
       )}
 
-      {/* Error Display */}
+      {/* Error Display - Compact */}
       {error && (
-        <Card className="p-4 bg-destructive/10 border-destructive/30">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+        <Card className="p-2.5 bg-destructive/10 border-destructive/30">
+          <div className="flex items-start gap-1.5">
+            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <div className="font-semibold text-destructive">Error</div>
-              <div className="text-sm text-destructive/90 mt-1 whitespace-pre-wrap">
+              <div className="font-semibold text-destructive text-xs">Error</div>
+              <div className="text-xs text-destructive/90 mt-0.5 whitespace-pre-wrap">
                 {error}
               </div>
             </div>
@@ -338,7 +335,7 @@ const DecisionIndicator = ({
   return (
     <div
       className={cn(
-        "flex items-center justify-between p-4 rounded-lg border",
+        "flex items-center justify-between p-2 rounded-lg border",
         value && highlight
           ? "bg-success/10 border-success/30"
           : value
@@ -346,17 +343,17 @@ const DecisionIndicator = ({
             : "bg-secondary/20 border-border/30",
       )}
     >
-      <span className="text-sm text-foreground">{label}</span>
+      <span className="text-xs text-foreground">{label}</span>
       <div
         className={cn(
-          "w-6 h-6 rounded-full flex items-center justify-center",
+          "w-4 h-4 rounded-full flex items-center justify-center",
           value ? "bg-success" : "bg-muted",
         )}
       >
         {value ? (
-          <Check className="w-3.5 h-3.5 text-success-foreground" />
+          <Check className="w-2.5 h-2.5 text-success-foreground" />
         ) : (
-          <X className="w-3.5 h-3.5 text-muted-foreground" />
+          <X className="w-2.5 h-2.5 text-muted-foreground" />
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TicketForm } from "@/components/TicketForm";
 import { TriageView } from "@/components/workflow/TriageView";
 import { PolicyView } from "@/components/workflow/PolicyView";
@@ -19,12 +19,30 @@ import {
 type WorkflowStep = "form" | "triage" | "policy" | "resolution" | "complete";
 
 const Index = () => {
-  const [currentStep, setCurrentStep] = useState<WorkflowStep>("form");
+  // Initialize state from URL parameters
+  const getInitialStateFromURL = () => {
+    const params = new URLSearchParams(window.location.search);
+    const step = params.get("step") as WorkflowStep;
+    const view = params.get("view") as "workflow" | "incidents";
+    const incidentId = params.get("incidentId") || "";
+    const tab = params.get("tab") || "triage";
+    
+    return {
+      step: (step && ["form", "triage", "policy", "resolution", "complete"].includes(step)) ? step : "form",
+      view: (view && ["workflow", "incidents"].includes(view)) ? view : "workflow",
+      incidentId,
+      tab,
+    };
+  };
+
+  const urlState = getInitialStateFromURL();
+  const [currentStep, setCurrentStep] = useState<WorkflowStep>(urlState.step);
   const [currentView, setCurrentView] = useState<"workflow" | "incidents">(
-    "workflow",
+    urlState.view,
   );
+  const [activeTab, setActiveTab] = useState<string>(urlState.tab);
   const [isLoading, setIsLoading] = useState(false);
-  const [incidentId, setIncidentId] = useState("");
+  const [incidentId, setIncidentId] = useState(urlState.incidentId);
   const [alertData, setAlertData] = useState<any>(null);
   const [triageData, setTriageData] = useState<any>(null);
   const [policyData, setPolicyData] = useState<any>(null);
@@ -57,6 +75,121 @@ const Index = () => {
     resolution: {},
   });
 
+  // Update URL when state changes
+  const updateURL = (step?: WorkflowStep, view?: "workflow" | "incidents", incidentIdParam?: string, tab?: string) => {
+    const params = new URLSearchParams(window.location.search);
+    
+    if (step !== undefined) {
+      if (step === "form") {
+        params.delete("step");
+      } else {
+        params.set("step", step);
+      }
+    }
+    
+    if (view !== undefined) {
+      if (view === "workflow") {
+        params.delete("view");
+      } else {
+        params.set("view", view);
+      }
+    }
+    
+    if (incidentIdParam !== undefined) {
+      if (incidentIdParam) {
+        params.set("incidentId", incidentIdParam);
+      } else {
+        params.delete("incidentId");
+      }
+    }
+    
+    if (tab !== undefined) {
+      if (tab === "triage") {
+        params.delete("tab");
+      } else {
+        params.set("tab", tab);
+      }
+    }
+    
+    const newURL = params.toString() 
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+    
+    window.history.replaceState({}, "", newURL);
+  };
+
+  // Load incident data from URL on mount if incidentId is present
+  useEffect(() => {
+    const loadIncidentFromURL = async () => {
+      // Read URL params fresh from the URL (not from urlState which is captured at init)
+      const params = new URLSearchParams(window.location.search);
+      const urlIncidentId = params.get("incidentId");
+      const urlStep = params.get("step") as WorkflowStep;
+      const urlView = params.get("view") as "workflow" | "incidents";
+      
+      // If we have an incidentId in URL, load it using the comprehensive function
+      if (urlIncidentId) {
+        try {
+          // Use the comprehensive loadIncidentById function which handles all data transformation
+          // This will set all the state (alertData, triageData, policyData, etc.)
+          await loadIncidentById(urlIncidentId);
+          
+          // Also set step and view from URL if they're different from current state
+          if (urlStep && ["form", "triage", "policy", "resolution", "complete"].includes(urlStep)) {
+            if (urlStep !== currentStep) {
+              setCurrentStep(urlStep);
+            }
+          }
+          
+          if (urlView && ["workflow", "incidents"].includes(urlView)) {
+            if (urlView !== currentView) {
+              setCurrentView(urlView);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load incident from URL:", err);
+          setError("Failed to load incident from URL");
+        }
+      } else if (urlStep || urlView) {
+        // Even if no incidentId, update step/view from URL
+        if (urlStep && ["form", "triage", "policy", "resolution", "complete"].includes(urlStep)) {
+          if (urlStep !== currentStep) {
+            setCurrentStep(urlStep);
+          }
+        }
+        
+        if (urlView && ["workflow", "incidents"].includes(urlView)) {
+          if (urlView !== currentView) {
+            setCurrentView(urlView);
+          }
+        }
+      }
+    };
+    
+    loadIncidentFromURL();
+  }, []); // Only run on mount
+
+  // Wrapper functions that update both state and URL
+  const setStep = (step: WorkflowStep) => {
+    setCurrentStep(step);
+    updateURL(step, currentView, incidentId, activeTab);
+  };
+
+  const setView = (view: "workflow" | "incidents") => {
+    setCurrentView(view);
+    updateURL(currentStep, view, incidentId, activeTab);
+  };
+
+  const setIncidentIdAndUpdateURL = (id: string) => {
+    setIncidentId(id);
+    updateURL(currentStep, currentView, id, activeTab);
+  };
+
+  const setActiveTabAndUpdateURL = (tab: string) => {
+    setActiveTab(tab);
+    updateURL(currentStep, currentView, incidentId, tab);
+  };
+
   const handleSubmit = async (alert: any) => {
     setIsLoading(true);
     setAlertData(alert);
@@ -65,7 +198,7 @@ const Index = () => {
     try {
       const data = await postTriage(alert);
 
-      setIncidentId(data.incident_id);
+      setIncidentIdAndUpdateURL(data.incident_id);
 
       // Extract triage data with new fields
       const triage = data.triage || {};
@@ -167,7 +300,7 @@ const Index = () => {
       // Reset ratings when new triage is generated
       setTriageRatings({});
       setRatingStatus(prev => ({ ...prev, triage: {} }));
-      setCurrentStep("triage");
+      setStep("triage");
     } catch (err: any) {
       console.error("❌ Triage FAILED!");
       console.error("Error object:", err);
@@ -194,7 +327,7 @@ const Index = () => {
   };
 
   const handleNextToPolicy = () => {
-    setCurrentStep("policy");
+    setStep("policy");
   };
 
   const handleApproveAndContinue = async () => {
@@ -210,9 +343,9 @@ const Index = () => {
       (resolutionData.recommendations && resolutionData.recommendations.length > 0)
     );
 
-    if (hasResolutionInState) {
+      if (hasResolutionInState) {
       console.log("Resolution already exists in state, navigating to resolution view");
-      setCurrentStep("resolution");
+      setStep("resolution");
       return;
     }
 
@@ -239,7 +372,7 @@ const Index = () => {
           overall_confidence:
             resolution.overall_confidence || resolution.confidence || null,
         });
-        setCurrentStep("resolution");
+        setStep("resolution");
         return;
       }
     } catch (dbCheckErr) {
@@ -295,7 +428,7 @@ const Index = () => {
       // Reset resolution ratings when new resolution is generated
       setResolutionRatings({});
       setRatingStatus(prev => ({ ...prev, resolution: {} }));
-      setCurrentStep("resolution");
+      setStep("resolution");
     } catch (err: any) {
       console.error("❌ Approval/Resolution FAILED!");
       console.error("Error:", err);
@@ -331,19 +464,19 @@ const Index = () => {
 
   const handleBack = () => {
     if (currentStep === "complete") {
-      setCurrentStep("resolution");
+      setStep("resolution");
     } else if (currentStep === "resolution") {
-      setCurrentStep("policy");
+      setStep("policy");
     } else if (currentStep === "policy") {
-      setCurrentStep("triage");
+      setStep("triage");
     } else if (currentStep === "triage") {
-      setCurrentStep("form");
+      setStep("form");
     }
   };
 
   const handleNewTicket = () => {
-    setCurrentView("workflow");
-    setCurrentStep("form");
+    setView("workflow");
+    setStep("form");
     setIncidentId("");
     setAlertData(null);
     setTriageData(null);
@@ -685,8 +818,11 @@ const Index = () => {
       // When loading an existing incident, ALWAYS go to complete summary page
       // This shows all available data in one place, regardless of resolution status
       // The CompleteSummary component handles missing data gracefully
+      // Update state first, then update URL in a single call to avoid race conditions
       setCurrentStep("complete");
       setCurrentView("workflow");
+      // Update URL with all values at once
+      updateURL("complete", "workflow", extractedIncidentId || "", activeTab);
 
       setShowSearch(false);
     } catch (err: any) {
@@ -708,10 +844,10 @@ const Index = () => {
       // Stay on current view or go back to form
       if (currentView === "incidents") {
         // If we're in incidents view, stay there
-        setCurrentView("incidents");
+        setView("incidents");
       } else {
         // Otherwise, go back to form
-        setCurrentStep("form");
+        setStep("form");
       }
     } finally {
       setIsLoading(false);
@@ -748,7 +884,7 @@ const Index = () => {
   };
 
   const handleOpenIncidentsView = async () => {
-    setCurrentView("incidents");
+    setView("incidents");
     if (incidents.length === 0 && !isLoadingIncidents) {
       await loadIncidents(1, incidentsSearch);
     }
@@ -765,7 +901,7 @@ const Index = () => {
   const handleMarkComplete = () => {
     // Simply navigate to complete page - no API call needed
     // The resolution is already stored in the database from when it was generated
-    setCurrentStep("complete");
+    setStep("complete");
   };
 
   const getStepStatus = (step: WorkflowStep) => {
@@ -893,13 +1029,13 @@ const Index = () => {
       )}
 
       {/* Main Content */}
-      <main className="relative z-10 container mx-auto px-4 py-8">
+      <main className="relative z-10 container mx-auto px-4 py-4">
         <div className="max-w-[98%] mx-auto">
           {currentView === "incidents" ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">
+                  <h2 className="text-lg font-semibold text-foreground">
                     Incident History
                   </h2>
                   <p className="text-sm text-muted-foreground">
@@ -997,9 +1133,9 @@ const Index = () => {
                                 incident.id || incident.incident_id,
                               )
                             }
-                            className="w-full text-left px-4 py-3 text-sm hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex items-center gap-2"
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex items-center gap-1.5"
                           >
-                            <div className="grid grid-cols-9 gap-2 w-full">
+                            <div className="grid grid-cols-9 gap-1.5 w-full">
                               <div className="font-mono text-xs truncate">
                                 {incident.id || incident.incident_id}
                               </div>
@@ -1118,6 +1254,8 @@ const Index = () => {
                 onNext={handleNextToPolicy}
                 onBack={handleBack}
                     incidentId={incidentId}
+                    activeTab={activeTab}
+                    onTabChange={setActiveTabAndUpdateURL}
                     triageRatings={triageRatings}
                     ratingStatus={ratingStatus.triage}
                     onRatingChange={handleTriageFieldRating}
@@ -1166,11 +1304,11 @@ const Index = () => {
               onNewTicket={handleNewTicket}
               onViewTriage={() => {
                 // Just navigate - use existing state data, no API calls
-                setCurrentStep("triage");
+                setStep("triage");
               }}
               onViewResolution={() => {
                 // Just navigate - use existing state data, no API calls
-                setCurrentStep("resolution");
+                setStep("resolution");
               }}
             />
               )}

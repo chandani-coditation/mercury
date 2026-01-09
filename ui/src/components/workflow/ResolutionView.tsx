@@ -66,7 +66,7 @@ const StepRatingButtons = ({
 
   return (
     <div 
-      className="flex items-center gap-1.5" 
+      className="flex items-center gap-1" 
       style={{ 
         position: "relative", 
         zIndex: 9999,
@@ -84,7 +84,7 @@ const StepRatingButtons = ({
           handleClick("thumbs_up");
         }}
         disabled={disabled || ratingStatus === "loading"}
-        className={`h-8 w-8 p-0 ${
+        className={`h-7 w-7 p-0 ${
           rating === "thumbs_up"
             ? "bg-success/20 text-success border border-success"
             : "hover:bg-secondary/50"
@@ -96,7 +96,7 @@ const StepRatingButtons = ({
           position: "relative",
         }}
       >
-        <span style={{ fontSize: "16px" }}>👍</span>
+        <span style={{ fontSize: "14px" }}>👍</span>
       </Button>
       <Button
         type="button"
@@ -109,7 +109,7 @@ const StepRatingButtons = ({
           handleClick("thumbs_down");
         }}
         disabled={disabled || ratingStatus === "loading"}
-        className={`h-8 w-8 p-0 ${
+        className={`h-7 w-7 p-0 ${
           rating === "thumbs_down"
             ? "bg-destructive/20 text-destructive border border-destructive"
             : "hover:bg-secondary/50"
@@ -121,7 +121,7 @@ const StepRatingButtons = ({
           position: "relative",
         }}
       >
-        <span style={{ fontSize: "16px" }}>👎</span>
+        <span style={{ fontSize: "14px" }}>👎</span>
       </Button>
       {ratingStatus === "success" && rating === "thumbs_up" && (
         <span className="text-xs text-success ml-1">✓</span>
@@ -207,58 +207,46 @@ export const ResolutionView = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Success Header */}
+    <div className="space-y-2.5">
+      {/* Compact Header with Confidence */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-success" />
+        <div className="flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-1.5">
+            <CheckCircle className="w-4 h-4 text-success" />
             Resolution Generated
           </h2>
-        </div>
-
-        {/* Key Metrics */}
-        <div className="flex gap-4">
           {overallConfidence && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/20">
-              <Brain className="w-4 h-4 text-success" />
-              <span className="text-sm">
-                <span className="font-semibold text-success">
-                  {Math.round(overallConfidence * 100)}%
-                </span>
-                <span className="text-muted-foreground ml-1">Confidence</span>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-success/10 border border-success/20">
+              <Brain className="w-3 h-3 text-success" />
+              <span className="text-xs font-semibold text-success">
+                {Math.round(overallConfidence * 100)}%
               </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Summary */}
-      {reasoning && (
-        <Card className="p-4 bg-primary/5 border-primary/20">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-semibold text-foreground mb-1">
-                Summary
-              </h4>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {reasoning}
-              </p>
-            </div>
+      {/* Summary - Compact, only if meaningful */}
+      {reasoning && reasoning.trim() && (
+        <Card className="p-2 bg-primary/5 border-primary/20">
+          <div className="flex items-start gap-1">
+            <Info className="w-3 h-3 text-primary flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {reasoning}
+            </p>
           </div>
         </Card>
       )}
 
-      {/* Resolution Recommendations */}
-      <Card className="p-6 glass-card glow-border" style={{ position: "relative", pointerEvents: "auto" }}>
-        <div className="space-y-4" style={{ position: "relative", pointerEvents: "auto" }}>
-          <h3 className="font-semibold text-foreground flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-success" />
+      {/* Resolution Recommendations - Prioritized */}
+      <Card className="p-2.5 glass-card glow-border" style={{ position: "relative", pointerEvents: "auto" }}>
+        <div className="space-y-1.5" style={{ position: "relative", pointerEvents: "auto" }}>
+          <h3 className="text-xs font-semibold text-foreground flex items-center gap-1">
+            <CheckCircle className="w-3 h-3 text-success" />
             Resolution Recommendations
           </h3>
-          <div className="space-y-3" style={{ position: "relative", pointerEvents: "auto" }}>
+          <div className="space-y-1" style={{ position: "relative", pointerEvents: "auto" }}>
             {stepsArray.length > 0 ? (
               // New format: steps array with objects (already filtered and renumbered)
               stepsArray.map((step: any, displayIndex: number) => {
@@ -277,29 +265,21 @@ export const ResolutionView = ({
                 return (
                   <div
                     key={`step-${stepNumber}-${displayIndex}`}
-                    className="bg-background/50 border border-border/30 rounded-lg p-4 hover:border-primary/30 transition-colors"
+                    className="bg-background/50 border border-border/30 rounded-lg p-2 hover:border-primary/30 transition-colors"
                     style={{ position: "relative" }}
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
+                    <div className="flex items-start gap-1.5">
+                      <span className="flex-shrink-0 w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
                         {stepNumber}
                       </span>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-start justify-between gap-2" style={{ position: "relative" }}>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-start justify-between gap-1.5" style={{ position: "relative" }}>
                           <div className="flex-1">
-                        {stepTitle && (
-                          <div>
-                            <h4 className="text-sm font-semibold text-foreground">
-                              {stepTitle}
-                            </h4>
-                          </div>
-                        )}
-                            {!stepTitle && stepAction && (
-                              <div>
-                                <h4 className="text-sm font-semibold text-foreground">
-                                  Step {stepNumber}
-                                </h4>
-                              </div>
+                            {/* Show action as main content (no title) */}
+                            {stepAction && (
+                              <p className="text-xs text-foreground leading-relaxed">
+                                {stepAction}
+                              </p>
                             )}
                           </div>
                           <div 
@@ -316,56 +296,27 @@ export const ResolutionView = ({
                                 rating={resolutionRatings?.[ratingIndex] ?? null}
                                 ratingStatus={ratingStatus?.[ratingIndex]}
                                 onRatingChange={onRatingChange}
-                                stepTitle={stepTitle}
+                                stepTitle={stepAction || stepTitle}
                               />
                             ) : null}
                           </div>
                         </div>
-                        {/* Only show action if it's different from title (to avoid redundancy) */}
-                        {stepAction && stepTitle && stepAction.trim() !== stepTitle.trim() && (
-                          <div>
-                            <span className="text-xs font-semibold text-muted-foreground">
-                              Action:{" "}
-                            </span>
-                            <p className="text-sm text-foreground leading-relaxed">
-                              {stepAction}
-                            </p>
-                          </div>
-                        )}
-                        {/* If no title but we have action, show action */}
-                        {stepAction && !stepTitle && (
-                          <div>
-                            <span className="text-xs font-semibold text-muted-foreground">
-                              Action:{" "}
-                            </span>
-                            <p className="text-sm text-foreground leading-relaxed">
-                              {stepAction}
-                            </p>
-                          </div>
-                        )}
                         {stepExpectedOutcome && (
-                          <div>
-                            <span className="text-xs font-semibold text-muted-foreground">
-                              Expected Outcome:{" "}
-                            </span>
-                            <span className="text-sm text-foreground">
-                              {stepExpectedOutcome}
-                            </span>
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-medium">Outcome: </span>
+                            <span>{stepExpectedOutcome}</span>
                           </div>
                         )}
-
-                        {/* Removed: Step-level risk level badge (deprecated field) */}
-
                         {hasCommands && (
-                          <div className="mt-3 space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Terminal className="w-3 h-3" />
+                          <div className="mt-1 space-y-1">
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Terminal className="w-2.5 h-2.5" />
                               <span>Commands:</span>
                             </div>
                             {stepCommands.map((cmd: string, cmdIdx: number) => (
                               <pre
                                 key={cmdIdx}
-                                className="text-xs bg-black/20 border border-border/30 rounded p-2 overflow-x-auto"
+                                className="text-xs bg-black/20 border border-border/30 rounded p-1.5 overflow-x-auto"
                               >
                                 <code className="text-primary">{cmd}</code>
                               </pre>
@@ -378,10 +329,10 @@ export const ResolutionView = ({
                 );
               })
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No resolution recommendations available</p>
-                <p className="text-xs mt-1">
+              <div className="text-center py-3 text-muted-foreground">
+                <AlertTriangle className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
+                <p className="text-xs">No resolution recommendations available</p>
+                <p className="text-xs mt-0.5">
                   Resolution data may be incomplete
                 </p>
               </div>
@@ -390,26 +341,26 @@ export const ResolutionView = ({
         </div>
       </Card>
 
-      {/* Rollback Plan */}
+      {/* Rollback Plan - Compact */}
       {hasRollbackPlan && (
-        <Card className="p-6 bg-warning/5 border-warning/20">
-          <div className="space-y-4">
-            <h3 className="font-semibold text-foreground flex items-center gap-2">
-              <Shield className="w-5 h-5 text-warning" />
+        <Card className="p-2.5 bg-warning/5 border-warning/20">
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-warning" />
               Rollback Plan
             </h3>
 
             {/* If rollback_plan is a string */}
             {rollbackPlanText && (
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 {rollbackPlanText}
               </p>
             )}
 
             {/* If rollback_plan is an object with steps */}
             {rollbackPlanSteps && rollbackPlanSteps.length > 0 && (
-              <div className="space-y-3">
-                <div className="space-y-2">
+              <>
+                <div className="space-y-1.5">
                   {rollbackPlanSteps.map((step: string, index: number) => {
                     const stepCommands =
                       rollbackPlanCommands[index] ||
@@ -420,28 +371,27 @@ export const ResolutionView = ({
                     return (
                       <div
                         key={index}
-                        className="bg-background/50 border border-warning/30 rounded-lg p-3"
+                        className="bg-background/50 border border-warning/30 rounded-lg p-2"
                       >
-                        <div className="flex items-start gap-3">
-                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-warning/20 text-warning flex items-center justify-center text-xs font-bold">
+                        <div className="flex items-start gap-1.5">
+                          <span className="flex-shrink-0 w-4 h-4 rounded-full bg-warning/20 text-warning flex items-center justify-center text-xs font-bold">
                             {index + 1}
                           </span>
                           <div className="flex-1">
-                            <p className="text-sm text-foreground leading-relaxed">
+                            <p className="text-xs text-foreground leading-relaxed">
                               {step}
                             </p>
-
                             {hasCommands && (
-                              <div className="mt-2 space-y-1">
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <Terminal className="w-3 h-3" />
+                              <div className="mt-1 space-y-1">
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Terminal className="w-2.5 h-2.5" />
                                   <span>Rollback Commands:</span>
                                 </div>
                                 {stepCommands.map(
                                   (cmd: string, cmdIdx: number) => (
                                     <pre
                                       key={cmdIdx}
-                                      className="text-xs bg-black/20 border border-border/30 rounded p-2 overflow-x-auto"
+                                      className="text-xs bg-black/20 border border-border/30 rounded p-1.5 overflow-x-auto"
                                     >
                                       <code className="text-warning">
                                         {cmd}
@@ -460,60 +410,47 @@ export const ResolutionView = ({
 
                 {/* Show additional rollback plan metadata if available */}
                 {typeof rollbackPlan === "object" && rollbackPlan !== null && (
-                  <div className="space-y-2 pt-3 border-t border-warning/20">
-                    {/* Removed: Estimated rollback time (deprecated field) */}
+                  <div className="space-y-1.5 pt-1.5 border-t border-warning/20">
                     {rollbackPlan.preconditions &&
                       rollbackPlan.preconditions.length > 0 && (
                         <div className="text-xs text-muted-foreground">
-                          <span className="font-semibold">Preconditions:</span>
-                          <ul className="list-disc list-inside mt-1">
-                            {rollbackPlan.preconditions.map(
-                              (precondition: string, idx: number) => (
-                                <li key={idx}>{precondition}</li>
-                              ),
-                            )}
-                          </ul>
+                          <span className="font-semibold">Preconditions: </span>
+                          <span>{rollbackPlan.preconditions.join(", ")}</span>
                         </div>
                       )}
                     {rollbackPlan.triggers &&
                       rollbackPlan.triggers.length > 0 && (
                         <div className="text-xs text-muted-foreground">
-                          <span className="font-semibold">
-                            Rollback Triggers:
-                          </span>
-                          <ul className="list-disc list-inside mt-1">
-                            {rollbackPlan.triggers.map(
-                              (trigger: string, idx: number) => (
-                                <li key={idx}>{trigger}</li>
-                              ),
-                            )}
-                          </ul>
+                          <span className="font-semibold">Triggers: </span>
+                          <span>{rollbackPlan.triggers.join(", ")}</span>
                         </div>
                       )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </Card>
       )}
 
-      {/* Navigation Buttons */}
+      {/* Navigation Buttons - Compact */}
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
+          size="sm"
           onClick={onBack}
-          className="bg-secondary hover:bg-secondary/80"
+          className="bg-secondary hover:bg-secondary/80 text-xs py-1.5 px-3"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
+          <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
           Back
         </Button>
         <Button
+          size="sm"
           onClick={handleMarkCompleteClick}
-          className="bg-success hover:bg-success/90 text-success-foreground"
+          className="bg-success hover:bg-success/90 text-success-foreground text-xs py-1.5 px-3"
         >
           Mark as Complete
-          <CheckCircle className="w-4 h-4 ml-2" />
+          <CheckCircle className="w-3.5 h-3.5 ml-1.5" />
         </Button>
       </div>
 

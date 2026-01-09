@@ -12,6 +12,8 @@ interface ResultsPanelProps {
   retrievalData: any;
   onHide?: () => void;
   incidentId?: string;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
   triageRatings?: {
     severity?: string | null;
     impact?: string | null;
@@ -34,19 +36,30 @@ export const ResultsPanel = ({
   retrievalData,
   onHide,
   incidentId,
+  activeTab: controlledActiveTab,
+  onTabChange,
   triageRatings,
   ratingStatus,
   onRatingChange,
 }: ResultsPanelProps) => {
-  const [activeTab, setActiveTab] = useState("triage");
+  const [internalActiveTab, setInternalActiveTab] = useState("triage");
+  const activeTab = controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
+  
+  const handleTabChange = (tab: string) => {
+    if (onTabChange) {
+      onTabChange(tab);
+    } else {
+      setInternalActiveTab(tab);
+    }
+  };
 
   return (
     <div className="w-full mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <h2 className="text-xl font-semibold text-foreground">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+          <h2 className="text-base font-semibold text-foreground">
             Analysis Results
           </h2>
         </div>
@@ -62,38 +75,38 @@ export const ResultsPanel = ({
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 bg-secondary/50 border border-border/50 p-1 rounded-xl mb-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <TabsList className="w-full grid grid-cols-3 bg-secondary/50 border border-border/50 p-1 rounded-xl mb-3">
           <TabsTrigger
             value="triage"
             className={cn(
-              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
+              "flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
             )}
           >
-            <Zap className="w-4 h-4" />
+            <Zap className="w-3.5 h-3.5" />
             Triage
           </TabsTrigger>
           <TabsTrigger
             value="policy"
             className={cn(
-              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
+              "flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
             )}
           >
-            <Shield className="w-4 h-4" />
+            <Shield className="w-3.5 h-3.5" />
             Policy
           </TabsTrigger>
           <TabsTrigger
             value="retrieval"
             className={cn(
-              "flex items-center gap-2 rounded-lg py-3 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
+              "flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg",
             )}
           >
-            <Database className="w-4 h-4" />
+            <Database className="w-3.5 h-3.5" />
             Retrieval
           </TabsTrigger>
         </TabsList>
 
-        <div className="glass-card p-6 glow-border">
+        <div className="glass-card p-3 glow-border">
           <TabsContent value="triage" className="mt-0">
             <TriageTab
               data={triageData}

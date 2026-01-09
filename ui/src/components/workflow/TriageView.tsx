@@ -9,6 +9,8 @@ interface TriageViewProps {
   onNext: () => void;
   onBack: () => void;
   incidentId?: string;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
   triageRatings?: {
     severity?: string | null;
     impact?: string | null;
@@ -32,18 +34,22 @@ export const TriageView = ({
   onNext,
   onBack,
   incidentId,
+  activeTab,
+  onTabChange,
   triageRatings,
   ratingStatus,
   onRatingChange,
 }: TriageViewProps) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Results Panel with 3 Tabs */}
       <ResultsPanel
         triageData={triageData}
         policyData={policyData}
         retrievalData={retrievalData}
         incidentId={incidentId}
+        activeTab={activeTab}
+        onTabChange={onTabChange}
         triageRatings={triageRatings}
         ratingStatus={ratingStatus}
         onRatingChange={onRatingChange}

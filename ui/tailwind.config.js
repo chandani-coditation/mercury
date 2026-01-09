@@ -60,6 +60,21 @@ export default {
           foreground: "hsl(var(--warning-foreground))",
         },
       },
+      fontSize: {
+        // Using theme values - update theme.ts to change globally
+        xs: ["0.75rem", { lineHeight: "1.5" }],      // 12px
+        sm: ["0.875rem", { lineHeight: "1.5" }],     // 14px
+        base: ["1rem", { lineHeight: "1.5" }],       // 16px
+        lg: ["1.125rem", { lineHeight: "1.5" }],     // 18px
+        xl: ["1.25rem", { lineHeight: "1.5" }],      // 20px
+        "2xl": ["1.5rem", { lineHeight: "1.5" }],   // 24px
+      },
+      spacing: {
+        // Custom spacing values - update theme.ts to change globally
+        "0.5": "0.125rem",   // 2px
+        "1.5": "0.375rem",   // 6px
+        "2.5": "0.625rem",   // 10px
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
