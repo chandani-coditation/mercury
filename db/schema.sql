@@ -396,11 +396,14 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION update_runbook_steps_tsv()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.tsv := to_tsvector('english', 
-        COALESCE(NEW.condition, '') || ' ' || 
-        COALESCE(NEW.action, '') || ' ' || 
-        COALESCE(NEW.expected_outcome, '')
-    );
+    -- Only set tsv if NULL (fallback when code doesn't explicitly set it)
+    IF NEW.tsv IS NULL THEN
+        NEW.tsv := to_tsvector('english', 
+            COALESCE(NEW.condition, '') || ' ' || 
+            COALESCE(NEW.action, '') || ' ' || 
+            COALESCE(NEW.expected_outcome, '')
+        );
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -408,14 +411,18 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION update_incident_signatures_tsv()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.tsv := to_tsvector('english', 
-        COALESCE(NEW.failure_type, '') || ' ' || 
-        COALESCE(NEW.error_class, '') || ' ' || 
-        COALESCE(NEW.assignment_group, '') || ' ' ||
-        COALESCE(NEW.impact, '') || ' ' ||
-        COALESCE(NEW.urgency, '') || ' ' ||
-        COALESCE(array_to_string(NEW.symptoms, ' '), '')
-    );
+    -- Only set tsv if NULL (fallback when code doesn't explicitly set it)
+    -- Code sets tsv with title/description for better full-text search
+    IF NEW.tsv IS NULL THEN
+        NEW.tsv := to_tsvector('english', 
+            COALESCE(NEW.failure_type, '') || ' ' || 
+            COALESCE(NEW.error_class, '') || ' ' || 
+            COALESCE(NEW.assignment_group, '') || ' ' ||
+            COALESCE(NEW.impact, '') || ' ' ||
+            COALESCE(NEW.urgency, '') || ' ' ||
+            COALESCE(array_to_string(NEW.symptoms, ' '), '')
+        );
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -441,49 +448,3 @@ CREATE TRIGGER incident_signatures_tsv_trigger
     BEFORE INSERT OR UPDATE ON incident_signatures
     FOR EACH ROW
     EXECUTE FUNCTION update_incident_signatures_tsv();
-
--- Helper views
-CREATE OR REPLACE VIEW runbook_steps_with_metadata AS
-SELECT 
-    rs.id,
-    rs.step_id,
-    rs.runbook_id,
-    rs.condition,
-    rs.action,
-    rs.expected_outcome,
-    rs.rollback,
-    rs.risk_level,
-    rs.service,
-    rs.component,
-    rs.runbook_title,
-    rs.created_at,
-    rs.updated_at,
-    rs.last_reviewed_at,
-    d.title AS document_title,
-    d.tags AS document_tags
-FROM runbook_steps rs
-LEFT JOIN documents d ON rs.runbook_document_id = d.id;
-
-CREATE OR REPLACE VIEW triage_to_resolution_chain AS
-SELECT 
-    i.id AS incident_id,
-    i.alert_id,
-    tr.id AS triage_result_id,
-    tr.failure_type,
-    tr.error_class,
-    tr.severity,
-    tr.confidence AS triage_confidence,
-    tr.policy_band,
-    tr.matched_signature_ids,
-    ro.id AS resolution_output_id,
-    ro.overall_confidence AS resolution_confidence,
-    ro.risk_level,
-    ro.retrieved_step_ids,
-    ro.execution_status,
-    tr.completed_at AS triage_completed_at,
-    ro.proposed_at AS resolution_proposed_at,
-    ro.accepted_at AS resolution_accepted_at
-FROM incidents i
-LEFT JOIN triage_results tr ON i.id = tr.incident_id
-LEFT JOIN resolution_outputs ro ON tr.id = ro.triage_result_id;
-

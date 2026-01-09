@@ -513,7 +513,7 @@ def main():
             logger.warning(f"No DOCX files found in {dir_path}")
             sys.exit(0)
 
-        print(f"\n📁 Found {len(docx_files)} DOCX file(s) to process\n")
+        print(f"\nFound {len(docx_files)} DOCX file(s) to process\n")
         logger.info(f"Found {len(docx_files)} DOCX file(s)")
 
         for idx, docx_file in enumerate(docx_files, start=1):
@@ -536,64 +536,33 @@ def main():
 
     # Verify embeddings were created
     if total_success > 0:
-        print("\n Verifying embeddings in database...")
+        print("\n" + "=" * 70)
+        print("Verification")
+        print("=" * 70)
         logger.info("\nVerifying embeddings in database...")
         try:
-            from db.connection import get_db_connection
-
-            conn = get_db_connection()
-            cur = conn.cursor()
-
-            # Count documents
-            cur.execute(
-                "SELECT COUNT(*) as doc_count FROM documents WHERE doc_type = %s", ("runbook",)
-            )
-            doc_result = cur.fetchone()
-            doc_count = doc_result["doc_count"] if isinstance(doc_result, dict) else doc_result[0]
-
-            # Count runbook steps (stored in dedicated table)
-            cur.execute(
-                """
-                SELECT COUNT(*) as step_count 
-                FROM runbook_steps
-            """
-            )
-            step_result = cur.fetchone()
-            step_count = (
-                step_result["step_count"] if isinstance(step_result, dict) else step_result[0]
-            )
-
-            # Count runbook steps with embeddings
-            cur.execute(
-                """
-                SELECT COUNT(*) as embed_count 
-                FROM runbook_steps 
-                WHERE embedding IS NOT NULL
-            """
-            )
-            embed_result = cur.fetchone()
-            embed_count = (
-                embed_result["embed_count"] if isinstance(embed_result, dict) else embed_result[0]
-            )
-
-            # Get embedding dimension sample
-            cur.execute(
-                """
-                SELECT embedding::text as embedding_text
-                FROM runbook_steps 
-                WHERE embedding IS NOT NULL
-                LIMIT 1
-            """
-            )
-            sample = cur.fetchone()
-            embedding_dim = None
-            if sample:
-                embedding_text = sample["embedding_text"] if isinstance(sample, dict) else sample[0]
-                if embedding_text:
-                    embedding_dim = embedding_text.count(",") + 1
-
-            conn.close()
-
+            from db.connection import get_db_connection_context
+            
+            with get_db_connection_context() as conn:
+                cur = conn.cursor()
+                
+                # Count runbook documents
+                cur.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'runbook';")
+                doc_result = cur.fetchone()
+                doc_count = doc_result["count"] if isinstance(doc_result, dict) else doc_result[0]
+                
+                # Count runbook steps
+                cur.execute("SELECT COUNT(*) FROM runbook_steps;")
+                step_result = cur.fetchone()
+                step_count = step_result["count"] if isinstance(step_result, dict) else step_result[0]
+                
+                # Count runbook steps with embeddings
+                cur.execute("SELECT COUNT(*) FROM runbook_steps WHERE embedding IS NOT NULL;")
+                embed_result = cur.fetchone()
+                embed_count = embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
+                
+                cur.close()
+            
             print(f"\nDatabase Verification:")
             print(f"   Runbook documents stored: {doc_count}")
             print(f"   Runbook steps created: {step_count}")
@@ -602,28 +571,22 @@ def main():
             logger.info(f"   Runbook documents stored: {doc_count}")
             logger.info(f"   Runbook steps created: {step_count}")
             logger.info(f"   Steps with embeddings: {embed_count}/{step_count}")
-
-            if embedding_dim:
-                print(f"   Embedding dimension: {embedding_dim}")
-                logger.info(f"   Embedding dimension: {embedding_dim}")
-
+            
             if embed_count == step_count and step_count > 0:
                 print(f"\n   SUCCESS: All {step_count} runbook steps have embeddings!")
                 logger.info(f"\n   SUCCESS: All {step_count} runbook steps have embeddings!")
             elif embed_count < step_count:
-                print(f"\n    WARNING: {step_count - embed_count} steps are missing embeddings!")
-                logger.warning(
-                    f"\n    WARNING: {step_count - embed_count} steps are missing embeddings!"
-                )
+                print(f"\n   WARNING: {step_count - embed_count} steps are missing embeddings!")
+                logger.warning(f"\n   WARNING: {step_count - embed_count} steps are missing embeddings!")
             else:
-                print(f"\n    WARNING: No runbook steps found in database!")
-                logger.warning(f"\n    WARNING: No runbook steps found in database!")
-
+                print(f"\n   WARNING: No runbook steps found in database!")
+                logger.warning(f"\n   WARNING: No runbook steps found in database!")
+                
         except Exception as e:
-            print(f"    Could not verify embeddings: {str(e)}")
-            print(f"     You can manually verify using: python scripts/db/verify_db.py")
-            logger.warning(f"    Could not verify embeddings: {str(e)}")
-            logger.warning(f"     You can manually verify using: python scripts/db/verify_db.py")
+            print(f"\n   Could not verify embeddings: {str(e)}")
+            print(f"   You can manually verify using: python scripts/db/verify_db.py")
+            logger.warning(f"   Could not verify embeddings: {str(e)}")
+            logger.warning(f"   You can manually verify using: python scripts/db/verify_db.py")
 
     if total_errors > 0:
         print(f"\n  Completed with {total_errors} error(s). Check logs for details.")

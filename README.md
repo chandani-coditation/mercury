@@ -25,27 +25,79 @@ This project is a NOC triage and resolution assistant. It:
 
 - **Docker** and **docker compose**
 - **Node.js** (v18+ recommended) and **npm** for the UI
-- A valid **OpenAI API key** exported as `OPENAI_API_KEY`
+- A valid **OpenAI API key**
+
+---
+
+## 0. Environment Setup
+
+**IMPORTANT**: The `.env` file is **not included in the repository** (it's gitignored for security reasons). You must create it before starting services.
+
+**Create `.env` file:**
 
 ```bash
-export OPENAI_API_KEY=sk-...
+cp env.template .env
 ```
+
+**Edit `.env` and set your configuration:**
+
+1. **OpenAI API Key** (required):
+   ```bash
+   OPENAI_API_KEY=sk-your-api-key-here
+   ```
+
+2. **Database Configuration** (defaults are usually fine):
+   ```bash
+   POSTGRES_HOST=localhost
+   POSTGRES_PORT=5432
+   POSTGRES_DB=noc_ai
+   POSTGRES_USER=noc_ai
+   POSTGRES_PASSWORD=noc_ai_password  # Change this in production!
+   ```
+
+3. **Frontend API URL** (defaults to localhost:8001):
+   ```bash
+   VITE_API_BASE_URL=http://localhost:8001/api/v1
+   ```
+
+**Note**: The `env.template` file shows all available configuration options with their defaults.
 
 ---
 
 ## 1. Start the backend (database + services)
 
+**Prerequisite**: Create a `.env` file first (see Section 0 above).
+
 From the repo root:
 
+**If `.env` is in the root folder:**
 ```bash
 docker compose up -d
+```
+
+**If your env file is in a different location or has a different name:**
+```bash
+ENV_FILE=/path/to/your.env docker compose up -d
+```
+
+**Examples:**
+```bash
+# Env file in root folder (default)
+docker compose up -d
+
+# Env file with different name
+ENV_FILE=.env.production docker compose up -d
+
+# Env file in different location
+ENV_FILE=/path/to/custom.env docker compose up -d
 ```
 
 This will start:
 
 - `postgres` on `localhost:5432`
 - `ai-service` (FastAPI) on `http://localhost:8001`
-- `ingestion-service` on `http://localhost:8002`
+- `ingestion-service` on `http://localhost:8002` 
+- `frontend` (React UI) on `http://localhost:5173`
 
 You can check health with:
 
@@ -57,7 +109,15 @@ curl http://localhost:8001/api/v1/health
 
 ## 2. Database Setup
 
-The PostgreSQL database is automatically initialized when the Docker container starts. The schema is loaded from `db/schema.sql`.
+**Automatic Schema Creation:**
+
+The PostgreSQL database schema is **automatically created** when the Docker container starts for the first time. The schema file (`db/schema.sql`) is automatically executed by PostgreSQL's initialization system.
+
+**How it works:**
+- When you run `docker compose up` for the first time, PostgreSQL detects that the database is empty
+- It automatically runs all `.sql` files in `/docker-entrypoint-initdb.d/` (which includes `db/schema.sql`)
+- All tables, indexes, triggers, and functions are created automatically
+- On subsequent starts, the schema already exists, so initialization is skipped (this is safe)
 
 **IMPORTANT: All database operations use Docker PostgreSQL only.**
 - Scripts connect via `docker exec` to the `noc-ai-postgres` container
@@ -71,24 +131,54 @@ The PostgreSQL database is automatically initialized when the Docker container s
 - `POSTGRES_USER=noc_ai` (default)
 - `POSTGRES_PASSWORD=noc_ai_password` (set your password)
 
-**Verify database setup:**
+**Verify database setup and schema creation:**
 ```bash
 # Using Python script (uses Docker exec, reads from .env)
 python scripts/db/verify_db.py
 
-# Or directly via Docker
+# Or directly via Docker - check if tables exist
+docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "\dt"
+
+# Check specific tables
 docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "SELECT COUNT(*) FROM documents;"
+docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "SELECT COUNT(*) FROM incident_signatures;"
+docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "SELECT COUNT(*) FROM chunks;"
+```
+
+**Note**: If you need to recreate the database from scratch, you can:
+```bash
+# Stop containers and remove the volume
+docker compose down -v
+
+# Start again (schema will be recreated automatically)
+docker compose up -d
 ```
 
 ## 3. Ingest runbooks and historical data (optional but recommended)
 
-With the backend up, you can ingest runbooks from the `runbooks/` folder:
+With the backend up, you can ingest runbooks and historical tickets data using command-line scripts.
+
+**Ingest Runbooks:**
 
 ```bash
-# Make sure .env file is configured with correct database credentials
+# Ingest all runbooks from a directory
 python scripts/data/ingest_runbooks.py --dir runbooks
-python scripts/data/ingest_servicenow_tickets.py --dir tickets_data
+
+# Ingest a single runbook file
+python scripts/data/ingest_runbooks.py --file "runbooks/Runbook - Database Alerts.docx"
 ```
+
+**Ingest ServiceNow Tickets (CSV):**
+
+```bash
+# Ingest all CSV files from a directory
+python scripts/data/ingest_servicenow_tickets.py --dir tickets_data
+
+# Ingest a single CSV file
+python scripts/data/ingest_servicenow_tickets.py --file "tickets_data/updated network filtered - Sheet1.csv"
+```
+
+**Note**: Make sure `.env` file is configured with correct database credentials before running ingestion scripts.
 
 **Database Management:**
 ```bash
@@ -108,6 +198,12 @@ python scripts/db/verify_db.py
 
 ## 4. Start the frontend UI
 
+**Option 1: Using Docker (recommended)**
+
+The frontend is automatically started with `docker compose up` and will be available at `http://localhost:5173`.
+
+**Option 2: Local development**
+
 From the `ui` directory:
 
 ```bash
@@ -118,7 +214,12 @@ npm run dev
 
 By default Vite will serve the UI on `http://localhost:5173`.
 
-The UI expects the backend `ai-service` to be reachable at `http://localhost:8001`. If you change ports, update the API client in `ui/src/api/client.js`.
+**Configuration:**
+
+The UI expects the backend `ai-service` to be reachable at `http://localhost:8001`. 
+
+- **Docker**: The API URL is configured via `VITE_API_BASE_URL` in your `.env` file (defaults to `http://localhost:8001/api/v1`)
+- **Local development**: Update the API client in `ui/src/api/client.js` or set the `VITE_API_BASE_URL` environment variable
 
 ---
 
@@ -205,5 +306,6 @@ pytest
 ```
 
 There are also helper scripts under `tests/` (e.g. `test_approve_and_resolve.sh`) to exercise the API end-to-end.
+
 
 

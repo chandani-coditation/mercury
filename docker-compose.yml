@@ -3,13 +3,13 @@ services:
     image: pgvector/pgvector:pg16
     container_name: noc-ai-postgres
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./db/migrations:/docker-entrypoint-initdb.d/migrations
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/migrations:/docker-entrypoint-initdb.d/migrations:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U noc_ai"]
       interval: 10s
@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: noc-ai-service
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     environment:
       - POSTGRES_HOST=postgres  # Override for Docker network
     ports:
@@ -46,7 +46,7 @@ services:
     container_name: noc-ai-ingestion
     command: uvicorn ingestion.main:app --host 0.0.0.0 --port 8002
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     environment:
       - POSTGRES_HOST=postgres  # Override for Docker network
     ports:
@@ -59,6 +59,24 @@ services:
       - ./logs:/app/logs
     networks:
       - noc-ai-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: noc-ai-frontend
+    env_file:
+      - ${ENV_FILE:-.env}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - ai-service
+    networks:
+      - noc-ai-network
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
     restart: unless-stopped
 
 volumes:

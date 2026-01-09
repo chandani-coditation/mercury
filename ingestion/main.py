@@ -48,6 +48,7 @@ app = FastAPI(
     description="Document ingestion service for NOC Agent AI",
     docs_url="/docs",
     redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # CORS middleware

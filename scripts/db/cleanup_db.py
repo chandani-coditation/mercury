@@ -14,6 +14,7 @@ Usage examples:
   # Selective wipes
   python scripts/db/cleanup_db.py --yes --incidents --feedback
   python scripts/db/cleanup_db.py --yes --documents --chunks --runbook-steps
+  python scripts/db/cleanup_db.py --yes --incident-signatures --agent-state
 """
 import sys
 import os
@@ -24,7 +25,7 @@ from typing import List
 from dotenv import load_dotenv
 
 
-ALL_TARGETS = ["documents", "chunks", "incidents", "feedback", "runbook_steps"]
+ALL_TARGETS = ["documents", "chunks", "incidents", "feedback", "runbook_steps", "incident_signatures", "agent_state"]
 
 # Load .env file from project root
 project_root = Path(__file__).parent.parent.parent
@@ -47,12 +48,16 @@ def build_statements(targets: List[str]) -> List[str]:
         ordered.append("TRUNCATE TABLE chunks RESTART IDENTITY CASCADE;")
     if "runbook_steps" in targets:
         ordered.append("TRUNCATE TABLE runbook_steps RESTART IDENTITY CASCADE;")
+    if "incident_signatures" in targets:
+        ordered.append("TRUNCATE TABLE incident_signatures RESTART IDENTITY CASCADE;")
     if "documents" in targets:
         ordered.append("TRUNCATE TABLE documents RESTART IDENTITY CASCADE;")
     if "feedback" in targets:
         ordered.append("TRUNCATE TABLE feedback RESTART IDENTITY CASCADE;")
     if "incidents" in targets:
         ordered.append("TRUNCATE TABLE incidents RESTART IDENTITY CASCADE;")
+    if "agent_state" in targets:
+        ordered.append("TRUNCATE TABLE agent_state RESTART IDENTITY CASCADE;")
     return ordered
 
 
@@ -135,6 +140,18 @@ Examples:
         action="store_true",
         help="Wipe runbook_steps table",
     )
+    parser.add_argument(
+        "--incident-signatures",
+        dest="incident_signatures",
+        action="store_true",
+        help="Wipe incident_signatures table",
+    )
+    parser.add_argument(
+        "--agent-state",
+        dest="agent_state",
+        action="store_true",
+        help="Wipe agent_state table",
+    )
 
     args = parser.parse_args()
 
@@ -146,6 +163,8 @@ Examples:
             ("incidents", args.incidents),
             ("feedback", args.feedback),
             ("runbook_steps", args.runbook_steps),
+            ("incident_signatures", args.incident_signatures),
+            ("agent_state", args.agent_state),
         )
         if flag
     ]

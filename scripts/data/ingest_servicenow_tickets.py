@@ -299,16 +299,16 @@ def ingest_csv_file(
                 except Exception as e:
                     error_count += 1
                     error_msg = f"  Error parsing row {row_num}: {str(e)}"
-                    print(f"     ⚠️  {error_msg}")
+                    print(f"     WARNING: {error_msg}")
                     logger.error(error_msg)
                     continue
 
         total_rows = len(incidents)
-        print(f"  ✓ Parsed {total_rows} ticket(s) successfully\n")
+        print(f"  Parsed {total_rows} ticket(s) successfully\n")
         logger.info(f"  Parsed {total_rows} ticket(s) successfully")
 
         if total_rows == 0:
-            print("  ⚠️  No valid tickets to ingest")
+            print("  WARNING: No valid tickets to ingest")
             return 0, error_count, []
 
         # Split incidents: 90% for ingestion, 10% for testing
@@ -322,12 +322,12 @@ def ingest_csv_file(
             if test_output_file:
                 save_test_incidents_to_file(test_incidents, test_output_file)
                 print(
-                    f"  📝 Reserved {len(test_incidents)} ticket(s) for testing → {test_output_file.name}"
+                    f"  Reserved {len(test_incidents)} ticket(s) for testing -> {test_output_file.name}"
                 )
             else:
-                print(f"  📝 Reserved {len(test_incidents)} ticket(s) for testing")
+                print(f"  Reserved {len(test_incidents)} ticket(s) for testing")
             print(
-                f"  📥 Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)\n"
+                f"  Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)\n"
             )
             logger.info(
                 f"Reserved {len(test_incidents)} incidents for testing, ingesting {len(ingest_incidents)}"
@@ -373,7 +373,7 @@ def ingest_csv_file(
             else:
                 error_count += 1
                 # Show error on new line but keep progress bar
-                print(f"\n     ⚠️  Failed: {incident_id}")
+                print(f"\n     WARNING: Failed: {incident_id}")
                 print(
                     f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%",
                     end="",
@@ -383,10 +383,10 @@ def ingest_csv_file(
         print(f"\r  Progress: [{'=' * 50}] 100% - Complete!                    ")
 
         elapsed_time = time.time() - start_time
-        print(f"\n  ✓ Completed in {elapsed_time:.1f}s")
-        print(f"  ✓ Success: {success_count}, Errors: {error_count}")
+        print(f"\n  Completed in {elapsed_time:.1f}s")
+        print(f"  Success: {success_count}, Errors: {error_count}")
         if success_count > 0:
-            print(f"  ✓ Average: {elapsed_time/success_count:.2f}s per ticket")
+            print(f"  Average: {elapsed_time/success_count:.2f}s per ticket")
 
     except Exception as e:
         logger.error(f"Error reading CSV file {file_path}: {str(e)}")
@@ -495,7 +495,7 @@ def main():
             logger.warning(f"No CSV files found in {dir_path}")
             sys.exit(0)
 
-        print(f"\n📁 Found {len(csv_files)} CSV file(s) to process\n")
+        print(f"\nFound {len(csv_files)} CSV file(s) to process\n")
         logger.info(f"Found {len(csv_files)} CSV file(s)")
 
         for csv_file in csv_files:
@@ -520,7 +520,7 @@ def main():
                 else dir_path / "test_incidents.csv"
             )
             save_test_incidents_to_file(all_test_incidents, test_output)
-            print(f"\n📝 Saved {len(all_test_incidents)} test incidents to {test_output.name}")
+            print(f"\nSaved {len(all_test_incidents)} test incidents to {test_output.name}")
             logger.info(f"Saved {len(all_test_incidents)} test incidents to {test_output}")
 
     print(f"\n{'='*70}")
@@ -534,16 +534,61 @@ def main():
     logger.info(f"   Errors: {total_errors} ticket(s)")
     logger.info(f"{'='*70}")
 
-    # Verify embeddings were created (skip if using Docker - use verify_db.py instead)
+    # Verify embeddings were created
     if total_success > 0:
         print("\n" + "=" * 70)
         print("Verification")
         print("=" * 70)
-        print("  Note: For detailed verification, run: python scripts/db/verify_db.py")
-        print("  (Skipping direct database connection to use Docker PostgreSQL only)")
-        logger.info(
-            "Skipping direct database verification (use verify_db.py for Docker PostgreSQL)"
-        )
+        logger.info("\nVerifying embeddings in database...")
+        try:
+            from db.connection import get_db_connection_context
+            
+            with get_db_connection_context() as conn:
+                cur = conn.cursor()
+                
+                # Count incident signatures
+                cur.execute("SELECT COUNT(*) FROM incident_signatures;")
+                sig_result = cur.fetchone()
+                sig_count = sig_result["count"] if isinstance(sig_result, dict) else sig_result[0]
+                
+                # Count incident signatures with embeddings
+                cur.execute("SELECT COUNT(*) FROM incident_signatures WHERE embedding IS NOT NULL;")
+                embed_result = cur.fetchone()
+                embed_count = embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
+                
+                # Count incident signatures with tsv
+                cur.execute("SELECT COUNT(*) FROM incident_signatures WHERE tsv IS NOT NULL;")
+                tsv_result = cur.fetchone()
+                tsv_count = tsv_result["count"] if isinstance(tsv_result, dict) else tsv_result[0]
+                
+                cur.close()
+            
+            print(f"\nDatabase Verification:")
+            print(f"   Incident signatures created: {sig_count}")
+            print(f"   Signatures with embeddings: {embed_count}/{sig_count}")
+            print(f"   Signatures with tsvector: {tsv_count}/{sig_count}")
+            logger.info(f"\nDatabase Verification:")
+            logger.info(f"   Incident signatures created: {sig_count}")
+            logger.info(f"   Signatures with embeddings: {embed_count}/{sig_count}")
+            logger.info(f"   Signatures with tsvector: {tsv_count}/{sig_count}")
+            
+            if embed_count == sig_count and sig_count > 0 and tsv_count == sig_count:
+                print(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!")
+                logger.info(f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!")
+            elif embed_count < sig_count or tsv_count < sig_count:
+                missing_embed = sig_count - embed_count
+                missing_tsv = sig_count - tsv_count
+                print(f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!")
+                logger.warning(f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!")
+            else:
+                print(f"\n   WARNING: No incident signatures found in database!")
+                logger.warning(f"\n   WARNING: No incident signatures found in database!")
+                
+        except Exception as e:
+            print(f"\n   Could not verify embeddings: {str(e)}")
+            print(f"   You can manually verify using: python scripts/db/verify_db.py")
+            logger.warning(f"   Could not verify embeddings: {str(e)}")
+            logger.warning(f"   You can manually verify using: python scripts/db/verify_db.py")
 
     if total_errors > 0:
         print(f"\n  Completed with {total_errors} error(s). Check logs for details.")
