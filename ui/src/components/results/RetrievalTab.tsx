@@ -31,7 +31,6 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
 
   // Handle cases where data might be undefined or have different structure
   const chunksUsed = data?.chunks_used || 0;
-  const chunkSources = data?.chunk_sources || [];
   const chunks = data?.chunks || [];
 
   // Helper function to calculate relevance score (same logic as EvidenceChunk)
@@ -52,22 +51,99 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
   // Get threshold from config
   const relevanceThreshold = retrievalConfig.ui_relevance_threshold || 0;
 
-  // Calculate breakdown of chunks by source type
-  const chunkBreakdown = (() => {
+  // Calculate filtered chunks (apply threshold filtering to runbooks)
+  const filteredChunks = (() => {
+    // Prior incidents - no threshold filtering
     const priorIncidents = chunks.filter(
       (c: any) =>
         c.provenance?.source_type === "incident_signature" ||
         c.metadata?.doc_type === "incident_signature",
+    );
+
+    // Runbooks (both metadata and steps) - apply threshold filtering
+    const allRunbooks = chunks.filter(
+      (c: any) =>
+        c.provenance?.source_type === "runbook" ||
+        c.provenance?.source_type === "runbook_step" ||
+        c.metadata?.doc_type === "runbook",
+    );
+
+    const filteredRunbooks = allRunbooks.filter((chunk: any) => {
+      const relevanceScore = calculateRelevanceScore(chunk);
+      return relevanceScore === null || relevanceScore >= relevanceThreshold;
+    });
+
+    return [...priorIncidents, ...filteredRunbooks];
+  })();
+
+  // Calculate breakdown of DISPLAYED chunks by source type (after threshold filtering)
+  const chunkBreakdown = (() => {
+    const priorIncidents = filteredChunks.filter(
+      (c: any) =>
+        c.provenance?.source_type === "incident_signature" ||
+        c.metadata?.doc_type === "incident_signature",
     ).length;
-    const runbookMetadata = chunks.filter(
+    const runbookMetadata = filteredChunks.filter(
       (c: any) =>
         c.provenance?.source_type === "runbook" ||
         c.metadata?.doc_type === "runbook",
     ).length;
-    const runbookSteps = chunks.filter(
+    const runbookSteps = filteredChunks.filter(
       (c: any) => c.provenance?.source_type === "runbook_step",
     ).length;
     return { priorIncidents, runbookMetadata, runbookSteps };
+  })();
+
+  // Calculate actually displayed chunks count (top 5 from each category after filtering)
+  const displayedChunksCount = (() => {
+    const priorIncidentsCount = filteredChunks
+      .filter(
+        (chunk: any) =>
+          chunk.provenance?.source_type === "incident_signature" ||
+          chunk.metadata?.doc_type === "incident_signature",
+      )
+      .slice(0, 5).length;
+
+    const runbooksCount = filteredChunks
+      .filter(
+        (chunk: any) =>
+          chunk.provenance?.source_type === "runbook" ||
+          chunk.provenance?.source_type === "runbook_step" ||
+          chunk.metadata?.doc_type === "runbook",
+      )
+      .slice(0, 5).length;
+
+    return priorIncidentsCount + runbooksCount;
+  })();
+
+  // Filter knowledge sources to only include sources from displayed chunks
+  const displayedKnowledgeSources = (() => {
+    // Get doc_title from filtered chunks (top 5 from each category)
+    const priorIncidentsChunks = filteredChunks
+      .filter(
+        (chunk: any) =>
+          chunk.provenance?.source_type === "incident_signature" ||
+          chunk.metadata?.doc_type === "incident_signature",
+      )
+      .slice(0, 5);
+
+    const runbooksChunks = filteredChunks
+      .filter(
+        (chunk: any) =>
+          chunk.provenance?.source_type === "runbook" ||
+          chunk.provenance?.source_type === "runbook_step" ||
+          chunk.metadata?.doc_type === "runbook",
+      )
+      .slice(0, 5);
+
+    const displayedChunksArray = [...priorIncidentsChunks, ...runbooksChunks];
+
+    // Extract unique doc_title values from displayed chunks
+    const sourceTitles = displayedChunksArray
+      .map((chunk: any) => chunk.doc_title)
+      .filter((title): title is string => Boolean(title));
+
+    return [...new Set(sourceTitles)];
   })();
 
   // Get unique source types with friendly names
@@ -85,6 +161,19 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
     unknown: "Unknown",
   };
 
+  // Calculate number of non-zero source types for display
+  const nonZeroSourceTypesCount = sourceTypes.filter((sourceType) => {
+    const count =
+      sourceType === "incident_signature"
+        ? chunkBreakdown.priorIncidents
+        : sourceType === "runbook"
+          ? chunkBreakdown.runbookSteps
+          : sourceType === "runbook_step"
+            ? chunkBreakdown.runbookMetadata
+            : 0;
+    return count > 0;
+  }).length;
+
   return (
     <div className="space-y-2.5 animate-fade-in">
       {/* Stats Header - Simplified */}
@@ -97,7 +186,7 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
           <div className="relative z-10 flex-1">
             <p className="text-xs text-muted-foreground">Chunks Retrieved</p>
             <p className="text-lg font-bold font-mono text-foreground">
-              {chunksUsed}
+              {displayedChunksCount}
             </p>
           </div>
         </div>
@@ -110,45 +199,51 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
           <div className="relative z-10 flex-1">
             <p className="text-xs text-muted-foreground">Unique Source Types</p>
             <p className="text-lg font-bold font-mono text-foreground">
-              {sourceTypes.length || 0}
+              {nonZeroSourceTypesCount}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Consolidated Source Breakdown - Shows the 3 unique source types with counts */}
-      {chunksUsed > 0 && sourceTypes.length > 0 && (
+      {/* Consolidated Source Breakdown - Shows the unique source types with counts */}
+      {displayedChunksCount > 0 && nonZeroSourceTypesCount > 0 && (
         <div className="glass-card p-2.5 space-y-1.5">
           <div className="flex items-center gap-2">
             <h4 className="text-xs font-semibold text-foreground">
-              The {sourceTypes.length} Unique Source Types
+              {nonZeroSourceTypesCount === 1
+                ? "The Unique Source Type"
+                : `The ${nonZeroSourceTypesCount} Unique Source Types`}
             </h4>
             <div className="group relative inline-block align-middle">
               <Info className="w-3 h-3 text-muted-foreground hover:text-primary cursor-help transition-colors" />
               <div className="hidden group-hover:block absolute z-20 w-80 p-2 text-xs text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
-                <p className="font-semibold mb-1">Total: {chunksUsed} chunks retrieved</p>
+                <p className="font-semibold mb-1">Displaying: {displayedChunksCount} chunks</p>
                 <p className="mb-1">
                   Breakdown: {chunkBreakdown.priorIncidents} Prior Incidents,{" "}
                   {chunkBreakdown.runbookMetadata} Runbook Metadata,{" "}
                   {chunkBreakdown.runbookSteps} Runbook Steps
                 </p>
                 <p className="text-muted-foreground mt-2">
-                  Only the top 5 from each category are displayed in the evidence details below.
+                  Runbooks below {relevanceThreshold}% relevance are filtered out. Only the top 5 from each category are displayed.
                 </p>
               </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {sourceTypes.map((sourceType, index) => {
-              const count =
-                sourceType === "incident_signature"
-                  ? chunkBreakdown.priorIncidents
-                  : sourceType === "runbook"
-                    ? chunkBreakdown.runbookMetadata
-                    : sourceType === "runbook_step"
+            {sourceTypes
+              .map((sourceType) => {
+                const count =
+                  sourceType === "incident_signature"
+                    ? chunkBreakdown.priorIncidents
+                    : sourceType === "runbook"
                       ? chunkBreakdown.runbookSteps
-                      : 0;
-              return (
+                      : sourceType === "runbook_step"
+                        ? chunkBreakdown.runbookMetadata
+                        : 0;
+                return { sourceType, count };
+              })
+              .filter(({ count }) => count > 0)
+              .map(({ sourceType, count }, index) => (
                 <div
                   key={index}
                   className="px-2 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-medium flex items-center gap-1.5"
@@ -158,28 +253,27 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
                     ({count})
                   </span>
                 </div>
-              );
-            })}
+              ))}
           </div>
         </div>
       )}
 
       {/* Knowledge Sources (Document Titles) - Different from Source Types */}
-      {chunkSources.length > 0 && (
+      {displayedKnowledgeSources.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Knowledge Sources ({[...new Set(chunkSources)].length})
+              Knowledge Sources ({displayedKnowledgeSources.length})
             </h4>
             <div className="group relative inline-block align-middle">
               <Info className="w-3 h-3 text-muted-foreground hover:text-primary cursor-help transition-colors" />
               <div className="hidden group-hover:block absolute z-20 w-64 p-2 text-xs text-foreground bg-background border border-border rounded-lg shadow-lg left-1/2 -translate-x-1/2 top-4">
-                Specific documents and runbooks retrieved from the knowledge base
+                Specific documents and runbooks displayed in the evidence sections below (after threshold filtering)
               </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {[...new Set(chunkSources)].map((source, index) => (
+            {displayedKnowledgeSources.map((source, index) => (
               <div
                 key={index}
                 className="px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium"
@@ -192,36 +286,28 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
       )}
 
       {/* Evidence Chunks - Separated by Type */}
-      {chunks.length > 0 ? (
+      {filteredChunks.length > 0 ? (
         <div className="space-y-3">
           {/* Separate chunks into Prior Incidents and Runbooks */}
           {(() => {
-            const priorIncidents = chunks
+            // Use filteredChunks which already has threshold filtering applied
+            const priorIncidents = filteredChunks
               .filter(
                 (chunk: any) =>
                   chunk.provenance?.source_type === "incident_signature" ||
                   chunk.metadata?.doc_type === "incident_signature",
               )
               .slice(0, 5); // Limit to top 5
-            
-            // Filter runbooks by source type, then filter by relevance threshold
-            const allRunbooks = chunks.filter(
+
+            const allRunbooks = filteredChunks.filter(
               (chunk: any) =>
                 chunk.provenance?.source_type === "runbook" ||
                 chunk.provenance?.source_type === "runbook_step" ||
                 chunk.metadata?.doc_type === "runbook",
             );
-            
-            // Filter out runbooks below relevance threshold
-            const filteredRunbooks = allRunbooks.filter((chunk: any) => {
-              const relevanceScore = calculateRelevanceScore(chunk);
-              // If no score, include it (don't filter out chunks without scores)
-              // If score exists, only include if it meets threshold
-              return relevanceScore === null || relevanceScore >= relevanceThreshold;
-            });
-            
-            const runbooks = filteredRunbooks.slice(0, 5); // Limit to top 5
-            const totalFilteredRunbooks = filteredRunbooks.length;
+
+            const runbooks = allRunbooks.slice(0, 5); // Limit to top 5
+            const totalFilteredRunbooks = allRunbooks.length;
 
             return (
               <>
@@ -239,12 +325,12 @@ export const RetrievalTab = ({ data }: RetrievalTabProps) => {
                       )}
                       <span className="w-1 h-4 bg-primary rounded-full" />
                       Prior Incidents ({priorIncidents.length}
-                      {chunks.filter(
+                      {filteredChunks.filter(
                         (chunk: any) =>
                           chunk.provenance?.source_type === "incident_signature" ||
                           chunk.metadata?.doc_type === "incident_signature",
                       ).length > 5
-                        ? ` of ${chunks.filter(
+                        ? ` of ${filteredChunks.filter(
                             (chunk: any) =>
                               chunk.provenance?.source_type ===
                                 "incident_signature" ||
