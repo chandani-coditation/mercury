@@ -27,7 +27,18 @@ RETRY_EXPONENTIAL_BASE = 2.0
 
 
 def get_llm_client():
-    """Get OpenAI client."""
+    """
+    Get an initialized OpenAI client instance.
+
+    Retrieves the OpenAI API key from environment variables and creates a client instance.
+    This client is used for all LLM interactions (chat completions, embeddings).
+
+    Returns:
+        OpenAI: Initialized OpenAI client instance
+
+    Raises:
+        ValueError: If OPENAI_API_KEY is not set in environment variables
+    """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY not set in environment")

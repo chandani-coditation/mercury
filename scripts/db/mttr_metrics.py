@@ -7,6 +7,21 @@ from datetime import datetime, timedelta
 # Add project root to path (go up 3 levels: scripts/db -> scripts -> project root)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+try:
+    from ai_service.core import get_logger, setup_logging
+except ImportError:
+    import logging
+
+    def setup_logging(log_level="INFO", service_name="mttr_metrics_script"):
+        logging.basicConfig(level=getattr(logging, log_level))
+
+    def get_logger(name):
+        return logging.getLogger(name)
+
+# Setup logging
+setup_logging(log_level="INFO", service_name="mttr_metrics_script")
+logger = get_logger(__name__)
+
 from db.connection import get_db_connection
 
 
@@ -86,23 +101,23 @@ def format_seconds(seconds: float) -> str:
 
 
 def print_metrics(hours: int = 24):
-    """Print MTTR metrics."""
+    """Log MTTR metrics."""
     metrics = get_mttr_metrics(hours)
 
-    print(f"\nMTTR Metrics (Last {hours} hours)")
-    print("=" * 60)
-    print(f"Total Incidents:        {metrics['total_incidents']}")
-    print(f"Triaged:                {metrics['triaged_count']}")
-    print(f"Resolutions Proposed:   {metrics['resolved_count']}")
-    print(f"Resolutions Accepted:   {metrics['accepted_count']}")
-    print()
-    print("Timing Metrics:")
-    print(f"  Avg Triage Time:      {format_seconds(metrics['avg_triage_secs'])}")
-    print(f"  Avg Resolution Time: {format_seconds(metrics['avg_resolution_secs'])}")
-    print(f"  Avg MTTR:             {format_seconds(metrics['avg_mttr_secs'])}")
-    print(f"  Median MTTR:          {format_seconds(metrics['median_mttr_secs'])}")
-    print(f"  P95 MTTR:             {format_seconds(metrics['p95_mttr_secs'])}")
-    print("=" * 60)
+    logger.info(f"\nMTTR Metrics (Last {hours} hours)")
+    logger.info("=" * 60)
+    logger.info(f"Total Incidents:        {metrics['total_incidents']}")
+    logger.info(f"Triaged:                {metrics['triaged_count']}")
+    logger.info(f"Resolutions Proposed:   {metrics['resolved_count']}")
+    logger.info(f"Resolutions Accepted:   {metrics['accepted_count']}")
+    logger.info("")
+    logger.info("Timing Metrics:")
+    logger.info(f"  Avg Triage Time:      {format_seconds(metrics['avg_triage_secs'])}")
+    logger.info(f"  Avg Resolution Time: {format_seconds(metrics['avg_resolution_secs'])}")
+    logger.info(f"  Avg MTTR:             {format_seconds(metrics['avg_mttr_secs'])}")
+    logger.info(f"  Median MTTR:          {format_seconds(metrics['median_mttr_secs'])}")
+    logger.info(f"  P95 MTTR:             {format_seconds(metrics['p95_mttr_secs'])}")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":

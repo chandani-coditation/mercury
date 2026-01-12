@@ -7,6 +7,17 @@ from datetime import datetime
 from typing import Optional
 from logging.handlers import TimedRotatingFileHandler
 
+# Import log sanitizer for sensitive data protection
+try:
+    from ai_service.core.log_sanitizer import sanitize_log_message, sanitize_exception_args
+except ImportError:
+    # Fallback if log_sanitizer is not available
+    def sanitize_log_message(message: str) -> str:
+        return message
+
+    def sanitize_exception_args(args: tuple) -> tuple:
+        return args
+
 
 def setup_logging(
     log_level: str = "INFO",
@@ -81,6 +92,38 @@ def setup_logging(
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    # Add log sanitization filter to all handlers
+    class SanitizeFilter(logging.Filter):
+        """Filter to sanitize log messages and exception args."""
+
+        def filter(self, record: logging.LogRecord) -> bool:
+            """Sanitize log record message and exception args."""
+            # Sanitize the message
+            if hasattr(record, "msg") and isinstance(record.msg, str):
+                record.msg = sanitize_log_message(record.msg)
+            elif hasattr(record, "args") and record.args:
+                # Sanitize format string arguments
+                sanitized_args = []
+                for arg in record.args:
+                    if isinstance(arg, str):
+                        sanitized_args.append(sanitize_log_message(arg))
+                    else:
+                        sanitized_args.append(arg)
+                record.args = tuple(sanitized_args)
+
+            # Sanitize exception info if present
+            if record.exc_info and record.exc_info[1]:
+                exc = record.exc_info[1]
+                if hasattr(exc, "args") and exc.args:
+                    exc.args = sanitize_exception_args(exc.args)
+
+            return True
+
+    # Add sanitization filter to all handlers
+    sanitize_filter = SanitizeFilter()
+    for handler in logger.handlers:
+        handler.addFilter(sanitize_filter)
 
     return logger
 

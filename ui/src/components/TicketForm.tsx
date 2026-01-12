@@ -52,6 +52,29 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
   >({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
+  const validateTimestamp = (value: string): string | null => {
+    if (!value.trim()) return null; // Empty is allowed (will be auto-generated)
+    
+    // Check if it's a valid ISO 8601 date string
+    const date = new Date(value);
+    
+    if (isNaN(date.getTime())) {
+      return "Invalid date format. Please use ISO 8601 format (e.g., 2025-12-22T01:43:00Z)";
+    }
+    
+    if (!value.includes('T')) {
+      return "Missing 'T' separator. Expected format: YYYY-MM-DDTHH:mm:ssZ (e.g., 2025-12-22T01:43:00Z)";
+    }
+    
+    // Check for basic ISO 8601 pattern
+    const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+    if (!isoPattern.test(value)) {
+      return "Invalid format. Expected: YYYY-MM-DDTHH:mm:ssZ or YYYY-MM-DDTHH:mm:ss.sssZ";
+    }
+    
+    return null; // Valid
+  };
+
   const validateField = (field: string, value: string) => {
     const errors: Record<string, string> = {};
 
@@ -92,6 +115,12 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
       case "component":
         if (!value.trim()) {
           errors[field] = "Component is required";
+        }
+        break;
+      case "ts":
+        const timestampError = validateTimestamp(value);
+        if (timestampError) {
+          errors[field] = timestampError;
         }
         break;
     }
@@ -149,6 +178,7 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
       description: alert.description,
       service: alert.labels.service,
       component: alert.labels.component,
+      ts: alert.ts,
     }).forEach(([field, value]) => {
       const errors = validateField(field, value);
       Object.assign(allErrors, errors);
@@ -161,7 +191,13 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
       return;
     }
 
-    onSubmit(alert);
+    // Auto-generate timestamp if empty
+    const alertToSubmit = {
+      ...alert,
+      ts: alert.ts.trim() || new Date().toISOString(),
+    };
+
+    onSubmit(alertToSubmit);
   };
 
   const handleReset = () => {
@@ -252,7 +288,11 @@ export const TicketForm = ({ onSubmit, isLoading, error }: TicketFormProps) => {
             onChange={(value) => handleAlertChange("ts", value)}
             placeholder={new Date().toISOString()}
             disabled={isLoading}
-            tooltip="ISO 8601 timestamp (auto-generated if not provided)"
+            status={getFieldStatus("ts")}
+            error={
+              touchedFields.has("ts") ? validationErrors.ts : undefined
+            }
+            tooltip="ISO 8601 timestamp format required (e.g., 2025-12-22T01:43:00Z). Leave empty to auto-generate."
           />
         </div>
 

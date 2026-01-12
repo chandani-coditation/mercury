@@ -26,6 +26,21 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+try:
+    from ai_service.core import get_logger, setup_logging
+except ImportError:
+    import logging
+
+    def setup_logging(log_level="INFO", service_name="ingest_data_script"):
+        logging.basicConfig(level=getattr(logging, log_level))
+
+    def get_logger(name):
+        return logging.getLogger(name)
+
+# Setup logging
+setup_logging(log_level="INFO", service_name="ingest_data_script")
+logger = get_logger(__name__)
+
 import requests
 
 INGESTION_SERVICE_URL = os.getenv("INGESTION_SERVICE_URL", "http://localhost:8002")
@@ -33,7 +48,7 @@ INGESTION_SERVICE_URL = os.getenv("INGESTION_SERVICE_URL", "http://localhost:800
 
 def ingest_file(file_path: Path, doc_type: str):
     """Ingest a single file (supports JSON, JSONL, or plain text)."""
-    print(f"Ingesting {file_path} as {doc_type}...")
+    logger.info(f"Ingesting {file_path} as {doc_type}...")
 
     # Calculate timeout based on file size and type
     # Large log files need more time for embedding generation
@@ -41,7 +56,7 @@ def ingest_file(file_path: Path, doc_type: str):
     if doc_type == "log" and file_size_mb > 5:
         # Large log files: 10 minutes per MB (minimum 10 minutes)
         timeout = max(600, int(file_size_mb * 600))
-        print(
+        logger.info(
             f"  Large log file detected ({file_size_mb:.1f}MB), using extended timeout: {timeout}s"
         )
     elif doc_type == "log":
@@ -66,12 +81,12 @@ def ingest_file(file_path: Path, doc_type: str):
                     item = json.loads(line)
                     items.append(item)
                 except json.JSONDecodeError as e:
-                    print(f"   Warning: Skipping invalid JSON on line {line_num}: {e}")
+                    logger.warning(f"   Warning: Skipping invalid JSON on line {line_num}: {e}")
                     continue
 
             if items:
                 # Batch ingest all items from JSONL
-                print(f"  Sending {len(items)} items to ingestion service (timeout: {timeout}s)...")
+                logger.info(f"  Sending {len(items)} items to ingestion service (timeout: {timeout}s)...")
                 response = requests.post(
                     f"{INGESTION_SERVICE_URL}/ingest/batch?doc_type={doc_type}",
                     json=items,
@@ -79,13 +94,13 @@ def ingest_file(file_path: Path, doc_type: str):
                 )
                 if response.status_code == 200:
                     result = response.json()
-                    print(f" Ingested {len(items)} items from JSONL file")
+                    logger.info(f" Ingested {len(items)} items from JSONL file")
                     return True
                 else:
-                    print(f" Error: {response.status_code} - {response.text}")
+                    logger.error(f" Error: {response.status_code} - {response.text}")
                     return False
             else:
-                print(f" No valid JSON objects found in file")
+                logger.warning(f" No valid JSON objects found in file")
                 return False
 
     # If not JSONL, try as regular JSON
@@ -103,10 +118,10 @@ def ingest_file(file_path: Path, doc_type: str):
             )
             if response.status_code == 200:
                 result = response.json()
-                print(f" Ingested {len(data)} items")
+                logger.info(f" Ingested {len(data)} items")
                 return True
             else:
-                print(f" Error: {response.status_code} - {response.text}")
+                logger.error(f" Error: {response.status_code} - {response.text}")
                 return False
         else:
             # Single item - use specific endpoint
@@ -153,10 +168,10 @@ def ingest_file(file_path: Path, doc_type: str):
 
             if response.status_code == 200:
                 result = response.json()
-                print(f" Ingested: {result.get('document_id', 'N/A')}")
+                logger.info(f" Ingested: {result.get('document_id', 'N/A')}")
                 return True
             else:
-                print(f" Error: {response.status_code} - {response.text}")
+                logger.error(f" Error: {response.status_code} - {response.text}")
                 return False
     except json.JSONDecodeError:
         # Unstructured text - use batch endpoint
@@ -167,17 +182,17 @@ def ingest_file(file_path: Path, doc_type: str):
         )
         if response.status_code == 200:
             result = response.json()
-            print(f" Ingested as text document")
+            logger.info(f" Ingested as text document")
             return True
         else:
-            print(f" Error: {response.status_code} - {response.text}")
+            logger.error(f" Error: {response.status_code} - {response.text}")
             return False
 
 
 def ingest_directory(directory: Path, doc_type: str, pattern: str = "*"):
     """Ingest all files in a directory matching the pattern."""
     files = list(directory.glob(pattern))
-    print(f"Found {len(files)} files in {directory}")
+    logger.info(f"Found {len(files)} files in {directory}")
 
     success = 0
     failed = 0
@@ -188,20 +203,20 @@ def ingest_directory(directory: Path, doc_type: str, pattern: str = "*"):
                     success += 1
                 else:
                     failed += 1
-                    print(f"   Failed to ingest {file_path.name}")
+                    logger.error(f"   Failed to ingest {file_path.name}")
             except requests.exceptions.ReadTimeout as e:
                 failed += 1
-                print(f"   Timeout ingesting {file_path.name}: {e}")
-                print(
+                logger.warning(f"   Timeout ingesting {file_path.name}: {e}")
+                logger.warning(
                     f"     This file may be too large. Try ingesting it separately with a longer timeout."
                 )
             except Exception as e:
                 failed += 1
-                print(f"   Error ingesting {file_path.name}: {e}")
+                logger.error(f"   Error ingesting {file_path.name}: {e}")
 
-    print(f"\n Successfully ingested {success}/{len(files)} files")
+    logger.info(f"\n Successfully ingested {success}/{len(files)} files")
     if failed > 0:
-        print(f" Failed to ingest {failed} files")
+        logger.error(f" Failed to ingest {failed} files")
     return success
 
 
@@ -244,17 +259,17 @@ Examples:
     try:
         response = requests.get(f"{INGESTION_SERVICE_URL}/health", timeout=5)
         if response.status_code != 200:
-            print(f" Ingestion service not healthy: {response.status_code}")
+            logger.error(f" Ingestion service not healthy: {response.status_code}")
             sys.exit(1)
     except Exception as e:
-        print(f" Cannot connect to ingestion service at {INGESTION_SERVICE_URL}: {e}")
+        logger.error(f" Cannot connect to ingestion service at {INGESTION_SERVICE_URL}: {e}")
         sys.exit(1)
 
-    print(f" Connected to ingestion service at {INGESTION_SERVICE_URL}\n")
+    logger.info(f" Connected to ingestion service at {INGESTION_SERVICE_URL}\n")
 
     if args.file:
         if not args.file.exists():
-            print(f" File not found: {args.file}")
+            logger.error(f" File not found: {args.file}")
             sys.exit(1)
 
         # Auto-detect type from filename if not provided
@@ -271,14 +286,14 @@ Examples:
                 doc_type = "log"
             else:
                 doc_type = "document"
-            print(f"Auto-detected type: {doc_type}")
+            logger.info(f"Auto-detected type: {doc_type}")
 
         success = ingest_file(args.file, doc_type)
         sys.exit(0 if success else 1)
 
     elif args.dir:
         if not args.dir.exists():
-            print(f" Directory not found: {args.dir}")
+            logger.error(f" Directory not found: {args.dir}")
             sys.exit(1)
 
         # If no type specified, process all types
@@ -294,15 +309,15 @@ Examples:
             for doc_type, type_pattern in types.items():
                 files = list(args.dir.glob(type_pattern))
                 if files:
-                    print(f"\n{'='*60}")
-                    print(f"Processing {doc_type} files...")
-                    print(f"{'='*60}")
+                    logger.info(f"\n{'='*60}")
+                    logger.info(f"Processing {doc_type} files...")
+                    logger.info(f"{'='*60}")
                     success = ingest_directory(args.dir, doc_type, type_pattern)
                     total_ingested += success
 
-            print(f"\n{'='*60}")
-            print(f" Total files ingested: {total_ingested}")
-            print(f"{'='*60}")
+            logger.info(f"\n{'='*60}")
+            logger.info(f" Total files ingested: {total_ingested}")
+            logger.info(f"{'='*60}")
             sys.exit(0 if total_ingested > 0 else 1)
         else:
             success = ingest_directory(args.dir, args.type, args.pattern)

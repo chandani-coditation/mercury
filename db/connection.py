@@ -33,15 +33,36 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
     """
     Initialize the database connection pool.
 
+    Validates database password strength in production environments to ensure security.
+
     Args:
         min_size: Minimum number of connections in pool (default: 2)
         max_size: Maximum number of connections in pool (default: 10)
         timeout: Connection timeout in seconds (default: 30)
+
+    Raises:
+        ValueError: If password validation fails in production
     """
     global _db_pool
     if _db_pool is not None:
         logger.warning("Database pool already initialized")
         return
+
+    # Validate database password in production
+    try:
+        from ai_service.core.password_validator import validate_database_password
+
+        is_valid, errors = validate_database_password()
+        if not is_valid:
+            error_msg = "Database password validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    except ImportError:
+        # If password validator is not available, log warning but continue
+        logger.warning(
+            "Password validator not available. Skipping password validation. "
+            "Ensure POSTGRES_PASSWORD is set to a strong password in production."
+        )
 
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
@@ -95,6 +116,15 @@ def close_db_pool():
 
 
 def _create_direct_connection():
+    """
+    Create a direct database connection (bypassing connection pool).
+
+    This is used as a fallback when the connection pool is not initialized.
+    Should only be used in exceptional circumstances.
+
+    Returns:
+        psycopg.Connection: Database connection object
+    """
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
     dbname = os.getenv("POSTGRES_DB", "nocdb")

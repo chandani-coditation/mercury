@@ -277,10 +277,9 @@ def ingest_csv_file(
         test_percentage: Percentage of incidents to reserve for testing (default: 0.1 = 10%)
         test_output_file: Optional path to save test incidents (default: tickets_data/test_incidents.csv)
     """
-    print(f"\n{'='*70}")
-    print(f"Processing: {file_path.name}")
-    print(f"{'='*70}")
-    logger.info(f"Processing CSV file: {file_path}")
+    logger.info(f"\n{'='*70}")
+    logger.info(f"Processing: {file_path.name}")
+    logger.info(f"{'='*70}")
 
     success_count = 0
     error_count = 0
@@ -288,7 +287,7 @@ def ingest_csv_file(
 
     try:
         # First pass: Read all rows and parse incidents
-        print("  Reading and parsing CSV file...")
+        logger.info("  Reading and parsing CSV file...")
         incidents = []
         with open(file_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -299,16 +298,14 @@ def ingest_csv_file(
                 except Exception as e:
                     error_count += 1
                     error_msg = f"  Error parsing row {row_num}: {str(e)}"
-                    print(f"     WARNING: {error_msg}")
-                    logger.error(error_msg)
+                    logger.warning(f"     WARNING: {error_msg}")
                     continue
 
         total_rows = len(incidents)
-        print(f"  Parsed {total_rows} ticket(s) successfully\n")
         logger.info(f"  Parsed {total_rows} ticket(s) successfully")
 
         if total_rows == 0:
-            print("  WARNING: No valid tickets to ingest")
+            logger.warning("  WARNING: No valid tickets to ingest")
             return 0, error_count, []
 
         # Split incidents: 90% for ingestion, 10% for testing
@@ -321,23 +318,20 @@ def ingest_csv_file(
             # Save test incidents to file if output file specified (for single file mode)
             if test_output_file:
                 save_test_incidents_to_file(test_incidents, test_output_file)
-                print(
+                logger.info(
                     f"  Reserved {len(test_incidents)} ticket(s) for testing -> {test_output_file.name}"
                 )
             else:
-                print(f"  Reserved {len(test_incidents)} ticket(s) for testing")
-            print(
-                f"  Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)\n"
-            )
+                logger.info(f"  Reserved {len(test_incidents)} ticket(s) for testing")
             logger.info(
-                f"Reserved {len(test_incidents)} incidents for testing, ingesting {len(ingest_incidents)}"
+                f"  Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)"
             )
 
             incidents = ingest_incidents  # Use only the ingestion set
 
         # Second pass: Ingest incidents (individual requests with progress)
-        print(f"  Ingesting {total_rows} ticket(s)...")
-        print(f"  Progress: [{' ' * 50}] 0%", end="", flush=True)
+        logger.info(f"  Ingesting {total_rows} ticket(s)...")
+        logger.info(f"  Progress: [{' ' * 50}] 0%")
 
         for idx, incident in enumerate(incidents, 1):
             # Calculate progress percentage
@@ -361,10 +355,8 @@ def ingest_csv_file(
             title_preview = (
                 (incident.title[:40] + "...") if len(incident.title) > 40 else incident.title
             )
-            print(
-                f"\r  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}% - {title_preview}{eta_str}",
-                end="",
-                flush=True,
+            logger.info(
+                f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}% - {title_preview}{eta_str}"
             )
 
             success, _ = ingest_incident(incident, ingestion_url)
@@ -373,20 +365,18 @@ def ingest_csv_file(
             else:
                 error_count += 1
                 # Show error on new line but keep progress bar
-                print(f"\n     WARNING: Failed: {incident_id}")
-                print(
-                    f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%",
-                    end="",
-                    flush=True,
+                logger.warning(f"     WARNING: Failed: {incident_id}")
+                logger.info(
+                    f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%"
                 )
 
-        print(f"\r  Progress: [{'=' * 50}] 100% - Complete!                    ")
+        logger.info(f"  Progress: [{'=' * 50}] 100% - Complete!")
 
         elapsed_time = time.time() - start_time
-        print(f"\n  Completed in {elapsed_time:.1f}s")
-        print(f"  Success: {success_count}, Errors: {error_count}")
+        logger.info(f"  Completed in {elapsed_time:.1f}s")
+        logger.info(f"  Success: {success_count}, Errors: {error_count}")
         if success_count > 0:
-            print(f"  Average: {elapsed_time/success_count:.2f}s per ticket")
+            logger.info(f"  Average: {elapsed_time/success_count:.2f}s per ticket")
 
     except Exception as e:
         logger.error(f"Error reading CSV file {file_path}: {str(e)}")
@@ -431,24 +421,23 @@ def main():
     if not args.dir and not args.file:
         parser.error("Either --dir or --file must be provided")
 
-    # Print startup message
-    print("=" * 70)
-    print("ServiceNow Ticket Ingestion Script")
-    print("=" * 70)
+    # Startup message
+    logger.info("=" * 70)
+    logger.info("ServiceNow Ticket Ingestion Script")
+    logger.info("=" * 70)
     logger.info("Starting ServiceNow ticket ingestion...")
 
     # Load field mappings configuration
     try:
-        print(" Loading field mappings configuration...")
+        logger.info(" Loading field mappings configuration...")
         field_mappings_config = get_field_mappings_config()
         servicenow_mappings = field_mappings_config.get("servicenow_csv", {})
         severity_mapping = field_mappings_config.get("severity_mapping", {}).get(
             "impact_urgency_to_severity", {}
         )
-        print(" Configuration loaded successfully\n")
+        logger.info(" Configuration loaded successfully")
     except Exception as e:
-        print(f" Failed to load field mappings: {str(e)}")
-        logger.error(f"Failed to load field mappings: {str(e)}")
+        logger.error(f" Failed to load field mappings: {str(e)}")
         sys.exit(1)
 
     total_success = 0
@@ -459,8 +448,7 @@ def main():
         # Process single file
         file_path = Path(args.file)
         if not file_path.exists():
-            print(f" File not found: {file_path}")
-            logger.error(f"File not found: {file_path}")
+            logger.error(f" File not found: {file_path}")
             sys.exit(1)
 
         test_output = (
@@ -485,18 +473,15 @@ def main():
         # Process directory
         dir_path = Path(args.dir)
         if not dir_path.exists():
-            print(f" Directory not found: {dir_path}")
-            logger.error(f"Directory not found: {dir_path}")
+            logger.error(f" Directory not found: {dir_path}")
             sys.exit(1)
 
         csv_files = list(dir_path.glob("*.csv"))
         if not csv_files:
-            print(f"  No CSV files found in {dir_path}")
-            logger.warning(f"No CSV files found in {dir_path}")
+            logger.warning(f"  No CSV files found in {dir_path}")
             sys.exit(0)
 
-        print(f"\nFound {len(csv_files)} CSV file(s) to process\n")
-        logger.info(f"Found {len(csv_files)} CSV file(s)")
+        logger.info(f"Found {len(csv_files)} CSV file(s) to process")
 
         for csv_file in csv_files:
             success, errors, test_incidents = ingest_csv_file(
@@ -520,14 +505,8 @@ def main():
                 else dir_path / "test_incidents.csv"
             )
             save_test_incidents_to_file(all_test_incidents, test_output)
-            print(f"\nSaved {len(all_test_incidents)} test incidents to {test_output.name}")
             logger.info(f"Saved {len(all_test_incidents)} test incidents to {test_output}")
 
-    print(f"\n{'='*70}")
-    print(f"Ingestion Summary:")
-    print(f"   Successfully ingested: {total_success} ticket(s)")
-    print(f"   Errors: {total_errors} ticket(s)")
-    print(f"{'='*70}")
     logger.info(f"\n{'='*70}")
     logger.info(f"Ingestion Summary:")
     logger.info(f"   Successfully ingested: {total_success} ticket(s)")
@@ -536,10 +515,10 @@ def main():
 
     # Verify embeddings were created
     if total_success > 0:
-        print("\n" + "=" * 70)
-        print("Verification")
-        print("=" * 70)
-        logger.info("\nVerifying embeddings in database...")
+        logger.info("\n" + "=" * 70)
+        logger.info("Verification")
+        logger.info("=" * 70)
+        logger.info("Verifying embeddings in database...")
         try:
             from db.connection import get_db_connection_context
 
@@ -565,46 +544,33 @@ def main():
 
                 cur.close()
 
-            print(f"\nDatabase Verification:")
-            print(f"   Incident signatures created: {sig_count}")
-            print(f"   Signatures with embeddings: {embed_count}/{sig_count}")
-            print(f"   Signatures with tsvector: {tsv_count}/{sig_count}")
             logger.info(f"\nDatabase Verification:")
             logger.info(f"   Incident signatures created: {sig_count}")
             logger.info(f"   Signatures with embeddings: {embed_count}/{sig_count}")
             logger.info(f"   Signatures with tsvector: {tsv_count}/{sig_count}")
 
             if embed_count == sig_count and sig_count > 0 and tsv_count == sig_count:
-                print(
-                    f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!"
-                )
                 logger.info(
                     f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!"
                 )
             elif embed_count < sig_count or tsv_count < sig_count:
                 missing_embed = sig_count - embed_count
                 missing_tsv = sig_count - tsv_count
-                print(
-                    f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!"
-                )
                 logger.warning(
                     f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!"
                 )
             else:
-                print(f"\n   WARNING: No incident signatures found in database!")
                 logger.warning(f"\n   WARNING: No incident signatures found in database!")
 
         except Exception as e:
-            print(f"\n   Could not verify embeddings: {str(e)}")
-            print(f"   You can manually verify using: python scripts/db/verify_db.py")
-            logger.warning(f"   Could not verify embeddings: {str(e)}")
+            logger.warning(f"\n   Could not verify embeddings: {str(e)}")
             logger.warning(f"   You can manually verify using: python scripts/db/verify_db.py")
 
     if total_errors > 0:
-        print(f"\n  Completed with {total_errors} error(s). Check logs for details.")
+        logger.error(f"\n  Completed with {total_errors} error(s). Check logs for details.")
         sys.exit(1)
     else:
-        print(f"\n Ingestion completed successfully!")
+        logger.info(f"\n Ingestion completed successfully!")
 
 
 if __name__ == "__main__":

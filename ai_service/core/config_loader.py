@@ -11,7 +11,15 @@ _CONFIG_CACHE: Optional[Dict] = None
 
 
 def _get_config_dir() -> str:
-    """Get the config directory path."""
+    """
+    Get the absolute path to the configuration directory.
+
+    Calculates the path relative to this module's location. The config directory
+    is expected to be at the project root level, containing JSON configuration files.
+
+    Returns:
+        str: Absolute path to the config directory (typically <project_root>/config)
+    """
     # __file__ is ai_service/core/config_loader.py
     # Go up 3 levels: ai_service/core/ -> ai_service/ -> project root
     current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -113,42 +121,99 @@ def reload_config(config_dir: Optional[str] = None) -> Dict:
 
 
 def get_policy_config() -> Dict:
-    """Get policy gate configuration."""
+    """
+    Get policy gate configuration.
+
+    Returns the policy gate configuration which defines automated action policies
+    (AUTO, PROPOSE, REVIEW) based on triage output and resolution risk levels.
+
+    Returns:
+        Dict: Policy gate configuration dictionary
+    """
     config = load_config()
     return config.get("policy_gate", {})
 
 
 def get_guardrail_config() -> Dict:
-    """Get guardrails configuration."""
+    """
+    Get guardrails configuration.
+
+    Returns the guardrails configuration which defines validation rules for LLM outputs,
+    including hallucination detection, duplication checks, and architectural boundary enforcement.
+
+    Returns:
+        Dict: Guardrails configuration dictionary
+    """
     config = load_config()
     return config.get("guardrails", {})
 
 
 def get_retrieval_config() -> Dict:
-    """Get retrieval configuration."""
+    """
+    Get retrieval configuration.
+
+    Returns the retrieval configuration which defines parameters for hybrid search,
+    including vector similarity search, full-text search, RRF (Reciprocal Rank Fusion),
+    and MMR (Maximal Marginal Relevance) settings.
+
+    Returns:
+        Dict: Retrieval configuration dictionary
+    """
     config = load_config()
     return config.get("retrieval", {})
 
 
 def get_workflow_config() -> Dict:
-    """Get workflow configuration (feedback/policy flags)."""
+    """
+    Get workflow configuration.
+
+    Returns the workflow configuration which defines feature flags and settings
+    for feedback collection, policy enforcement, and other workflow-related features.
+
+    Returns:
+        Dict: Workflow configuration dictionary containing feedback and policy flags
+    """
     config = load_config()
     return config.get("workflow", {})
 
 
 def get_llm_config() -> Dict:
-    """Get LLM configuration (model, temperature, etc.)."""
+    """
+    Get LLM configuration.
+
+    Returns the LLM configuration which defines model settings, temperature,
+    max tokens, and other parameters for OpenAI API calls.
+
+    Returns:
+        Dict: LLM configuration dictionary containing model name, temperature, max_tokens, etc.
+    """
     config = load_config()
     return config.get("llm", {})
 
 
 def get_field_mappings_config() -> Dict:
-    """Get field mappings configuration (CSV columns, DOCX sections to internal models)."""
+    """
+    Get field mappings configuration.
+
+    Returns the field mappings configuration which defines how external data formats
+    (CSV columns, DOCX sections) map to internal data models and database schemas.
+
+    Returns:
+        Dict: Field mappings configuration dictionary
+    """
     config = load_config()
     return config.get("field_mappings", {})
 
 
 def get_embeddings_config() -> Dict:
-    """Get embeddings configuration (model, dimensions, etc.)."""
+    """
+    Get embeddings configuration.
+
+    Returns the embeddings configuration which defines the embedding model,
+    dimensions, and other parameters for vector embedding generation.
+
+    Returns:
+        Dict: Embeddings configuration dictionary containing model name, dimensions, etc.
+    """
     config = load_config()
     return config.get("embeddings", {})

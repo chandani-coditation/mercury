@@ -6,6 +6,21 @@ import os
 # Add project root to path (go up 3 levels: scripts/db -> scripts -> project root)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+try:
+    from ai_service.core import get_logger, setup_logging
+except ImportError:
+    import logging
+
+    def setup_logging(log_level="INFO", service_name="init_db_script"):
+        logging.basicConfig(level=getattr(logging, log_level))
+
+    def get_logger(name):
+        return logging.getLogger(name)
+
+# Setup logging
+setup_logging(log_level="INFO", service_name="init_db_script")
+logger = get_logger(__name__)
+
 from db.connection import get_db_connection
 
 
@@ -25,10 +40,10 @@ def init_schema():
     cur.execute(schema_sql)
     conn.commit()
 
-    print(" Database schema initialized successfully")
-    print(" Extensions: vector, uuid-ossp")
-    print(" Tables: documents, chunks, incidents, feedback")
-    print(" Indexes and view created")
+    logger.info(" Database schema initialized successfully")
+    logger.info(" Extensions: vector, uuid-ossp")
+    logger.info(" Tables: documents, chunks, incidents, feedback")
+    logger.info(" Indexes and view created")
 
     cur.close()
     conn.close()
@@ -38,5 +53,5 @@ if __name__ == "__main__":
     try:
         init_schema()
     except Exception as e:
-        print(f"Error initializing database: {e}")
+        logger.error(f"Error initializing database: {e}")
         sys.exit(1)

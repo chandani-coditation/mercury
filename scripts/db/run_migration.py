@@ -6,6 +6,21 @@ import os
 # Add project root to path (go up 3 levels: scripts/db -> scripts -> project root)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+try:
+    from ai_service.core import get_logger, setup_logging
+except ImportError:
+    import logging
+
+    def setup_logging(log_level="INFO", service_name="migration_script"):
+        logging.basicConfig(level=getattr(logging, log_level))
+
+    def get_logger(name):
+        return logging.getLogger(name)
+
+# Setup logging
+setup_logging(log_level="INFO", service_name="migration_script")
+logger = get_logger(__name__)
+
 from db.connection import get_db_connection
 
 
@@ -18,14 +33,14 @@ def run_migration(migration_file):
         with open(migration_file, "r") as f:
             migration_sql = f.read()
 
-        print(f"Running migration: {migration_file}")
+        logger.info(f"Running migration: {migration_file}")
         cur.execute(migration_sql)
         conn.commit()
-        print(" Migration completed successfully")
+        logger.info(" Migration completed successfully")
 
     except Exception as e:
         conn.rollback()
-        print(f" Migration failed: {e}")
+        logger.error(f" Migration failed: {e}")
         raise
     finally:
         cur.close()
@@ -41,9 +56,9 @@ if __name__ == "__main__":
     combined_migration = os.path.join(migration_dir, "000_combined_migration.sql")
 
     if os.path.exists(combined_migration):
-        print("Found combined migration file - using it instead of individual migrations")
+        logger.info("Found combined migration file - using it instead of individual migrations")
         run_migration(combined_migration)
-        print("\n Combined migration completed")
+        logger.info("\n Combined migration completed")
     else:
         # Run all migrations in order (excluding combined if it exists)
         migrations = sorted(
@@ -55,13 +70,13 @@ if __name__ == "__main__":
         )
 
         if not migrations:
-            print("No migrations found")
+            logger.warning("No migrations found")
             sys.exit(0)
 
-        print(f"Found {len(migrations)} migration(s)")
+        logger.info(f"Found {len(migrations)} migration(s)")
 
         for migration in migrations:
             migration_path = os.path.join(migration_dir, migration)
             run_migration(migration_path)
 
-        print("\n All migrations completed")
+        logger.info("\n All migrations completed")

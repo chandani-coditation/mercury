@@ -22,6 +22,21 @@ from typing import List
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+try:
+    from ai_service.core import get_logger, setup_logging
+except ImportError:
+    import logging
+
+    def setup_logging(log_level="INFO", service_name="cleanup_data_script"):
+        logging.basicConfig(level=getattr(logging, log_level))
+
+    def get_logger(name):
+        return logging.getLogger(name)
+
+# Setup logging
+setup_logging(log_level="INFO", service_name="cleanup_data_script")
+logger = get_logger(__name__)
+
 from db.connection import get_db_connection
 
 ALL_TARGETS = ["documents", "chunks", "incidents", "feedback"]
@@ -48,23 +63,23 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
     stmts = build_statements(targets)
 
     if dry_run:
-        print("\n DRY RUN - The following statements would be executed:")
+        logger.info("\n DRY RUN - The following statements would be executed:")
         for s in stmts:
-            print(f"  {s.strip()}")
-        print(f"\n  This would delete all data from: {', '.join(targets)}")
+            logger.info(f"  {s.strip()}")
+        logger.info(f"\n  This would delete all data from: {', '.join(targets)}")
         return
 
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         for s in stmts:
-            print(f"Executing: {s.strip()}")
+            logger.info(f"Executing: {s.strip()}")
             cur.execute(s)
         conn.commit()
-        print(f"\n Cleanup complete. Deleted all data from: {', '.join(targets)}")
+        logger.info(f"\n Cleanup complete. Deleted all data from: {', '.join(targets)}")
     except Exception as e:
         conn.rollback()
-        print(f"\n Cleanup failed: {type(e).__name__}: {e}")
+        logger.error(f"\n Cleanup failed: {type(e).__name__}: {e}")
         raise
     finally:
         cur.close()
@@ -112,10 +127,10 @@ Examples:
     targets = selected or ALL_TARGETS
 
     if not args.dry_run and not args.yes:
-        print(" Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
+        logger.warning(" Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
         sys.exit(1)
 
-    print(f"Targets: {', '.join(targets)}")
+    logger.info(f"Targets: {', '.join(targets)}")
     cleanup_db(targets, dry_run=args.dry_run)
 
 

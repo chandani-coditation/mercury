@@ -24,6 +24,25 @@ from pathlib import Path
 from typing import List
 from dotenv import load_dotenv
 
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+try:
+    from ai_service.core import get_logger, setup_logging
+except ImportError:
+    import logging
+
+    def setup_logging(log_level="INFO", service_name="cleanup_script"):
+        logging.basicConfig(level=getattr(logging, log_level))
+
+    def get_logger(name):
+        return logging.getLogger(name)
+
+# Setup logging
+setup_logging(log_level="INFO", service_name="cleanup_script")
+logger = get_logger(__name__)
+
 
 ALL_TARGETS = [
     "documents",
@@ -92,12 +111,12 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
 
     stmts = build_statements(targets)
     if dry_run:
-        print(
+        logger.info(
             f"\nDRY RUN - The following statements would be executed in Docker PostgreSQL ({DOCKER_CONTAINER}):"
         )
-        print(f"  Database: {DB_NAME}, User: {DB_USER}")
+        logger.info(f"  Database: {DB_NAME}, User: {DB_USER}")
         for s in stmts:
-            print(f"  {s.strip()}")
+            logger.info(f"  {s.strip()}")
         return
 
     # Use Docker exec to connect to Docker PostgreSQL container
@@ -106,16 +125,16 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
 
     try:
         for s in stmts:
-            print(f"Executing in Docker ({DOCKER_CONTAINER}): {s.strip()}")
+            logger.info(f"Executing in Docker ({DOCKER_CONTAINER}): {s.strip()}")
             # Execute SQL via docker exec
             result = subprocess.run(docker_cmd + [s], capture_output=True, text=True, check=True)
             if result.stdout:
-                print(result.stdout.strip())
-        print("\n✅ Cleanup complete.")
+                logger.info(result.stdout.strip())
+        logger.info("\n✅ Cleanup complete.")
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ Cleanup failed: {e}")
+        logger.error(f"\n❌ Cleanup failed: {e}")
         if e.stderr:
-            print(f"Error: {e.stderr}")
+            logger.error(f"Error: {e.stderr}")
         raise
 
 
@@ -181,10 +200,10 @@ Examples:
     targets = selected or ALL_TARGETS
 
     if not args.dry_run and not args.yes:
-        print(" Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
+        logger.warning(" Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
         sys.exit(1)
 
-    print(f"Targets: {', '.join(targets)}")
+    logger.info(f"Targets: {', '.join(targets)}")
     cleanup_db(targets, dry_run=args.dry_run)
 
 
