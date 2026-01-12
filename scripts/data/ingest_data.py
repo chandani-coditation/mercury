@@ -37,6 +37,7 @@ except ImportError:
     def get_logger(name):
         return logging.getLogger(name)
 
+
 # Setup logging
 setup_logging(log_level="INFO", service_name="ingest_data_script")
 logger = get_logger(__name__)
@@ -86,7 +87,9 @@ def ingest_file(file_path: Path, doc_type: str):
 
             if items:
                 # Batch ingest all items from JSONL
-                logger.info(f"  Sending {len(items)} items to ingestion service (timeout: {timeout}s)...")
+                logger.info(
+                    f"  Sending {len(items)} items to ingestion service (timeout: {timeout}s)..."
+                )
                 response = requests.post(
                     f"{INGESTION_SERVICE_URL}/ingest/batch?doc_type={doc_type}",
                     json=items,

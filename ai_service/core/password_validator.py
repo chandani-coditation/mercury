@@ -79,7 +79,10 @@ def validate_password_strength(password: str, is_production: bool = None) -> Tup
             errors.append("Password contains repeated characters (e.g., 'aaa')")
 
         # Check for sequential characters
-        if re.search(r"(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)", password.lower()):
+        if re.search(
+            r"(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)",
+            password.lower(),
+        ):
             errors.append("Password contains sequential characters")
 
     return len(errors) == 0, errors
@@ -110,4 +113,3 @@ def validate_database_password() -> Tuple[bool, List[str]]:
         ]
 
     return validate_password_strength(password, is_production=True)
-

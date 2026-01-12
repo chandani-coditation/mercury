@@ -2,7 +2,10 @@
 
 import os
 import pytest
-from ai_service.core.password_validator import validate_password_strength, validate_database_password
+from ai_service.core.password_validator import (
+    validate_password_strength,
+    validate_database_password,
+)
 
 
 class TestPasswordStrength:
@@ -84,7 +87,7 @@ class TestDatabasePasswordValidation:
         """Test that default passwords are rejected in production."""
         monkeypatch.setenv("ENVIRONMENT", "production")
         monkeypatch.setenv("POSTGRES_PASSWORD", "postgres")
-        
+
         is_valid, errors = validate_database_password()
         assert not is_valid
         assert any("default" in e.lower() or "placeholder" in e.lower() for e in errors)
@@ -93,7 +96,7 @@ class TestDatabasePasswordValidation:
         """Test that default passwords are allowed in development."""
         monkeypatch.setenv("ENVIRONMENT", "development")
         monkeypatch.setenv("POSTGRES_PASSWORD", "postgres")
-        
+
         is_valid, errors = validate_database_password()
         assert is_valid
         assert len(errors) == 0
@@ -102,8 +105,7 @@ class TestDatabasePasswordValidation:
         """Test that strong passwords are accepted in production."""
         monkeypatch.setenv("ENVIRONMENT", "production")
         monkeypatch.setenv("POSTGRES_PASSWORD", "StrongPass123!@#")
-        
+
         is_valid, errors = validate_database_password()
         assert is_valid
         assert len(errors) == 0
-

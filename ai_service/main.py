@@ -35,7 +35,9 @@ app = FastAPI(
 allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
 if allowed_origins_env:
     # Split by comma and strip whitespace from each origin
-    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+    allowed_origins = [
+        origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()
+    ]
 else:
     # Default to localhost for development only
     allowed_origins = ["http://localhost:5173"]

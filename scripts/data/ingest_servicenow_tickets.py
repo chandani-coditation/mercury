@@ -366,9 +366,7 @@ def ingest_csv_file(
                 error_count += 1
                 # Show error on new line but keep progress bar
                 logger.warning(f"     WARNING: Failed: {incident_id}")
-                logger.info(
-                    f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%"
-                )
+                logger.info(f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%")
 
         logger.info(f"  Progress: [{'=' * 50}] 100% - Complete!")
 

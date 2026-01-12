@@ -18,6 +18,7 @@ except ImportError:
     def get_logger(name):
         return logging.getLogger(name)
 
+
 # Setup logging
 setup_logging(log_level="INFO", service_name="mttr_metrics_script")
 logger = get_logger(__name__)

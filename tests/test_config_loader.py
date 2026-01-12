@@ -59,11 +59,11 @@ class TestConfigLoader:
         """Test that configuration is cached after first load."""
         # Clear any existing cache by reloading
         reload_config()
-        
+
         # Load config twice
         config1 = load_config()
         config2 = load_config()
-        
+
         # Should be the same object (cached)
         assert config1 is config2
 
@@ -71,11 +71,10 @@ class TestConfigLoader:
         """Test that reload_config clears the cache."""
         # Load config
         config1 = load_config()
-        
+
         # Reload config
         config2 = reload_config()
-        
+
         # Should be different objects (cache cleared)
         # Note: In practice they may have same content, but cache was cleared
         assert isinstance(config2, dict)
-

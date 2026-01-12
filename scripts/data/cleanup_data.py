@@ -33,6 +33,7 @@ except ImportError:
     def get_logger(name):
         return logging.getLogger(name)
 
+
 # Setup logging
 setup_logging(log_level="INFO", service_name="cleanup_data_script")
 logger = get_logger(__name__)
@@ -127,7 +128,9 @@ Examples:
     targets = selected or ALL_TARGETS
 
     if not args.dry_run and not args.yes:
-        logger.warning(" Refusing to proceed without --yes (destructive). Use --dry-run to preview.")
+        logger.warning(
+            " Refusing to proceed without --yes (destructive). Use --dry-run to preview."
+        )
         sys.exit(1)
 
     logger.info(f"Targets: {', '.join(targets)}")

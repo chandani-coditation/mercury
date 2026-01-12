@@ -83,7 +83,9 @@ def sanitize_log_message(message: str) -> str:
     return sanitized
 
 
-def sanitize_dict(data: Dict[str, Any], sensitive_keys: Optional[List[str]] = None) -> Dict[str, Any]:
+def sanitize_dict(
+    data: Dict[str, Any], sensitive_keys: Optional[List[str]] = None
+) -> Dict[str, Any]:
     """
     Sanitize a dictionary by redacting values for sensitive keys.
 
@@ -146,4 +148,3 @@ def sanitize_exception_args(args: tuple) -> tuple:
         else:
             sanitized_args.append(arg)
     return tuple(sanitized_args)
-

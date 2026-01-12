@@ -150,4 +150,3 @@ class TestExceptionArgsSanitization:
         args = ("Error occurred", 123, {"key": "value"})
         sanitized = sanitize_exception_args(args)
         assert sanitized == args
-

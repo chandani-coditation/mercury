@@ -28,6 +28,7 @@ except ImportError:
     def get_logger(name):
         return logging.getLogger(name)
 
+
 # Setup logging
 setup_logging(log_level="INFO", service_name="verify_db_script")
 logger = get_logger(__name__)
@@ -225,7 +226,9 @@ def verify_db():
         for line in chunk_per_doc:
             parts = line.split("|")
             if len(parts) >= 4:
-                logger.info(f"    {parts[0]}: avg={float(parts[1]):.1f}, min={parts[2]}, max={parts[3]}")
+                logger.info(
+                    f"    {parts[0]}: avg={float(parts[1]):.1f}, min={parts[2]}, max={parts[3]}"
+                )
 
         # 5. Check for documents without chunks
         logger.info("\n🔗 Document-Chunk Relationships:")

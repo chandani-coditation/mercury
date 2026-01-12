@@ -54,7 +54,9 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
 
         is_valid, errors = validate_database_password()
         if not is_valid:
-            error_msg = "Database password validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            error_msg = "Database password validation failed:\n" + "\n".join(
+                f"  - {e}" for e in errors
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
     except ImportError:
