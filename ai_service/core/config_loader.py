@@ -100,7 +100,7 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
             raise ValueError(f"Invalid JSON in configuration file {config_path}: {e}")
 
     _CONFIG_CACHE = merged_config
-    logger.info("Configuration loaded successfully")
+    logger.debug("Configuration loaded and cached")
     return merged_config
 
 

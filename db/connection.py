@@ -76,6 +76,7 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
     wait_timeout = int(
         os.getenv("DB_POOL_WAIT_TIMEOUT", "10")
     )  # Wait up to 10s for available connection
+
     conninfo = f"host={host} port={port} dbname={dbname} user={user} password={password} connect_timeout={timeout}"
 
     try:
@@ -104,7 +105,7 @@ def init_db_pool(min_size: int = 2, max_size: int = 10, timeout: int = 30):
             logger.warning(f"Database pool connection test failed: {test_error}")
             # Don't raise - pool might still work, just log the warning
     except Exception as e:
-        logger.error(f"Failed to initialize database pool: {e}", exc_info=True)
+        logger.error("Failed to initialize database pool", exc_info=True)
         raise
 
 

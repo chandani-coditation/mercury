@@ -78,7 +78,7 @@ class IncidentRepository:
                 )
 
                 conn.commit()
-                logger.info(f"Incident created successfully: {incident_id}")
+                logger.debug(f"Incident created: {incident_id}")
                 return str(incident_id)
 
             except Exception as e:
@@ -115,7 +115,6 @@ class IncidentRepository:
                     logger.warning(f"Incident not found: {incident_id}")
                     raise IncidentNotFoundError(f"Incident {incident_id} not found")
 
-                logger.debug(f"Incident retrieved: {incident_id}")
                 return dict(row)
             except IncidentNotFoundError:
                 raise
@@ -155,7 +154,6 @@ class IncidentRepository:
                     logger.warning(f"Incident not found for alert_id: {alert_id}")
                     raise IncidentNotFoundError(f"Incident with alert_id {alert_id} not found")
 
-                logger.debug(f"Incident retrieved by alert_id: {alert_id}")
                 return dict(row)
             except IncidentNotFoundError:
                 raise

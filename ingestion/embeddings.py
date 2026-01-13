@@ -4,12 +4,12 @@ import os
 import sys
 import time
 import random
-import requests
 from pathlib import Path
 import tiktoken
 from typing import List, Optional
-from openai import OpenAI, RateLimitError, APIError, APIConnectionError, APITimeoutError
+from openai import RateLimitError, APIError, APIConnectionError, APITimeoutError
 from dotenv import load_dotenv
+from ai_service.core import get_llm_handler
 
 
 # Lazy import for logger
@@ -90,56 +90,19 @@ def count_tokens(text: str, model: str = None) -> int:
 
 
 def get_embedding_client():
-    """Get OpenAI client for embeddings."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not set in environment")
-    return OpenAI(api_key=api_key)
-
-
-def _use_gateway_for_embeddings() -> bool:
-    """Check if gateway should be used for embeddings."""
-    return os.getenv("PRIVATE_LLM_GATEWAY", "false").lower() == "true"
-
-
-def _call_gateway_embeddings(text_or_texts, model: str):
     """
-    Call gateway embeddings API directly (exact URL control).
+    Get LLM handler for embeddings (for backward compatibility).
 
-    Args:
-        text_or_texts: Single text string or list of texts
-        model: Model name
+    This function is kept for backward compatibility with existing code.
+    New code should use get_llm_handler() directly from ai_service.core.
 
     Returns:
-        Gateway response (OpenAI-compatible format)
+        LLMHandler: The global LLM handler instance
     """
-    gateway_url = os.getenv("PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL")
-    auth_key = os.getenv("PRIVATE_LLM_AUTH_KEY")
-    cert_path = os.getenv("PRIVATE_LLM_CERT_PATH")
+    # Import here to avoid circular dependencies
+    from ai_service.core import get_llm_handler
 
-    if not auth_key:
-        raise ValueError("PRIVATE_LLM_AUTH_KEY not set when gateway is enabled")
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Basic {auth_key}",
-    }
-
-    payload = {
-        "input": text_or_texts,
-        "model": model,
-    }
-
-    # Call gateway with exact URL
-    response = requests.post(
-        gateway_url,
-        headers=headers,
-        json=payload,
-        verify=cert_path if cert_path else True,
-        timeout=EMBEDDING_TIMEOUT,
-    )
-    response.raise_for_status()
-    return response.json()
+    return get_llm_handler()
 
 
 def embed_text(text: str, model: str = None) -> Optional[List[float]]:
@@ -176,26 +139,17 @@ def embed_text(text: str, model: str = None) -> Optional[List[float]]:
             f"Please chunk the text before embedding."
         )
 
-    # Check if using gateway or OpenAI
-    use_gateway = _use_gateway_for_embeddings()
-    client = None if use_gateway else get_embedding_client()
+    # Get LLM handler (handles both gateway and OpenAI modes)
+    handler = get_llm_handler()
 
     last_error = None
 
     # Retry logic with exponential backoff
     for attempt in range(MAX_RETRIES):
         try:
-            if use_gateway:
-                # Call gateway directly with exact URL
-                response = _call_gateway_embeddings(text, model)
-                # Gateway returns OpenAI-compatible format
-                return response["data"][0]["embedding"]
-            else:
-                # Use OpenAI client
-                response = client.embeddings.create(
-                    model=model, input=text, timeout=EMBEDDING_TIMEOUT
-                )
-                return response.data[0].embedding
+            # Use common handler (works for both gateway and OpenAI)
+            response = handler.embeddings_create(text, model, timeout=EMBEDDING_TIMEOUT)
+            return response.data[0].embedding
 
         except Exception as e:
             last_error = e
@@ -290,9 +244,10 @@ def embed_texts_batch(
         except Exception:
             batch_size = 100  # Fallback to default
 
-    # Check if using gateway or OpenAI
-    use_gateway = _use_gateway_for_embeddings()
-    client = None if use_gateway else get_embedding_client()
+    # Get LLM handler (handles both gateway and OpenAI modes)
+    from ai_service.core import get_llm_handler
+
+    handler = get_llm_handler()
 
     all_embeddings = []
     max_tokens = EMBEDDING_MODEL_LIMITS.get(model, 8191)
@@ -326,20 +281,12 @@ def embed_texts_batch(
 
         for attempt in range(MAX_RETRIES):
             try:
-                if use_gateway:
-                    # Call gateway directly with exact URL
-                    response = _call_gateway_embeddings(cleaned_batch, model)
-                    # Gateway returns OpenAI-compatible format
-                    batch_embeddings = [
-                        item["embedding"] for item in response["data"]
-                    ]
-                else:
-                    # Use OpenAI client
-                    response = client.embeddings.create(
-                        model=model, input=cleaned_batch, timeout=EMBEDDING_TIMEOUT
-                    )
-                    # Extract embeddings (maintain order)
-                    batch_embeddings = [item.embedding for item in response.data]
+                # Use common handler (works for both gateway and OpenAI)
+                response = handler.embeddings_create(
+                    cleaned_batch, model, timeout=EMBEDDING_TIMEOUT
+                )
+                # Extract embeddings (maintain order)
+                batch_embeddings = [item.embedding for item in response.data]
 
                 break  # Success, exit retry loop
 

@@ -25,7 +25,9 @@ This project is a NOC triage and resolution assistant. It:
 
 - **Docker** and **docker compose**
 - **Node.js** (v18+ recommended) and **npm** for the UI
-- A valid **OpenAI API key**
+- **LLM Access** (choose one):
+  - **For local development/testing**: A valid **OpenAI API key**
+  - **For production**: Access to a **Private LLM Gateway** with authentication credentials
 
 ---
 
@@ -41,10 +43,27 @@ cp env.template .env
 
 **Edit `.env` and set your configuration:**
 
-1. **OpenAI API Key** (required):
+1. **LLM Configuration** (choose one option):
+
+   **Option A: Direct OpenAI API** (for local development and testing):
    ```bash
    OPENAI_API_KEY=sk-your-api-key-here
+   PRIVATE_LLM_GATEWAY=false
    ```
+   This is the default mode. Use this for local development, testing, and when you have direct access to OpenAI API.
+
+   **Option B: Private LLM Gateway** (for production):
+   ```bash
+   PRIVATE_LLM_GATEWAY=true
+   PRIVATE_LLM_GATEWAY_URL=https://your-gateway-url/api/v1/ai/call
+   PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL=https://your-gateway-url/api/v1/ai/openai/embeddings
+   PRIVATE_LLM_AUTH_KEY=your-gateway-auth-key
+   # Optional: Only needed if gateway requires custom SSL certificate
+   PRIVATE_LLM_CERT_PATH=/path/to/certificate.pem
+   ```
+   Use this mode in production environments where LLM requests must go through a private gateway. When gateway mode is enabled, `OPENAI_API_KEY` is not required for LLM calls.
+
+   **Note**: The system automatically detects which mode to use based on the `PRIVATE_LLM_GATEWAY` environment variable. When set to `true`, all LLM calls (chat completions and embeddings) are routed through the gateway instead of directly to OpenAI.
 
 2. **Database Configuration** (defaults are usually fine):
    ```bash
@@ -307,5 +326,41 @@ pytest
 
 There are also helper scripts under `tests/` (e.g. `test_approve_and_resolve.sh`) to exercise the API end-to-end.
 
+---
 
+## 8. CI/CD and GitHub Secrets Configuration
+
+For CI/CD pipelines (e.g., GitHub Actions), you can configure LLM access using GitHub Secrets.
+
+### Using OpenAI API Key in GitHub Actions
+
+If your GitHub secret is named `OPENAI_API_KEY`:
+
+```yaml
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+If your GitHub secret has a different name (e.g., `OPENAI_KEY`), map it to the expected environment variable:
+
+```yaml
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+```
+
+### Using Private LLM Gateway in GitHub Actions
+
+For production deployments, configure the gateway settings:
+
+```yaml
+env:
+  PRIVATE_LLM_GATEWAY: "true"
+  PRIVATE_LLM_GATEWAY_URL: ${{ secrets.PRIVATE_LLM_GATEWAY_URL }}
+  PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL: ${{ secrets.PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL }}
+  PRIVATE_LLM_AUTH_KEY: ${{ secrets.PRIVATE_LLM_AUTH_KEY }}
+  # Optional: Only if custom SSL certificate is required
+  PRIVATE_LLM_CERT_PATH: ${{ secrets.PRIVATE_LLM_CERT_PATH }}
+```
+
+**Note**: The application reads environment variables directly, so no code changes are required when using GitHub Secrets. Simply ensure the environment variable names match what the application expects (as documented in `env.template`).
 

@@ -53,9 +53,9 @@ class TestEmbeddingsGateway:
     def test_gateway_embeddings_api_call_structure(self, mock_post):
         """Test that gateway embeddings API call has correct structure."""
         os.environ["PRIVATE_LLM_GATEWAY"] = "true"
-        os.environ[
-            "PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"
-        ] = "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        os.environ["PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"] = (
+            "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        )
         os.environ["PRIVATE_LLM_AUTH_KEY"] = "test_auth_key"
 
         # Mock response
@@ -98,9 +98,9 @@ class TestEmbeddingsGateway:
     def test_single_embedding_with_gateway(self, mock_post):
         """Test single text embedding with gateway enabled."""
         os.environ["PRIVATE_LLM_GATEWAY"] = "true"
-        os.environ[
-            "PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"
-        ] = "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        os.environ["PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"] = (
+            "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        )
         os.environ["PRIVATE_LLM_AUTH_KEY"] = "test_auth_key"
 
         # Mock response with 1536-dim embedding
@@ -125,9 +125,9 @@ class TestEmbeddingsGateway:
     def test_batch_embeddings_with_gateway(self, mock_post):
         """Test batch embeddings with gateway enabled."""
         os.environ["PRIVATE_LLM_GATEWAY"] = "true"
-        os.environ[
-            "PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"
-        ] = "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        os.environ["PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"] = (
+            "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        )
         os.environ["PRIVATE_LLM_AUTH_KEY"] = "test_auth_key"
 
         # Mock response with multiple embeddings
@@ -155,9 +155,9 @@ class TestEmbeddingsGateway:
     def test_exact_url_used(self):
         """Test that exact URL from env var is used (not SDK path logic)."""
         os.environ["PRIVATE_LLM_GATEWAY"] = "true"
-        os.environ[
-            "PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"
-        ] = "https://custom-gateway.example.com/custom/path/embeddings"
+        os.environ["PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL"] = (
+            "https://custom-gateway.example.com/custom/path/embeddings"
+        )
         os.environ["PRIVATE_LLM_AUTH_KEY"] = "test_auth_key"
 
         with patch("ingestion.embeddings.requests.post") as mock_post:

@@ -1,10 +1,8 @@
 """Health check endpoints with dependency checks."""
 
 from fastapi import APIRouter, HTTPException
-from ai_service.core import get_logger
+from ai_service.core import get_logger, get_llm_handler
 from db.connection import get_db_connection_context
-from ai_service.llm_client import get_llm_client
-import os
 import time
 
 logger = get_logger(__name__)
@@ -61,21 +59,29 @@ def readiness_check():
         }
         checks["status"] = "not_ready"
 
-    # Check LLM API (lightweight check - just verify API key is set)
+    # Check LLM API (lightweight check - validate configuration)
     llm_start = time.time()
     try:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            checks["checks"]["llm_api"] = {"status": "unhealthy", "error": "OPENAI_API_KEY not set"}
-            checks["status"] = "not_ready"
-        else:
-            # Try to create client (doesn't make actual API call)
-            client = get_llm_client()
-            llm_duration = time.time() - llm_start
+        # Use common handler to validate configuration (doesn't make actual API call)
+        handler = get_llm_handler()
+        validation = handler.validate_configuration()
+
+        llm_duration = time.time() - llm_start
+        if validation["valid"]:
             checks["checks"]["llm_api"] = {
                 "status": "healthy",
+                "mode": validation["mode"],
                 "response_time_ms": round(llm_duration * 1000, 2),
             }
+        else:
+            error_msg = "; ".join(validation["errors"])
+            checks["checks"]["llm_api"] = {
+                "status": "unhealthy",
+                "mode": validation["mode"],
+                "error": error_msg,
+                "response_time_ms": round(llm_duration * 1000, 2),
+            }
+            checks["status"] = "not_ready"
     except Exception as e:
         llm_duration = time.time() - llm_start
         error_msg = str(e)

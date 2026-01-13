@@ -70,6 +70,7 @@ from retrieval.resolution_retrieval import (
 )
 from ai_service.ranking import rank_steps
 from ai_service.llm_client import get_llm_client, _call_llm_with_retry
+from ai_service.core import get_llm_handler
 from ai_service.prompts import (
     RESOLUTION_RANKING_PROMPT_TEMPLATE,
     RESOLUTION_RANKING_SYSTEM_PROMPT_DEFAULT,
@@ -520,7 +521,7 @@ def _call_llm_for_ranking(
     Returns:
         LLM output with enhanced recommendations
     """
-    client = get_llm_client()
+    handler = get_llm_handler()
 
     # Get LLM config
     llm_config = get_llm_config()
@@ -603,7 +604,7 @@ def _call_llm_for_ranking(
 
     # Call LLM with retry logic
     try:
-        response = _call_llm_with_retry(client, request_params, "resolution_ranking", model)
+        response = _call_llm_with_retry(handler, request_params, "resolution_ranking", model)
 
         result_text = response.choices[0].message.content
         result = json.loads(result_text)

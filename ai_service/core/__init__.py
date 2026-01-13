@@ -25,6 +25,7 @@ from ai_service.core.exceptions import (
     ConfigurationError,
     ApprovalRequiredError,
 )
+from ai_service.core.llm_handler import get_llm_handler, LLMHandler, reset_llm_handler
 
 __all__ = [
     "setup_logging",
@@ -38,6 +39,9 @@ __all__ = [
     "get_llm_config",
     "get_field_mappings_config",
     "get_embeddings_config",
+    "get_llm_handler",
+    "LLMHandler",
+    "reset_llm_handler",
     "NOCAgentError",
     "ValidationError",
     "TriageValidationError",

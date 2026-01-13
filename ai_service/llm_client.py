@@ -1,15 +1,12 @@
-"""LLM client for OpenAI with retry logic."""
+"""LLM client for OpenAI with retry logic.
 
-import os
+This module provides high-level functions for LLM operations (triage, resolution).
+It uses the common LLM handler from ai_service.core.llm_handler which abstracts
+away the differences between OpenAI API and Private LLM Gateway.
+"""
+
 import json
-import time
-import random
-from openai import OpenAI
-from openai import RateLimitError, APIError, APIConnectionError, APITimeoutError
-import requests
-import uuid
-from dotenv import load_dotenv
-from ai_service.core import get_llm_config, get_logger
+from ai_service.core import get_llm_config, get_logger, get_llm_handler
 from ai_service.prompts import (
     TRIAGE_USER_PROMPT_TEMPLATE,
     TRIAGE_SYSTEM_PROMPT_DEFAULT,
@@ -17,186 +14,36 @@ from ai_service.prompts import (
     RESOLUTION_SYSTEM_PROMPT_DEFAULT,
 )
 
-load_dotenv()
-
 logger = get_logger(__name__)
-
-# Retry configuration
-MAX_RETRIES = 3
-INITIAL_RETRY_DELAY = 1.0  # seconds
-MAX_RETRY_DELAY = 60.0  # seconds
-RETRY_EXPONENTIAL_BASE = 2.0
 
 
 def get_llm_client():
     """
-    Get an initialized OpenAI client instance.
+    Get LLM handler instance (for backward compatibility).
 
-    Retrieves the OpenAI API key from environment variables and creates a client instance.
-    This client is used for all LLM interactions (chat completions, embeddings).
-
-    Returns:
-        OpenAI: Initialized OpenAI client instance
-
-    Raises:
-        ValueError: If OPENAI_API_KEY is not set in environment variables
-    """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not set in environment")
-    return OpenAI(api_key=api_key)
-
-
-def _use_private_gateway() -> bool:
-    """Check if private gateway is enabled."""
-    return os.getenv("PRIVATE_LLM_GATEWAY", "false").lower() == "true"
-
-
-def _call_private_gateway(request_params: dict):
-    """Call private gateway API with OpenAI-style params."""
-    url = os.getenv("PRIVATE_LLM_GATEWAY_URL")
-    cert_path = os.getenv("PRIVATE_LLM_CERT_PATH")
-    auth_key = os.getenv("PRIVATE_LLM_AUTH_KEY")
-
-    # Combine messages into single prompt
-    messages = request_params.get("messages", [])
-    prompt_text = "\n\n".join(
-        [f"{msg['role'].upper()}: {msg['content']}" for msg in messages]
-    )
-
-    # Build request
-    headers = {"Content-Type": "application/json", "accept": "*/*"}
-    if auth_key:
-        headers["Authorization"] = f"Basic {auth_key}"
-
-    payload = {
-        "chatId": str(uuid.uuid4()),
-        "input": prompt_text,
-        "model": request_params.get("model", "gpt-4o-mini"),
-    }
-
-    # Call API
-    response = requests.post(
-        url,
-        headers=headers,
-        json=payload,
-        verify=cert_path if cert_path else True,
-        timeout=request_params.get("timeout", 60.0),
-    )
-    response.raise_for_status()
-    gateway_response = response.json()
-
-    # Transform to OpenAI format
-    class Response:
-        class Choice:
-            class Message:
-                def __init__(self, content):
-                    self.content = content
-            def __init__(self, content):
-                self.message = self.Message(content)
-        class Usage:
-            def __init__(self):
-                self.prompt_tokens = 0
-                self.completion_tokens = 0
-        def __init__(self, content):
-            self.choices = [self.Choice(content)]
-            self.usage = self.Usage()
-
-    # Extract content (adjust based on actual gateway response)
-    content = (
-        gateway_response.get("response")
-        or gateway_response.get("output")
-        or str(gateway_response)
-    )
-    return Response(content)
-
-
-def _should_retry(error: Exception) -> bool:
-    """
-    Determine if an error should trigger a retry.
-
-    Args:
-        error: The exception that occurred
+    This function is kept for backward compatibility with existing code.
+    New code should use get_llm_handler() directly from ai_service.core.
 
     Returns:
-        True if the error is retryable, False otherwise
+        LLMHandler: The global LLM handler instance
     """
-    # Retry on rate limits, connection errors, and timeouts
-    if isinstance(error, (RateLimitError, APIConnectionError, APITimeoutError)):
-        return True
-
-    # Retry on 5xx server errors (internal server errors)
-    if isinstance(error, APIError):
-        if hasattr(error, "status_code") and error.status_code:
-            status = error.status_code
-            # Retry on 5xx errors, but also on 429 (Too Many Requests) which might be temporary
-            if 500 <= status < 600 or status == 429:
-                return True
-
-    # Don't retry on 4xx client errors (except 429) or other errors
-    return False
+    return get_llm_handler()
 
 
-def _call_llm_with_retry(client, request_params, agent_type: str, model: str):
+def _call_llm_with_retry(handler, request_params, agent_type: str, model: str):
     """
-    Call LLM API with exponential backoff retry logic.
+    Call LLM API with retry logic using the common handler.
 
     Args:
-        client: OpenAI client instance
+        handler: LLMHandler instance
         request_params: Parameters for the API call
         agent_type: Type of agent (triage or resolution)
         model: Model name for metrics
 
     Returns:
         API response
-
-    Raises:
-        Exception: If all retries are exhausted
     """
-    last_error = None
-
-    for attempt in range(MAX_RETRIES):
-        try:
-            # Add timeout to prevent hanging (60 seconds default)
-            request_params_with_timeout = {**request_params, "timeout": 60.0}
-            if _use_private_gateway():
-                response = _call_private_gateway(request_params_with_timeout)
-            else:
-                response = client.chat.completions.create(**request_params_with_timeout)
-            return response
-
-        except Exception as e:
-            last_error = e
-
-            # Check if we should retry
-            if not _should_retry(e) or attempt == MAX_RETRIES - 1:
-                logger.error(
-                    f"LLM {agent_type} error (attempt {attempt + 1}/{MAX_RETRIES}): {str(e)}",
-                    exc_info=True,
-                )
-                raise
-
-            # Calculate exponential backoff with jitter
-            # For rate limits, use longer initial delay
-            if isinstance(e, RateLimitError):
-                base_delay = INITIAL_RETRY_DELAY * 2  # Start with 2s for rate limits
-            else:
-                base_delay = INITIAL_RETRY_DELAY
-
-            delay = min(base_delay * (RETRY_EXPONENTIAL_BASE**attempt), MAX_RETRY_DELAY)
-            jitter = random.uniform(0, delay * 0.1)  # Add up to 10% jitter
-            total_delay = delay + jitter
-
-            error_type = type(e).__name__
-            logger.warning(
-                f"LLM {agent_type} error ({error_type}, attempt {attempt + 1}/{MAX_RETRIES}): {str(e)}. "
-                f"Retrying in {total_delay:.2f}s..."
-            )
-            time.sleep(total_delay)
-
-    # Should never reach here, but just in case
-    if last_error:
-        raise last_error
+    return handler.chat_completions_create(request_params, agent_type=agent_type)
 
 
 def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -> dict:
@@ -213,7 +60,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
     Returns:
         Triage output as dictionary matching architecture schema
     """
-    client = get_llm_client()
+    handler = get_llm_handler()
 
     # Get LLM config (with defaults)
     llm_config = get_llm_config()
@@ -307,7 +154,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
 
     # Call LLM with retry logic
     try:
-        response = _call_llm_with_retry(client, request_params, "triage", model)
+        response = _call_llm_with_retry(handler, request_params, "triage", model)
 
         # Extract token usage if available
         usage = response.usage
@@ -320,7 +167,7 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
 
         result_text = response.choices[0].message.content
         result = json.loads(result_text)
-        logger.debug(f"LLM triage response parsed successfully")
+        # Removed unnecessary debug log - success is implied by no exception
         return result
 
     except Exception as e:
@@ -343,7 +190,7 @@ def call_llm_for_resolution(
     Returns:
         Resolution output as dictionary
     """
-    client = get_llm_client()
+    handler = get_llm_handler()
 
     # Get LLM config (with defaults)
     llm_config = get_llm_config()
@@ -404,7 +251,7 @@ def call_llm_for_resolution(
 
     # Call LLM with retry logic
     try:
-        response = _call_llm_with_retry(client, request_params, "resolution", model)
+        response = _call_llm_with_retry(handler, request_params, "resolution", model)
 
         # Extract token usage if available
         usage = response.usage
@@ -417,7 +264,7 @@ def call_llm_for_resolution(
 
         result_text = response.choices[0].message.content
         result = json.loads(result_text)
-        logger.debug(f"LLM resolution response parsed successfully")
+        # Removed unnecessary debug log - success is implied by no exception
         return result
 
     except Exception as e:
