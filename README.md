@@ -138,11 +138,6 @@ The PostgreSQL database schema is **automatically created** when the Docker cont
 - All tables, indexes, triggers, and functions are created automatically
 - On subsequent starts, the schema already exists, so initialization is skipped (this is safe)
 
-**IMPORTANT: All database operations use Docker PostgreSQL only.**
-- Scripts connect via `docker exec` to the `noc-ai-postgres` container
-- Never uses local PostgreSQL instance
-- Database credentials are read from `.env` file
-
 **Database Configuration (in `.env`):**
 - `POSTGRES_HOST=localhost` (for Docker port mapping)
 - `POSTGRES_PORT=5432`
@@ -152,16 +147,7 @@ The PostgreSQL database schema is **automatically created** when the Docker cont
 
 **Verify database setup and schema creation:**
 ```bash
-# Using Python script (uses Docker exec, reads from .env)
 python scripts/db/verify_db.py
-
-# Or directly via Docker - check if tables exist
-docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "\dt"
-
-# Check specific tables
-docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "SELECT COUNT(*) FROM documents;"
-docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "SELECT COUNT(*) FROM incident_signatures;"
-docker exec noc-ai-postgres psql -U noc_ai -d noc_ai -c "SELECT COUNT(*) FROM chunks;"
 ```
 
 **Note**: If you need to recreate the database from scratch, you can:
