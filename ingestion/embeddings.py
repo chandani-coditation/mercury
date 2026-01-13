@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import random
+import requests
 from pathlib import Path
 import tiktoken
 from typing import List, Optional
@@ -96,6 +97,51 @@ def get_embedding_client():
     return OpenAI(api_key=api_key)
 
 
+def _use_gateway_for_embeddings() -> bool:
+    """Check if gateway should be used for embeddings."""
+    return os.getenv("PRIVATE_LLM_GATEWAY", "false").lower() == "true"
+
+
+def _call_gateway_embeddings(text_or_texts, model: str):
+    """
+    Call gateway embeddings API directly (exact URL control).
+
+    Args:
+        text_or_texts: Single text string or list of texts
+        model: Model name
+
+    Returns:
+        Gateway response (OpenAI-compatible format)
+    """
+    gateway_url = os.getenv("PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL")
+    auth_key = os.getenv("PRIVATE_LLM_AUTH_KEY")
+    cert_path = os.getenv("PRIVATE_LLM_CERT_PATH")
+
+    if not auth_key:
+        raise ValueError("PRIVATE_LLM_AUTH_KEY not set when gateway is enabled")
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {auth_key}",
+    }
+
+    payload = {
+        "input": text_or_texts,
+        "model": model,
+    }
+
+    # Call gateway with exact URL
+    response = requests.post(
+        gateway_url,
+        headers=headers,
+        json=payload,
+        verify=cert_path if cert_path else True,
+        timeout=EMBEDDING_TIMEOUT,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def embed_text(text: str, model: str = None) -> Optional[List[float]]:
     """
     Generate embedding for text with retry logic and error handling.
@@ -116,8 +162,6 @@ def embed_text(text: str, model: str = None) -> Optional[List[float]]:
     if not text or not text.strip():
         raise ValueError("Text cannot be empty")
 
-    client = get_embedding_client()
-
     # Replace newlines with spaces for better embeddings
     text = text.replace("\n", " ").strip()
 
@@ -132,13 +176,26 @@ def embed_text(text: str, model: str = None) -> Optional[List[float]]:
             f"Please chunk the text before embedding."
         )
 
+    # Check if using gateway or OpenAI
+    use_gateway = _use_gateway_for_embeddings()
+    client = None if use_gateway else get_embedding_client()
+
     last_error = None
 
     # Retry logic with exponential backoff
     for attempt in range(MAX_RETRIES):
         try:
-            response = client.embeddings.create(model=model, input=text, timeout=EMBEDDING_TIMEOUT)
-            return response.data[0].embedding
+            if use_gateway:
+                # Call gateway directly with exact URL
+                response = _call_gateway_embeddings(text, model)
+                # Gateway returns OpenAI-compatible format
+                return response["data"][0]["embedding"]
+            else:
+                # Use OpenAI client
+                response = client.embeddings.create(
+                    model=model, input=text, timeout=EMBEDDING_TIMEOUT
+                )
+                return response.data[0].embedding
 
         except Exception as e:
             last_error = e
@@ -232,7 +289,11 @@ def embed_texts_batch(
                 batch_size = 100  # Fallback to default
         except Exception:
             batch_size = 100  # Fallback to default
-    client = get_embedding_client()
+
+    # Check if using gateway or OpenAI
+    use_gateway = _use_gateway_for_embeddings()
+    client = None if use_gateway else get_embedding_client()
+
     all_embeddings = []
     max_tokens = EMBEDDING_MODEL_LIMITS.get(model, 8191)
 
@@ -265,12 +326,21 @@ def embed_texts_batch(
 
         for attempt in range(MAX_RETRIES):
             try:
-                response = client.embeddings.create(
-                    model=model, input=cleaned_batch, timeout=EMBEDDING_TIMEOUT
-                )
+                if use_gateway:
+                    # Call gateway directly with exact URL
+                    response = _call_gateway_embeddings(cleaned_batch, model)
+                    # Gateway returns OpenAI-compatible format
+                    batch_embeddings = [
+                        item["embedding"] for item in response["data"]
+                    ]
+                else:
+                    # Use OpenAI client
+                    response = client.embeddings.create(
+                        model=model, input=cleaned_batch, timeout=EMBEDDING_TIMEOUT
+                    )
+                    # Extract embeddings (maintain order)
+                    batch_embeddings = [item.embedding for item in response.data]
 
-                # Extract embeddings (maintain order)
-                batch_embeddings = [item.embedding for item in response.data]
                 break  # Success, exit retry loop
 
             except Exception as e:

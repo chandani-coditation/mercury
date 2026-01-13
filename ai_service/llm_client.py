@@ -6,6 +6,8 @@ import time
 import random
 from openai import OpenAI
 from openai import RateLimitError, APIError, APIConnectionError, APITimeoutError
+import requests
+import uuid
 from dotenv import load_dotenv
 from ai_service.core import get_llm_config, get_logger
 from ai_service.prompts import (
@@ -43,6 +45,70 @@ def get_llm_client():
     if not api_key:
         raise ValueError("OPENAI_API_KEY not set in environment")
     return OpenAI(api_key=api_key)
+
+
+def _use_private_gateway() -> bool:
+    """Check if private gateway is enabled."""
+    return os.getenv("PRIVATE_LLM_GATEWAY", "false").lower() == "true"
+
+
+def _call_private_gateway(request_params: dict):
+    """Call private gateway API with OpenAI-style params."""
+    url = os.getenv("PRIVATE_LLM_GATEWAY_URL")
+    cert_path = os.getenv("PRIVATE_LLM_CERT_PATH")
+    auth_key = os.getenv("PRIVATE_LLM_AUTH_KEY")
+
+    # Combine messages into single prompt
+    messages = request_params.get("messages", [])
+    prompt_text = "\n\n".join(
+        [f"{msg['role'].upper()}: {msg['content']}" for msg in messages]
+    )
+
+    # Build request
+    headers = {"Content-Type": "application/json", "accept": "*/*"}
+    if auth_key:
+        headers["Authorization"] = f"Basic {auth_key}"
+
+    payload = {
+        "chatId": str(uuid.uuid4()),
+        "input": prompt_text,
+        "model": request_params.get("model", "gpt-4o-mini"),
+    }
+
+    # Call API
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload,
+        verify=cert_path if cert_path else True,
+        timeout=request_params.get("timeout", 60.0),
+    )
+    response.raise_for_status()
+    gateway_response = response.json()
+
+    # Transform to OpenAI format
+    class Response:
+        class Choice:
+            class Message:
+                def __init__(self, content):
+                    self.content = content
+            def __init__(self, content):
+                self.message = self.Message(content)
+        class Usage:
+            def __init__(self):
+                self.prompt_tokens = 0
+                self.completion_tokens = 0
+        def __init__(self, content):
+            self.choices = [self.Choice(content)]
+            self.usage = self.Usage()
+
+    # Extract content (adjust based on actual gateway response)
+    content = (
+        gateway_response.get("response")
+        or gateway_response.get("output")
+        or str(gateway_response)
+    )
+    return Response(content)
 
 
 def _should_retry(error: Exception) -> bool:
@@ -93,7 +159,10 @@ def _call_llm_with_retry(client, request_params, agent_type: str, model: str):
         try:
             # Add timeout to prevent hanging (60 seconds default)
             request_params_with_timeout = {**request_params, "timeout": 60.0}
-            response = client.chat.completions.create(**request_params_with_timeout)
+            if _use_private_gateway():
+                response = _call_private_gateway(request_params_with_timeout)
+            else:
+                response = client.chat.completions.create(**request_params_with_timeout)
             return response
 
         except Exception as e:
