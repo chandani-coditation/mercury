@@ -47,32 +47,41 @@ cp env.template .env
 
    **Option A: Direct OpenAI API** (for local development and testing):
    ```bash
-   OPENAI_API_KEY=sk-your-api-key-here
+   OPENAI_API_KEY=sk-your-actual-api-key-here  #  Replace with your actual OpenAI API key
    PRIVATE_LLM_GATEWAY=false
    ```
    This is the default mode. Use this for local development, testing, and when you have direct access to OpenAI API.
+   
+   **Security Note**: Never commit API keys to version control. The `.env` file is gitignored for security.
 
    **Option B: Private LLM Gateway** (for production):
    ```bash
    PRIVATE_LLM_GATEWAY=true
-   PRIVATE_LLM_GATEWAY_URL=https://your-gateway-url/api/v1/ai/call
-   PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL=https://your-gateway-url/api/v1/ai/openai/embeddings
-   PRIVATE_LLM_AUTH_KEY=your-gateway-auth-key
+   PRIVATE_LLM_GATEWAY_URL=https://your-gateway-url/api/v1/ai/call  #  Replace with actual gateway URL
+   PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL=https://your-gateway-url/api/v1/ai/openai/embeddings  #  Replace with actual embeddings URL
+   PRIVATE_LLM_AUTH_KEY=your-actual-gateway-auth-key  #  Replace with actual authentication key
    # Optional: Only needed if gateway requires custom SSL certificate
-   PRIVATE_LLM_CERT_PATH=/path/to/certificate.pem
+   PRIVATE_LLM_CERT_PATH=/path/to/certificate.pem  #  Replace with actual certificate path if needed
    ```
    Use this mode in production environments where LLM requests must go through a private gateway. When gateway mode is enabled, `OPENAI_API_KEY` is not required for LLM calls.
+   
+
 
    **Note**: The system automatically detects which mode to use based on the `PRIVATE_LLM_GATEWAY` environment variable. When set to `true`, all LLM calls (chat completions and embeddings) are routed through the gateway instead of directly to OpenAI.
 
-2. **Database Configuration** (defaults are usually fine):
+2. **Database Configuration**:
    ```bash
    POSTGRES_HOST=localhost
    POSTGRES_PORT=5432
-   POSTGRES_DB=noc_ai
-   POSTGRES_USER=noc_ai
-   POSTGRES_PASSWORD=noc_ai_password  # Change this in production!
+   POSTGRES_DB=nocdb
+   POSTGRES_USER=postgres
+   POSTGRES_PASSWORD=your_secure_password_here  #  REQUIRED: Set a strong password in production!
    ```
+   
+   **Security Note**: 
+   - Never use default passwords in production environments
+   - The password must meet strength requirements (12+ characters, uppercase, lowercase, digits, special chars) in production
+   - See `env.template` for all available database configuration options
 
 3. **Frontend API URL** (defaults to localhost:8001):
    ```bash
@@ -139,11 +148,16 @@ The PostgreSQL database schema is **automatically created** when the Docker cont
 - On subsequent starts, the schema already exists, so initialization is skipped (this is safe)
 
 **Database Configuration (in `.env`):**
-- `POSTGRES_HOST=localhost` (for Docker port mapping)
-- `POSTGRES_PORT=5432`
-- `POSTGRES_DB=noc_ai` (default)
-- `POSTGRES_USER=noc_ai` (default)
-- `POSTGRES_PASSWORD=noc_ai_password` (set your password)
+- `POSTGRES_HOST` - Database host (default: `localhost`)
+- `POSTGRES_PORT` - Database port (default: `5432`)
+- `POSTGRES_DB` - Database name (default: `nocdb`)
+- `POSTGRES_USER` - Database user (default: `postgres`)
+- `POSTGRES_PASSWORD` - Database password (**REQUIRED** - must be set to a strong password)
+
+** Security Warning**: 
+- Never commit database credentials to version control
+- Use strong passwords in production (12+ characters with mixed case, numbers, and special characters)
+- The `.env` file is gitignored for security - never add it to the repository 
 
 **Verify database setup and schema creation:**
 ```bash
@@ -183,7 +197,9 @@ python scripts/data/ingest_servicenow_tickets.py --dir tickets_data
 python scripts/data/ingest_servicenow_tickets.py --file "tickets_data/updated network filtered - Sheet1.csv"
 ```
 
-**Note**: Make sure `.env` file is configured with correct database credentials before running ingestion scripts.
+**Note**: 
+- Make sure `.env` file is configured with correct database credentials before running ingestion scripts
+- Database credentials are read from environment variables - never hardcode them in scripts
 
 **Database Management:**
 ```bash
@@ -256,7 +272,7 @@ Both triage and resolution agents provide clear status indicators in their respo
     "runbook_metadata": 0,
     "total": 0
   },
-  "evidence_warning": "⚠️ NO EVIDENCE FOUND: No historical data in knowledge base. Please ingest runbooks and historical incidents first using: `python scripts/data/ingest_runbooks.py` and `python scripts/data/ingest_servicenow_tickets.py`. Status: FAILED (no historical evidence available)."
+  "evidence_warning": " NO EVIDENCE FOUND: No historical data in knowledge base. Please ingest runbooks and historical incidents first using: `python scripts/data/ingest_runbooks.py` and `python scripts/data/ingest_servicenow_tickets.py`. Status: FAILED (no historical evidence available)."
 }
 ```
 
@@ -349,4 +365,44 @@ env:
 ```
 
 **Note**: The application reads environment variables directly, so no code changes are required when using GitHub Secrets. Simply ensure the environment variable names match what the application expects (as documented in `env.template`).
+
+---
+
+## 9. Security Best Practices
+
+### Credential Management
+
+** CRITICAL**: Never commit credentials to version control.
+
+1. **Environment Variables**: All sensitive data (API keys, passwords, tokens) must be stored in environment variables via the `.env` file
+2. **`.env` File**: The `.env` file is gitignored - never add it to the repository
+3. **Template File**: Use `env.template` as a reference for required variables, but never include actual values
+4. **Production Passwords**: Database passwords in production must meet strength requirements:
+   - Minimum 12 characters
+   - Mix of uppercase and lowercase letters
+   - At least one digit
+   - At least one special character
+   - Cannot be default/placeholder values
+
+### Database Security
+
+- **Default Credentials**: Never use default database credentials (`postgres/postgres`) in production
+- **Password Validation**: The application automatically validates database password strength in production environments
+- **Connection Security**: Database connections use parameterized queries to prevent SQL injection
+- **Log Sanitization**: All logs are automatically sanitized to prevent credential exposure
+
+### API Key Security
+
+- **OpenAI API Keys**: Store in `.env` file, never in code or configuration files
+- **Gateway Credentials**: Private LLM Gateway authentication keys must be kept secure
+- **Secrets Management**: For production, consider using a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.)
+
+### General Security
+
+- **CORS Configuration**: In production, restrict CORS to specific allowed origins (not `*`)
+- **Log Files**: Review log files to ensure no sensitive data is being logged
+- **Dependencies**: Keep all dependencies up to date to patch security vulnerabilities
+- **Access Control**: Implement proper authentication and authorization for production deployments
+
+For more security information, see the code review documentation and security audit reports.
 
