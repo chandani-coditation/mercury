@@ -7,7 +7,7 @@ This module handles:
 - Step transformation (generate titles, clean actions)
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict
 import re
 import json
 from pathlib import Path
@@ -112,7 +112,6 @@ def classify_step_type(step: Dict) -> str:
     # Documentation/Context steps (should be filtered out) - AGGRESSIVE FILTERING
     # Check for documentation/impact assessment patterns FIRST (before other classifications)
     action_lower = action.lower()
-    condition_lower = condition.lower()
 
     # Hard filter: If action is primarily about documenting/recording/impact assessment
     # BUT: Allow if step contains actionable content (like "Action:", "Restart", "Fix", etc.)

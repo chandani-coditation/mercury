@@ -12,23 +12,23 @@ import argparse
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+
+# Add project root to path BEFORE importing project modules
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+# Now import project modules
+from typing import Dict, Optional
 from docx import Document
-from docx.document import Document as DocxDocument
 from docx.oxml.text.paragraph import CT_P
 from docx.oxml.table import CT_Tbl
 from docx.table import Table
 from docx.text.paragraph import Paragraph
-
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
 from ai_service.core import get_field_mappings_config, get_logger, setup_logging
 from ingestion.models import IngestRunbook
 import requests
 import json
-from pathlib import Path
+
 
 # Default ingestion service URL
 INGESTION_SERVICE_URL = "http://localhost:8002"

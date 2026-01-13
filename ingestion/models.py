@@ -1,7 +1,7 @@
 """Pydantic models for ingestion service."""
 
 from pydantic import BaseModel
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional
 from datetime import datetime
 
 

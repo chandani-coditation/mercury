@@ -6,7 +6,7 @@ Per architecture: Steps are ranked by:
 - Relevance to incident signature
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict
 import re
 import json
 from pathlib import Path

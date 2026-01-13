@@ -1,7 +1,6 @@
 """Repository for agent state persistence."""
 
-from typing import Optional, Dict, Any, List
-from datetime import datetime
+from typing import Optional, List
 from db.connection import get_db_connection_context
 from ai_service.core import get_logger, DatabaseError
 from ai_service.state import AgentState, PendingAction

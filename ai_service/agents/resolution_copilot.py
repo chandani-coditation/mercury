@@ -5,7 +5,9 @@ from typing import Dict, Any, Optional
 from ai_service.llm_client import call_llm_for_triage, call_llm_for_resolution
 from ai_service.repositories import IncidentRepository
 from ai_service.core import IncidentNotFoundError
-from ai_service.policy import get_policy_from_config, get_resolution_policy
+
+# from ai_service.policy import get_policy_from_config, get_resolution_policy
+from ai_service.policy import get_policy_from_config
 from ai_service.guardrails import validate_triage_output, validate_resolution_output
 from ai_service.core import (
     get_retrieval_config,
@@ -189,7 +191,6 @@ def _resolution_copilot_agent_internal(
 
     # Check policy handling and approval requirements
     workflow_cfg = get_workflow_config() or {}
-    resolution_requires_approval = bool(workflow_cfg.get("resolution_requires_approval", False))
 
     # If policy was deferred and still pending, compute from stored triage now
     if not existing_policy_band or existing_policy_band == "PENDING":

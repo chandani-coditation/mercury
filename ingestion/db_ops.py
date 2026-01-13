@@ -8,11 +8,9 @@ from db.connection import get_db_connection_context
 from ingestion.embeddings import (
     embed_text,
     embed_texts_batch,
-    count_tokens,
-    EMBEDDING_MODEL_LIMITS,
     DEFAULT_MODEL,
 )
-from ingestion.chunker import chunk_text, add_chunk_header
+from ingestion.chunker import add_chunk_header
 from ingestion.models import RunbookStep, IncidentSignature
 
 

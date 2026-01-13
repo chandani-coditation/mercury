@@ -1,6 +1,6 @@
 """Policy gates for resolution actions - configuration-driven."""
 
-from typing import Dict, Optional
+from typing import Dict
 import json
 from pathlib import Path
 from ai_service.core import get_policy_config, get_logger

@@ -1,12 +1,10 @@
 """Normalizers to convert various input formats to IngestDocument format."""
 
 import json
-import os
 import re
 import uuid
 from pathlib import Path
 from typing import Dict, Optional, List, Tuple
-from datetime import datetime
 from ingestion.models import (
     IngestAlert,
     IngestIncident,

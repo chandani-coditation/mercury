@@ -10,7 +10,6 @@ Usage:
 """
 import argparse
 import csv
-import json
 import sys
 import time
 import random

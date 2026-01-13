@@ -360,7 +360,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     vector_weight = retrieval_cfg.get("vector_weight", 0.7)
     fulltext_weight = retrieval_cfg.get("fulltext_weight", 0.3)
     use_mmr = retrieval_cfg.get("use_mmr", False)
-    mmr_diversity = retrieval_cfg.get("mmr_diversity", 0.5)
 
     # Use specialized triage retrieval (incident signatures + runbook metadata only)
     try:

@@ -11,7 +11,7 @@ import json
 import time
 import random
 import uuid
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union
 from openai import OpenAI
 from openai import RateLimitError, APIError, APIConnectionError, APITimeoutError
 import requests
@@ -239,7 +239,7 @@ class LLMHandler:
         return Response(content)
 
     def _call_gateway_embeddings(
-        self, text_or_texts: str | List[str], model: str
+        self, text_or_texts: Union[str, List[str]], model: str
     ) -> Dict[str, Any]:
         """
         Call gateway API for embeddings.
@@ -379,7 +379,7 @@ class LLMHandler:
             raise last_error
 
     def embeddings_create(
-        self, text_or_texts: str | List[str], model: str, timeout: float = 60.0
+        self, text_or_texts: Union[str, List[str]], model: str, timeout: float = 60.0
     ) -> Any:
         """
         Create embeddings with retry logic.
