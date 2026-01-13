@@ -9,9 +9,13 @@ import {
   Check,
   ThumbsUp,
   ThumbsDown,
+  Edit,
+  Save,
+  X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import {
   Dialog,
@@ -31,6 +35,8 @@ interface ResolutionViewProps {
   resolutionRatings?: Record<number, string | null>;
   ratingStatus?: Record<number, string>;
   onRatingChange?: (stepIndex: number, rating: "thumbs_up" | "thumbs_down", stepTitle?: string) => void;
+  onStepEdit?: (stepIndex: number, editedStep: any, originalStep: any) => Promise<void>;
+  stepEditStatus?: Record<number, "idle" | "loading" | "success" | "error">;
 }
 
 // Rating buttons component for resolution steps
@@ -142,8 +148,13 @@ export const ResolutionView = ({
   resolutionRatings,
   ratingStatus,
   onRatingChange,
+  onStepEdit,
+  stepEditStatus,
 }: ResolutionViewProps) => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  // Track which step is being edited and its edited content
+  const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
+  const [editedStepContent, setEditedStepContent] = useState<string>("");
 
   const resolution = data.resolution || data;
 
@@ -205,6 +216,39 @@ export const ResolutionView = ({
   const handleConfirmComplete = () => {
     setConfirmDialogOpen(false);
     onMarkComplete();
+  };
+
+  // Edit handlers
+  const handleEditClick = (stepIndex: number, currentAction: string) => {
+    setEditingStepIndex(stepIndex);
+    setEditedStepContent(currentAction);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingStepIndex(null);
+    setEditedStepContent("");
+  };
+
+  const handleSaveEdit = async (stepIndex: number, originalStep: any) => {
+    if (!onStepEdit) {
+      console.warn("onStepEdit handler not provided");
+      return;
+    }
+
+    const editedStep = {
+      ...originalStep,
+      action: editedStepContent.trim(),
+    };
+
+    try {
+      await onStepEdit(stepIndex, editedStep, originalStep);
+      // Only close edit mode if save was successful
+      setEditingStepIndex(null);
+      setEditedStepContent("");
+    } catch (error) {
+      console.error("Failed to save edited step:", error);
+      // Keep edit mode open on error so user can retry
+    }
   };
 
   return (
@@ -281,14 +325,25 @@ export const ResolutionView = ({
                       <div className="flex-1 space-y-1">
                         <div className="flex items-start justify-between gap-1.5" style={{ position: "relative" }}>
                           <div className="flex-1">
-                            {/* Show action as main content (no title) */}
-                            {stepAction && (
-                              <p className="text-xs text-foreground leading-relaxed">
-                                {stepAction}
-                              </p>
+                            {/* Show action as main content - editable if in edit mode */}
+                            {editingStepIndex === ratingIndex ? (
+                              <Textarea
+                                value={editedStepContent}
+                                onChange={(e) => setEditedStepContent(e.target.value)}
+                                className="text-xs min-h-[60px] resize-none"
+                                placeholder="Edit the step description..."
+                                autoFocus
+                              />
+                            ) : (
+                              stepAction && (
+                                <p className="text-xs text-foreground leading-relaxed">
+                                  {stepAction}
+                                </p>
+                              )
                             )}
                           </div>
                           <div 
+                            className="flex items-center gap-1"
                             style={{ 
                               position: "relative", 
                               zIndex: 9999, 
@@ -296,15 +351,67 @@ export const ResolutionView = ({
                               flexShrink: 0
                             }}
                           >
-                            {incidentId && onRatingChange ? (
-                              <StepRatingButtons
-                                stepIndex={ratingIndex}
-                                rating={resolutionRatings?.[ratingIndex] ?? null}
-                                ratingStatus={ratingStatus?.[ratingIndex]}
-                                onRatingChange={onRatingChange}
-                                stepTitle={stepAction || stepTitle}
-                              />
-                            ) : null}
+                            {editingStepIndex === ratingIndex ? (
+                              // Save/Cancel buttons when editing
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleSaveEdit(ratingIndex, step)}
+                                  disabled={stepEditStatus?.[ratingIndex] === "loading"}
+                                  className="h-7 w-7 p-0 hover:bg-success/20 text-success"
+                                  title="Save changes"
+                                >
+                                  <Save className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={handleCancelEdit}
+                                  disabled={stepEditStatus?.[ratingIndex] === "loading"}
+                                  className="h-7 w-7 p-0 hover:bg-destructive/20 text-destructive"
+                                  title="Cancel editing"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </Button>
+                                {stepEditStatus?.[ratingIndex] === "loading" && (
+                                  <span className="text-xs text-muted-foreground">Saving...</span>
+                                )}
+                                {stepEditStatus?.[ratingIndex] === "success" && (
+                                  <span className="text-xs text-success">✓ Saved</span>
+                                )}
+                                {stepEditStatus?.[ratingIndex] === "error" && (
+                                  <span className="text-xs text-destructive">✕ Error</span>
+                                )}
+                              </>
+                            ) : (
+                              // Edit button and rating buttons when not editing
+                              <>
+                                {incidentId && onStepEdit && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditClick(ratingIndex, stepAction)}
+                                    className="h-7 w-7 p-0 hover:bg-primary/20 text-primary"
+                                    title="Edit this step"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                {incidentId && onRatingChange && (
+                                  <StepRatingButtons
+                                    stepIndex={ratingIndex}
+                                    rating={resolutionRatings?.[ratingIndex] ?? null}
+                                    ratingStatus={ratingStatus?.[ratingIndex]}
+                                    onRatingChange={onRatingChange}
+                                    stepTitle={stepAction || stepTitle}
+                                  />
+                                )}
+                              </>
+                            )}
                           </div>
                         </div>
                         {stepExpectedOutcome && (

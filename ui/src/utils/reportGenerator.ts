@@ -1,4 +1,4 @@
-// Report Generator - Creates beautiful HTML reports instead of plain JSON
+// Report Generator - Creates beautiful HTML reports matching the summary page design
 
 export interface ReportData {
   incident_summary: {
@@ -12,10 +12,13 @@ export interface ReportData {
     severity: string;
     category: string;
     routing: string;
-    affected_services: string[];
+    affected_services?: string[];
     confidence: number;
     summary: string;
     likely_cause: string;
+    impact?: string;
+    urgency?: string;
+    incident_signature?: Record<string, string>;
   };
   policy_decision: {
     policy_band: string;
@@ -36,6 +39,12 @@ export interface ReportData {
 
 export const generateHTMLReport = (data: ReportData): string => {
   const timestamp = new Date().toLocaleString();
+  const incidentDate = new Date(data.incident_summary.timestamp).toLocaleString();
+  const affectedServices = data.triage_analysis.affected_services || [];
+  const incidentSignature = data.triage_analysis.incident_signature || {};
+  const impact = data.triage_analysis.impact || "N/A";
+  const urgency = data.triage_analysis.urgency || "N/A";
+  const service = (data.incident_summary as any).service || "Database";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -54,16 +63,16 @@ export const generateHTMLReport = (data: ReportData): string => {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.6;
             color: #1a1a1a;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f5f5;
             padding: 20px;
         }
         
         .report-container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             overflow: hidden;
         }
         
@@ -78,6 +87,10 @@ export const generateHTMLReport = (data: ReportData): string => {
             font-size: 32px;
             margin-bottom: 10px;
             font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
         }
         
         .report-header .subtitle {
@@ -114,186 +127,416 @@ export const generateHTMLReport = (data: ReportData): string => {
         }
         
         .report-content {
-            padding: 40px;
+            padding: 20px;
+        }
+        
+        .success-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        .success-check {
+            width: 16px;
+            height: 16px;
+            color: #28a745;
+        }
+        
+        .success-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+        
+        .content-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .left-column, .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .resolution-card {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
         
         .section {
-            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
         }
         
         .section-header {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: 3px solid #667eea;
+            gap: 8px;
+            margin-bottom: 16px;
         }
         
         .section-icon {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 8px;
+            width: 14px;
+            height: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 18px;
+            color: #0066cc;
         }
         
         .section-title {
-            font-size: 24px;
-            font-weight: 700;
+            font-size: 12px;
+            font-weight: 600;
             color: #1a1a1a;
         }
         
-        .card {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 16px;
-            border-left: 4px solid #667eea;
+        .subsection {
+            margin-bottom: 12px;
         }
         
-        .card-title {
-            font-size: 14px;
-            text-transform: uppercase;
-            color: #6c757d;
-            font-weight: 600;
-            letter-spacing: 0.5px;
+        .subsection-header {
+            display: flex;
+            align-items: center;
+            gap: 4px;
             margin-bottom: 8px;
-        }
-        
-        .card-content {
-            font-size: 16px;
-            color: #1a1a1a;
-            line-height: 1.6;
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            color: #1a1a1a;
         }
         
-        .badge-critical { background: #dc3545; color: white; }
-        .badge-high { background: #fd7e14; color: white; }
-        .badge-medium { background: #ffc107; color: #1a1a1a; }
-        .badge-low { background: #28a745; color: white; }
+        .info-icon, .policy-icon {
+            width: 14px;
+            height: 14px;
+            color: #0066cc;
+        }
         
-        .badge-auto { background: #28a745; color: white; }
-        .badge-propose { background: #ffc107; color: #1a1a1a; }
-        .badge-block { background: #dc3545; color: white; }
+        .policy-icon {
+            color: #6c757d;
+        }
         
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
+        .field-row {
+            margin-bottom: 6px;
+            font-size: 12px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        
+        .field-label {
+            color: #6c757d;
+            margin-right: 8px;
+            font-size: 12px;
+        }
+        
+        .field-value {
+            color: #1a1a1a;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        
+        .success-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             margin-bottom: 20px;
         }
         
-        .stat-card {
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
+        .success-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
         }
         
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: #667eea;
-            margin-bottom: 8px;
+        .success-check {
+            width: 16px;
+            height: 16px;
+            color: #28a745;
         }
         
-        .stat-label {
+        .success-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        .subsection {
+            margin-bottom: 20px;
+        }
+        
+        .subsection-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
             font-size: 14px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        .info-icon {
+            width: 16px;
+            height: 16px;
+            color: #0066cc;
+        }
+        
+        .policy-icon {
+            width: 16px;
+            height: 16px;
             color: #6c757d;
+        }
+        
+        .field-row {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .field-label {
+            color: #6c757d;
+            margin-right: 8px;
+        }
+        
+        .field-value {
+            color: #1a1a1a;
             font-weight: 500;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .badge-high {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .badge-medium {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .badge-low {
+            background: #28a745;
+            color: white;
+        }
+        
+        .badge-auto {
+            background: rgba(40, 167, 69, 0.2);
+            color: #28a745;
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            font-family: monospace;
+            font-weight: 700;
+        }
+        
+        .badge-propose {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ff9800;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            font-family: monospace;
+            font-weight: 700;
+        }
+        
+        .badge-block {
+            background: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            font-family: monospace;
+            font-weight: 700;
         }
         
         .resolution-steps {
             list-style: none;
             counter-reset: step-counter;
+            padding: 0;
+        }
+        
+        .resolution-steps-container {
+            background: rgba(0, 0, 0, 0.02);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            padding: 16px;
         }
         
         .resolution-step {
-            counter-increment: step-counter;
-            margin-bottom: 16px;
-            padding: 16px;
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            position: relative;
-            padding-left: 60px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #1a1a1a;
+            line-height: 1.5;
         }
         
-        .resolution-step::before {
-            content: counter(step-counter);
-            position: absolute;
-            left: 16px;
-            top: 16px;
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        .resolution-step-number {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            background: rgba(40, 167, 69, 0.2);
+            color: #28a745;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 11px;
         }
         
-        .tag {
+        .resolution-step-text {
+            flex: 1;
+            padding-top: 2px;
+        }
+        
+        .triage-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        
+        .triage-field {
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        
+        .triage-label {
+            color: #6c757d;
+            margin-bottom: 2px;
+            font-size: 12px;
+            display: block;
+        }
+        
+        .triage-value {
+            color: #1a1a1a;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        
+        .triage-value.blue {
+            color: #0066cc;
+        }
+        
+        .triage-value.green {
+            color: #28a745;
+        }
+        
+        .triage-value.orange {
+            color: #ff9800;
+        }
+        
+        .triage-value.red {
+            color: #dc3545;
+        }
+        
+        .evidence-stats {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .evidence-stat {
+            flex: 1;
+            padding: 8px;
+            background: rgba(0, 102, 204, 0.1);
+            border: 1px solid rgba(0, 102, 204, 0.2);
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .evidence-stat-number {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0066cc;
+            margin-bottom: 2px;
+        }
+        
+        .evidence-stat-label {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .source-tag {
             display: inline-block;
             padding: 4px 12px;
-            background: #e9ecef;
-            border-radius: 12px;
+            background: #0066cc;
+            color: white;
+            border-radius: 16px;
             font-size: 12px;
-            color: #495057;
+            font-weight: 500;
             margin-right: 8px;
             margin-bottom: 8px;
         }
         
-        .info-box {
-            background: #e7f3ff;
-            border-left: 4px solid #0066cc;
-            padding: 16px;
-            border-radius: 4px;
-            margin-bottom: 20px;
+        .signature-item {
+            font-size: 13px;
+            margin-bottom: 4px;
         }
         
-        .warning-box {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 16px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-        
-        .success-box {
-            background: #d4edda;
-            border-left: 4px solid #28a745;
-            padding: 16px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-        
-        .report-footer {
-            background: #f8f9fa;
-            padding: 30px 40px;
-            text-align: center;
-            border-top: 2px solid #e9ecef;
+        .signature-key {
             color: #6c757d;
+        }
+        
+        .signature-value {
+            color: #0066cc;
+            font-weight: 500;
+        }
+        
+        .feedback-history {
             font-size: 14px;
+        }
+        
+        .feedback-item {
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+        
+        .feedback-date {
+            color: #6c757d;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        
+        .success-banner {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: #1a1a1a;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .success-banner-title {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #1a1a1a;
+        }
+        
+        .success-banner-message {
+            font-size: 12px;
+            color: #6c757d;
+            line-height: 1.5;
         }
         
         @media print {
@@ -307,13 +550,8 @@ export const generateHTMLReport = (data: ReportData): string => {
             }
         }
         
-        @media (max-width: 768px) {
-            .report-meta {
-                flex-direction: column;
-                gap: 16px;
-            }
-            
-            .stats-grid {
+        @media (max-width: 1024px) {
+            .content-layout {
                 grid-template-columns: 1fr;
             }
         }
@@ -347,175 +585,204 @@ export const generateHTMLReport = (data: ReportData): string => {
             </div>
         </div>
         
-        <!-- Main Content -->
         <div class="report-content">
-            <!-- Original Alert -->
-            <div class="section">
-                <div class="section-header">
-                    <div class="section-icon">📋</div>
-                    <h2 class="section-title">Original Alert</h2>
+            <div class="content-layout">
+                <!-- Left Column -->
+                <div class="left-column">
+                    <!-- Original Alert -->
+                    <div class="section">
+                        <div class="subsection">
+                            <div class="subsection-header">
+                                <svg class="info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Original Alert
+                            </div>
+                            <div class="field-row">
+                                <span class="field-label">Alert ID:</span>
+                                <span class="field-value">${data.incident_summary.alert_id}</span>
+                            </div>
+                            <div class="field-row">
+                                <span class="field-label">Source:</span>
+                                <span class="field-value">${data.incident_summary.source}</span>
+                            </div>
+                            <div class="field-row">
+                                <span class="field-label">Service:</span>
+                                <span class="field-value">${service}</span>
+                            </div>
+                            <div class="field-row">
+                                <span class="field-label">Title:</span>
+                                <span class="field-value">${data.incident_summary.title}</span>
+                            </div>
+                            <div class="field-row">
+                                <span class="field-label">Description:</span>
+                                <span class="field-value">${data.incident_summary.description}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Policy Decision -->
+                        <div class="subsection">
+                            <div class="subsection-header">
+                                <svg class="policy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                                Policy Decision
+                            </div>
+                            <div class="field-row">
+                                <span class="field-label">Policy Band:</span>
+                                <span class="field-value">${getPolicyBadge(data.policy_decision.policy_band)}</span>
+                            </div>
+                            <div class="field-row" style="background: rgba(0,0,0,0.02); border-radius: 4px; padding: 6px; display: flex; justify-content: space-between; align-items: center;">
+                                <span class="field-label" style="margin: 0;">Requires Approval</span>
+                                <span class="field-value" style="color: ${data.policy_decision.requires_approval ? "#ff9800" : "#28a745"}; font-weight: 600; margin: 0;">${data.policy_decision.requires_approval ? "Yes" : "No"}</span>
+                            </div>
+                            <div class="field-row" style="background: rgba(0,0,0,0.02); border-radius: 4px; padding: 6px; display: flex; justify-content: space-between; align-items: center;">
+                                <span class="field-label" style="margin: 0;">Can Auto-Apply</span>
+                                <span class="field-value" style="color: ${data.policy_decision.can_auto_apply ? "#28a745" : "#6c757d"}; font-weight: 600; margin: 0;">${data.policy_decision.can_auto_apply ? "Yes" : "No"}</span>
+                            </div>
+                            <div class="field-row">
+                                <span class="field-label">Reason:</span>
+                                <span class="field-value">${data.policy_decision.policy_reason}</span>
+                            </div>
+                        </div>
+                        
+                        
+                        <!-- Feedback History -->
+                        <div class="subsection">
+                            <div class="subsection-header">
+                                <svg class="success-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Feedback History
+                            </div>
+                            <div class="feedback-history">
+                                <div class="feedback-item">Triage</div>
+                                <div class="feedback-item">Approved via UI</div>
+                                <div class="feedback-date">${incidentDate}</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="card">
-                    <div class="card-title">Alert Title</div>
-                    <div class="card-content">${data.incident_summary.title}</div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">Description</div>
-                    <div class="card-content">${data.incident_summary.description}</div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">Timestamp</div>
-                    <div class="card-content">${new Date(data.incident_summary.timestamp).toLocaleString()}</div>
+                <!-- Right Column -->
+                <div class="right-column">
+                    <!-- Triage Analysis -->
+                    <div class="section">
+                        <div class="section-header">
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <h3 class="section-title">Triage Analysis</h3>
+                        </div>
+                        
+                        <div class="triage-field">
+                            <div class="triage-label">Severity</div>
+                            <div class="triage-value">${getSeverityBadgeWithIcon(data.triage_analysis.severity)}</div>
+                        </div>
+                        
+                        <div class="triage-field">
+                            <div class="triage-label">Routing</div>
+                            <div class="triage-value blue">${data.triage_analysis.routing}</div>
+                        </div>
+                        
+                        <div class="triage-field">
+                            <div class="triage-label">Affected Services</div>
+                            <div class="triage-value">${affectedServices.length > 0 ? affectedServices.join(", ") : "N/A"}</div>
+                        </div>
+                        
+                        <div class="triage-field">
+                            <div class="triage-label">Impact</div>
+                            <div class="triage-value orange">${impact}</div>
+                        </div>
+                        
+                        <div class="triage-field">
+                            <div class="triage-label">Urgency</div>
+                            <div class="triage-value orange">${urgency}</div>
+                        </div>
+                        
+                        <div class="triage-field">
+                            <div class="triage-label">AI Confidence</div>
+                            <div class="triage-value green">${Math.round(data.triage_analysis.confidence * 100)}%</div>
+                        </div>
+                        
+                        ${Object.keys(incidentSignature).length > 0 ? `
+                        <div class="triage-field" style="background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.1); border-radius: 4px; padding: 6px; margin-top: 6px;">
+                            <div class="triage-label" style="font-weight: 600; margin-bottom: 4px;">Incident Signature</div>
+                            ${incidentSignature.failure_type ? `
+                            <div class="signature-item" style="font-size: 12px;">
+                                <span class="signature-key">Failure: </span>
+                                <span class="signature-value" style="font-weight: 600; font-family: monospace;">${incidentSignature.failure_type}</span>
+                            </div>
+                            ` : ""}
+                            ${incidentSignature.error_class ? `
+                            <div class="signature-item" style="font-size: 12px;">
+                                <span class="signature-key">Error: </span>
+                                <span class="signature-value" style="font-weight: 600; font-family: monospace;">${incidentSignature.error_class}</span>
+                            </div>
+                            ` : ""}
+                        </div>
+                        ` : ""}
+                    </div>
+                    
+                    <!-- Knowledge Base Evidence -->
+                    <div class="section">
+                        <div class="section-header">
+                            <svg class="section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <h3 class="section-title">Knowledge Base Evidence</h3>
+                        </div>
+                        
+                        <div class="evidence-stats">
+                            <div class="evidence-stat">
+                                <div class="evidence-stat-number">${data.evidence.chunks_used}</div>
+                                <div class="evidence-stat-label">Chunks Used</div>
+                            </div>
+                            <div class="evidence-stat">
+                                <div class="evidence-stat-number">${data.evidence.sources.length}</div>
+                                <div class="evidence-stat-label">Unique Sources</div>
+                            </div>
+                        </div>
+                        
+                        <div class="triage-field">
+                            <div class="triage-label">Sources</div>
+                            <div>
+                                ${data.evidence.sources.map((s) => `<span class="source-tag">${s}</span>`).join("")}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- Triage Analysis -->
-            <div class="section">
+            <!-- Resolution Steps - Full Width -->
+            ${data.resolution.steps && data.resolution.steps.length > 0 ? `
+            <div class="resolution-card">
                 <div class="section-header">
-                    <div class="section-icon">🔍</div>
-                    <h2 class="section-title">Triage Analysis</h2>
+                    <svg class="success-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <h3 class="section-title">Resolution Steps Executed</h3>
                 </div>
-                
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value">${getSeverityBadge(data.triage_analysis.severity)}</div>
-                        <div class="stat-label">Severity</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${Math.round(data.triage_analysis.confidence * 100)}%</div>
-                        <div class="stat-label">AI Confidence</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${data.triage_analysis.category}</div>
-                        <div class="stat-label">Category</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${data.triage_analysis.routing}</div>
-                        <div class="stat-label">Routed To</div>
-                    </div>
-                </div>
-                
-                <div class="info-box">
-                    <strong>Summary:</strong><br>
-                    ${data.triage_analysis.summary}
-                </div>
-                
-                <div class="warning-box">
-                    <strong>Likely Cause:</strong><br>
-                    ${data.triage_analysis.likely_cause}
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">Affected Services</div>
-                    <div class="card-content">
-                        ${data.triage_analysis.affected_services.map((s) => `<span class="tag">${s}</span>`).join("")}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Policy Decision -->
-            <div class="section">
-                <div class="section-header">
-                    <div class="section-icon">🛡️</div>
-                    <h2 class="section-title">Policy Decision</h2>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">Policy Band</div>
-                    <div class="card-content">
-                        ${getPolicyBadge(data.policy_decision.policy_band)}
-                    </div>
-                </div>
-                
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value">${data.policy_decision.requires_approval ? "✓" : "✗"}</div>
-                        <div class="stat-label">Requires Approval</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${data.policy_decision.can_auto_apply ? "✓" : "✗"}</div>
-                        <div class="stat-label">Can Auto-Apply</div>
-                    </div>
-                </div>
-                
-                <div class="info-box">
-                    <strong>Reason:</strong><br>
-                    ${data.policy_decision.policy_reason}
-                </div>
-            </div>
-            
-            <!-- Knowledge Base Evidence -->
-            <div class="section">
-                <div class="section-header">
-                    <div class="section-icon">📚</div>
-                    <h2 class="section-title">Knowledge Base Evidence</h2>
-                </div>
-                
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value">${data.evidence.chunks_used}</div>
-                        <div class="stat-label">Evidence Chunks</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${data.evidence.sources.length}</div>
-                        <div class="stat-label">Unique Sources</div>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">Sources</div>
-                    <div class="card-content">
-                        ${data.evidence.sources.map((s) => `<span class="tag">${s}</span>`).join("")}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Resolution Steps -->
-            <div class="section">
-                <div class="section-header">
-                    <div class="section-icon">✅</div>
-                    <h2 class="section-title">Resolution Steps</h2>
-                </div>
-                
-                ${
-                  data.resolution.reasoning
-                    ? `
-                <div class="info-box">
-                    <strong>AI Reasoning:</strong><br>
-                    ${data.resolution.reasoning}
-                </div>
-                `
-                    : ""
-                }
-                
-                {/* Removed: Risk level and estimated time stats (deprecated fields) */}
-                
-                <ol class="resolution-steps">
+                <div class="resolution-steps-container">
                     ${data.resolution.steps
                       .map(
-                        (step) => `
-                        <li class="resolution-step">${step}</li>
+                        (step, index) => `
+                        <div class="resolution-step">
+                            <div class="resolution-step-number">${index + 1}</div>
+                            <div class="resolution-step-text">${step}</div>
+                        </div>
                     `,
                       )
                       .join("")}
-                </ol>
-                
-                <div class="success-box">
-                    <strong>✅ Resolution Completed</strong><br>
-                    All steps have been executed successfully. The incident has been marked as ${data.resolution.status}.
                 </div>
             </div>
+            ` : ""}
         </div>
         
-        <!-- Footer -->
-        <div class="report-footer">
-            <div>Generated by NOC Agent UI - AI-Powered Incident Resolution</div>
-            <div style="margin-top: 8px; font-size: 12px;">
-                © ${new Date().getFullYear()} | Report generated on ${timestamp}
-            </div>
+        <!-- Success Banner -->
+        <div class="success-banner">
+            <div class="success-banner-title">Incident Resolved Successfully</div>
+            <div class="success-banner-message">All resolution steps have been executed. The incident has been marked as complete.</div>
         </div>
     </div>
 </body>
@@ -525,7 +792,20 @@ export const generateHTMLReport = (data: ReportData): string => {
 function getSeverityBadge(severity: string): string {
   const severityLower = severity.toLowerCase();
   const badgeClass = `badge badge-${severityLower}`;
-  return `<span class="${badgeClass}">${severity.toUpperCase()}</span>`;
+  const severityText = severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase();
+  return `<span class="${badgeClass}">${severityText} Severity</span>`;
+}
+
+function getSeverityBadgeWithIcon(severity: string): string {
+  const severityLower = severity.toLowerCase();
+  const badgeClass = `badge badge-${severityLower}`;
+  const severityText = severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase();
+  return `<span class="${badgeClass}">
+    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline-block; vertical-align: middle;">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+    </svg>
+    ${severityText} Severity
+  </span>`;
 }
 
 function getPolicyBadge(policy: string): string {

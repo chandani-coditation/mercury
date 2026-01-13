@@ -68,6 +68,39 @@ def submit_feedback(incident_id: str, feedback: FeedbackInput):
             rating=feedback.rating,
         )
 
+        # If user provided user_edited resolution_output, update the incident with it
+        # This ensures the edited resolution is preserved in the database
+        if feedback.feedback_type == "resolution" and feedback.user_edited:
+            try:
+                # Get current incident to preserve resolution_evidence, policy_band, and policy_decision
+                current_incident = incident_service.get_incident(incident_id)
+                
+                # Update the incident's resolution_output with the user-edited version
+                incident_service.update_resolution(
+                    incident_id=incident_id,
+                    resolution_output=feedback.user_edited,
+                    resolution_evidence=current_incident.get("resolution_evidence"),
+                    policy_band=current_incident.get("policy_band"),
+                    policy_decision=current_incident.get("policy_decision"),
+                )
+                logger.info(f"Resolution output updated via feedback: incident_id={incident_id}")
+
+                # Verify the update by fetching the incident again
+                try:
+                    updated_incident = incident_service.get_incident(incident_id)
+                    verified_resolution = updated_incident.get("resolution_output")
+                    if verified_resolution != feedback.user_edited:
+                        logger.warning(
+                            f"Resolution update verification: user_edited may not match stored resolution_output"
+                        )
+                    else:
+                        logger.info(f"Resolution update verified: incident_id={incident_id}")
+                except Exception as e:
+                    logger.warning(f"Could not verify resolution update: {str(e)}")
+            except Exception as e:
+                # Non-fatal; still return feedback stored
+                logger.warning(f"Failed to update resolution output after feedback: {str(e)}")
+
         # If user provided user_edited triage_output, update the incident with it
         # This ensures resolution agent uses the user-edited version
         if feedback.feedback_type == "triage" and feedback.user_edited:

@@ -74,6 +74,8 @@ const Index = () => {
     triage: {},
     resolution: {},
   });
+  // Step edit status for resolution steps: step index -> status
+  const [stepEditStatus, setStepEditStatus] = useState<Record<number, "idle" | "loading" | "success" | "error">>({});
 
   // Update URL when state changes
   const updateURL = (step?: WorkflowStep, view?: "workflow" | "incidents", incidentIdParam?: string, tab?: string) => {
@@ -605,6 +607,76 @@ const Index = () => {
           resolution: { ...prev.resolution, [stepIndex]: "success" },
         }));
       }, 500);
+    }
+  };
+
+  // Handler for resolution step editing
+  const handleResolutionStepEdit = async (
+    stepIndex: number,
+    editedStep: any,
+    originalStep: any
+  ) => {
+    console.log("handleResolutionStepEdit called:", { stepIndex, editedStep, originalStep, incidentId, hasResolutionData: !!resolutionData });
+    if (!incidentId || !resolutionData) {
+      console.warn("Missing incidentId or resolutionData:", { incidentId, hasResolutionData: !!resolutionData });
+      throw new Error("Missing incidentId or resolutionData");
+    }
+
+    // Set loading status
+    setStepEditStatus(prev => ({ ...prev, [stepIndex]: "loading" }));
+
+    try {
+      // Get the current resolution data
+      const currentResolution = resolutionData.resolution || resolutionData;
+      const currentSteps = currentResolution.steps || [];
+
+      // Create updated steps array with the edited step
+      const updatedSteps = currentSteps.map((step: any, idx: number) => {
+        // Match by original index or by step content
+        if (idx === stepIndex) {
+          return editedStep;
+        }
+        return step;
+      });
+
+      // Create updated resolution data with edited step
+      const updatedResolution = {
+        ...currentResolution,
+        steps: updatedSteps,
+      };
+
+      // Submit feedback with edited resolution
+      await putFeedback(incidentId, {
+        feedback_type: "resolution",
+        user_edited: updatedResolution,
+        notes: `User edited resolution step ${stepIndex + 1}: "${editedStep.action || editedStep.title || 'Step edited'}"`,
+      });
+
+      // Update local resolution data to reflect the edit
+      setResolutionData((prev: any) => ({
+        ...prev,
+        resolution: updatedResolution,
+      }));
+
+      // Set success status
+      setStepEditStatus(prev => ({ ...prev, [stepIndex]: "success" }));
+
+      // Clear success status after a short delay
+      setTimeout(() => {
+        setStepEditStatus(prev => ({ ...prev, [stepIndex]: "idle" }));
+      }, 2000);
+
+      console.log("Step edit submitted successfully for step", stepIndex);
+    } catch (err) {
+      console.error(`Failed to save edited step ${stepIndex}:`, err);
+      setStepEditStatus(prev => ({ ...prev, [stepIndex]: "error" }));
+      
+      // Clear error status after a delay
+      setTimeout(() => {
+        setStepEditStatus(prev => ({ ...prev, [stepIndex]: "idle" }));
+      }, 3000);
+      
+      throw err; // Re-throw so component can handle it
     }
   };
 
@@ -1310,10 +1382,12 @@ const Index = () => {
               data={resolutionData}
               onBack={handleBack}
               onMarkComplete={handleMarkComplete}
-                  incidentId={incidentId}
-                  resolutionRatings={resolutionRatings}
-                  ratingStatus={ratingStatus.resolution}
-                  onRatingChange={handleResolutionStepRating}
+              incidentId={incidentId}
+              resolutionRatings={resolutionRatings}
+              ratingStatus={ratingStatus.resolution}
+              onRatingChange={handleResolutionStepRating}
+              onStepEdit={handleResolutionStepEdit}
+              stepEditStatus={stepEditStatus}
             />
           )}
 
