@@ -71,11 +71,11 @@ cp env.template .env
 
 2. **Database Configuration**:
    ```bash
-   POSTGRES_HOST=localhost
-   POSTGRES_PORT=5432
-   POSTGRES_DB=nocdb
-   POSTGRES_USER=postgres
-   POSTGRES_PASSWORD=your_secure_password_here  #  REQUIRED: Set a strong password in production!
+   POSTGRES_HOST=<db_host>
+   POSTGRES_PORT=<db_port>
+   POSTGRES_DB=<db_name>
+   POSTGRES_USER=<db_user>
+   POSTGRES_PASSWORD=<db_password>
    ```
    
    **Security Note**: 
@@ -154,7 +154,7 @@ The PostgreSQL database schema is **automatically created** when the Docker cont
 - `POSTGRES_USER` - Database user (default: `postgres`)
 - `POSTGRES_PASSWORD` - Database password (**REQUIRED** - must be set to a strong password)
 
-** Security Warning**: 
+**Security Warning**: 
 - Never commit database credentials to version control
 - Use strong passwords in production (12+ characters with mixed case, numbers, and special characters)
 - The `.env` file is gitignored for security - never add it to the repository 
@@ -372,7 +372,7 @@ env:
 
 ### Credential Management
 
-** CRITICAL**: Never commit credentials to version control.
+**CRITICAL**: Never commit credentials to version control.
 
 1. **Environment Variables**: All sensitive data (API keys, passwords, tokens) must be stored in environment variables via the `.env` file
 2. **`.env` File**: The `.env` file is gitignored - never add it to the repository
