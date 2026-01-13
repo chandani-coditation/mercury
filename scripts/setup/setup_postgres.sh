@@ -54,7 +54,7 @@ for i in {1..30}; do
         echo " Postgres is ready"
         break
     fi
-    if [ $i -eq 30 ]; then
+    if [ "$i" -eq 30 ]; then
         echo " Postgres failed to start"
         exit 1
     fi

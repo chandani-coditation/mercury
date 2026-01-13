@@ -16,7 +16,7 @@ if [ ! -f .env ]; then
     cp .env.example .env
     echo " Please edit .env and add your OPENAI_API_KEY"
     echo ""
-    read -p "Press Enter after you've added your API key..."
+    read -r -p "Press Enter after you've added your API key..."
 fi
 
 # Check if Postgres is running
@@ -107,6 +107,6 @@ echo "To stop services, press Ctrl+C or run:"
 echo "  kill $INGESTION_PID $AI_SERVICE_PID"
 
 # Wait for user interrupt
-trap "kill $INGESTION_PID $AI_SERVICE_PID 2>/dev/null; exit" INT TERM
+trap 'kill "$INGESTION_PID" "$AI_SERVICE_PID" 2>/dev/null; exit' INT TERM
 wait
 

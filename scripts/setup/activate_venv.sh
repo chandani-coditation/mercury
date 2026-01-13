@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [ -d "$PROJECT_ROOT/venv" ]; then
+    # shellcheck source=/dev/null
     source "$PROJECT_ROOT/venv/bin/activate"
     echo " Virtual environment activated"
     echo "  Python: $(which python)"
