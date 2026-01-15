@@ -60,6 +60,9 @@ class TriageOutput(BaseModel):
     likely_cause: Optional[str] = (
         None  # LLM-generated summary based on evidence patterns (not a direct quote from historical data, max 300 chars)
     )
+    affected_services: Optional[List[str]] = (
+        None  # Affected services/CI extracted from incident signatures (primary) or alert labels/input (fallback)
+    )
 
 
 class RollbackPlan(BaseModel):

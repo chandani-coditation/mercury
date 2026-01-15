@@ -178,6 +178,114 @@ def predict_severity_from_evidence(incident_signatures: List[Dict[str, Any]]) ->
     return None
 
 
+def extract_affected_services_from_evidence(
+    incident_signatures: List[Dict[str, Any]],
+) -> Optional[List[str]]:
+    """
+    Extract affected services from matched incident signatures (PRIMARY method).
+
+    Uses the most common affected_service from historical incident signatures.
+    This is the most reliable source since it's based on actual historical data.
+
+    Args:
+        incident_signatures: List of retrieved incident signature chunks with metadata
+
+    Returns:
+        List of affected services or None if none found
+    """
+    if not incident_signatures:
+        return None
+
+    affected_services_list = []
+    for sig in incident_signatures:
+        metadata = sig.get("metadata", {})
+        # Check both 'affected_service' (singular) and 'affected_services' (plural) in metadata
+        affected_service = metadata.get("affected_service") or metadata.get("affected_services")
+        if affected_service:
+            if isinstance(affected_service, str) and affected_service.strip():
+                affected_services_list.append(affected_service.strip())
+            elif isinstance(affected_service, list):
+                for svc in affected_service:
+                    if isinstance(svc, str) and svc.strip():
+                        affected_services_list.append(svc.strip())
+
+    if not affected_services_list:
+        return None
+
+    # Return the most common affected_service(s)
+    from collections import Counter
+
+    counter = Counter(affected_services_list)
+    most_common = counter.most_common(1)
+    if most_common:
+        # Return as list with the most common service
+        affected_service = [most_common[0][0]]
+        logger.info(
+            f"Extracted affected_services from evidence: {affected_service} "
+            f"(appeared {most_common[0][1]} times in {len(affected_services_list)} signatures)"
+        )
+        return affected_service
+
+    return None
+
+
+def extract_affected_services_from_alert(alert: Dict[str, Any]) -> Optional[List[str]]:
+    """
+    Extract affected services from alert labels and input (FALLBACK method).
+
+    Checks in order:
+    1. alert.labels.affected_services
+    2. alert.labels.cmdb_ci (maps to affected_services per field_mappings.json)
+    3. alert.affected_services (direct input)
+
+    Args:
+        alert: Alert dictionary with labels and optional affected_services
+
+    Returns:
+        List of affected services or None if none found
+    """
+    affected_services = None
+
+    # Check alert labels first
+    if isinstance(alert.get("labels"), dict):
+        labels = alert.get("labels", {})
+        # Check for 'affected_services' in labels
+        if "affected_services" in labels:
+            aff_svc = labels.get("affected_services")
+            if aff_svc:
+                if isinstance(aff_svc, str):
+                    affected_services = [aff_svc]
+                elif isinstance(aff_svc, list):
+                    affected_services = aff_svc
+                elif aff_svc:
+                    affected_services = [str(aff_svc)]
+                if affected_services and len(affected_services) > 0:
+                    logger.info(f"Extracted affected_services from alert labels: {affected_services}")
+                    return affected_services
+        # Also check for 'cmdb_ci' which maps to affected_services per field_mappings.json
+        if "cmdb_ci" in labels:
+            cmdb_ci = labels.get("cmdb_ci")
+            if cmdb_ci and isinstance(cmdb_ci, str) and cmdb_ci.strip():
+                affected_services = [cmdb_ci.strip()]
+                logger.info(f"Extracted affected_services from cmdb_ci label: {affected_services}")
+                return affected_services
+
+    # Fallback to alert input directly
+    aff_svc_input = alert.get("affected_services")
+    if aff_svc_input is not None:
+        if isinstance(aff_svc_input, str):
+            affected_services = [aff_svc_input]
+        elif isinstance(aff_svc_input, list):
+            affected_services = aff_svc_input
+        elif aff_svc_input:
+            affected_services = [str(aff_svc_input)]
+        if affected_services and len(affected_services) > 0:
+            logger.info(f"Extracted affected_services from alert input: {affected_services}")
+            return affected_services
+
+    return None
+
+
 def format_evidence_chunks(
     context_chunks: list, retrieval_method: str = "hybrid_search", retrieval_params: dict = None
 ) -> dict:
@@ -617,26 +725,13 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
         triage_output["policy"] = policy_band
 
-        # Extract affected_services from alert
-        affected_services = alert.get("affected_services")
-        if affected_services is not None:
-            if isinstance(affected_services, str):
-                affected_services = [affected_services]
-            elif not isinstance(affected_services, list):
-                affected_services = [str(affected_services)]
-            if len(affected_services) > 0:
-                triage_output["affected_services"] = affected_services
-        # Also check labels if not in alert directly
-        elif isinstance(alert.get("labels"), dict):
-            labels = alert.get("labels", {})
-            if "affected_services" in labels:
-                aff_svc = labels.get("affected_services")
-                if isinstance(aff_svc, str):
-                    aff_svc = [aff_svc]
-                elif not isinstance(aff_svc, list):
-                    aff_svc = [str(aff_svc)]
-                if len(aff_svc) > 0:
-                    triage_output["affected_services"] = aff_svc
+        # Extract affected_services - PRIMARY: from incident signatures, FALLBACK: from alert
+        affected_services = extract_affected_services_from_evidence(incident_signatures)
+        if not affected_services:
+            affected_services = extract_affected_services_from_alert(alert)
+        
+        if affected_services and len(affected_services) > 0:
+            triage_output["affected_services"] = affected_services
 
         formatted_evidence = format_evidence_chunks(
             incident_signatures,  # Only incident signatures have chunk structure
@@ -840,26 +935,10 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         if routing:
             triage_output["routing"] = routing
 
-        # Extract affected_services from alert
-        affected_services = alert.get("affected_services")
-        if affected_services is not None:
-            if isinstance(affected_services, str):
-                affected_services = [affected_services]
-            elif not isinstance(affected_services, list):
-                affected_services = [str(affected_services)]
-            if len(affected_services) > 0:
-                triage_output["affected_services"] = affected_services
-        # Also check labels if not already set
-        if "affected_services" not in triage_output and isinstance(alert.get("labels"), dict):
-            labels = alert.get("labels", {})
-            if "affected_services" in labels:
-                aff_svc = labels.get("affected_services")
-                if isinstance(aff_svc, str):
-                    aff_svc = [aff_svc]
-                elif not isinstance(aff_svc, list):
-                    aff_svc = [str(aff_svc)]
-                if len(aff_svc) > 0:
-                    triage_output["affected_services"] = aff_svc
+        # Extract affected_services - FALLBACK: from alert (no evidence available)
+        affected_services = extract_affected_services_from_alert(alert)
+        if affected_services and len(affected_services) > 0:
+            triage_output["affected_services"] = affected_services
 
         policy_decision = {
             "policy_band": "REVIEW",

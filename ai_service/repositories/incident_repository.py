@@ -380,6 +380,7 @@ class IncidentRepository:
                 )
                 conn.commit()
 
+                logger.info(
                     f"policy_band: {old_policy_band} -> {policy_band}, "
                     f"policy_decision updated: {old_policy_decision is not None} -> {policy_decision is not None}"
                 )
