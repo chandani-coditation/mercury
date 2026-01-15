@@ -326,253 +326,112 @@ def extract_runbook_steps(
     normalized_service: Optional[str] = None,
     normalized_component: Optional[str] = None,
 ) -> List[RunbookStep]:
-    """
-    Extract atomic runbook steps from runbook content.
-
-    Per architecture: Each step is stored independently with:
-    - step_id, runbook_id, condition, action, expected_outcome, rollback, risk_level
-
-    Returns:
-        List of RunbookStep objects
-    """
     steps = []
 
-    # Generate runbook_id if not provided
     if not runbook_id:
-        # Try to extract from tags or generate one
         runbook_id = (
             runbook.tags.get("runbook_id") if runbook.tags else f"RB-{uuid.uuid4().hex[:8].upper()}"
         )
 
-    # Log extraction attempt
-    try:
-        from ai_service.core import get_logger
-
-        logger = get_logger(__name__)
-        has_steps = runbook.steps is not None
-        steps_count = len(runbook.steps) if isinstance(runbook.steps, list) else 0
-        content_len = len(runbook.content) if runbook.content else 0
-        logger.info(
-            f"Extracting steps from runbook {runbook.title}. Has steps list: {has_steps}, Steps count: {steps_count}, Content length: {content_len}"
-        )
-    except:
-        pass
-
-    # If structured steps are provided, use them
+    # ---- Structured steps ----
     if runbook.steps and isinstance(runbook.steps, list) and len(runbook.steps) > 0:
-        try:
-            from ai_service.core import get_logger
-
-            logger = get_logger(__name__)
-            logger.debug(f"Using {len(runbook.steps)} structured steps from runbook.steps")
-        except:
-            pass
         for idx, step_text in enumerate(runbook.steps, 1):
             step_id = f"{runbook_id}-S{idx}"
-
-            # Try to parse structured step format
-            # Look for patterns like "Condition: ... Action: ..." or similar
-            condition = None
-            action = step_text
-            expected_outcome = None
-            rollback = None
-            risk_level = None
-
-            # Parse remediation steps that may be in format "Problem: Solution" or "Problem: Action"
-            # Example: "Connection saturation: Kill idle sessions, increase max_connections if safe."
-            if ":" in step_text and len(step_text.split(":")) == 2:
-                parts = step_text.split(":", 1)
-                condition = parts[0].strip()  # Problem/condition
-                action = parts[1].strip()  # Remediation action
-                # Apply technical term normalization to action text (from historical data)
-                action = normalize_technical_terms(action)
-
-            # Try to extract condition if present (e.g., "If X, then Y")
-            elif "if" in step_text.lower() or "when" in step_text.lower():
-                # Simple heuristic: split on "then" or "do"
-                parts = re.split(r"\s+then\s+|\s+do\s+", step_text, flags=re.IGNORECASE)
-                if len(parts) >= 2:
-                    condition = parts[0].strip()
-                    action = parts[1].strip()
-                    # Apply technical term normalization to action text (from historical data)
-                    action = normalize_technical_terms(action)
-
-            # Normalize action text if it wasn't parsed above
-            if action == step_text:
-                action = normalize_technical_terms(action)
-
-            # Extract rollback from rollback_procedures if available
-            if runbook.rollback_procedures:
-                if isinstance(runbook.rollback_procedures, dict):
-                    rollback = runbook.rollback_procedures.get("steps", [])
-                    if isinstance(rollback, list):
-                        rollback = "\n".join(rollback) if rollback else None
-                else:
-                    rollback = runbook.rollback_procedures
+            action = normalize_technical_terms(step_text)
 
             steps.append(
                 RunbookStep(
                     step_id=step_id,
                     runbook_id=runbook_id,
-                    condition=condition or f"Step {idx} applies",
-                    action=action,
-                    expected_outcome=expected_outcome,
-                    rollback=rollback,
-                    risk_level=None,  # Removed: risk_level is not based on historical data
-                    service=normalized_service or runbook.service,
-                    component=normalized_component or runbook.component,
-                )
-            )
-    else:
-        # Parse unstructured content to extract steps
-        # Look for numbered lists, bullet points, or step markers
-        content = runbook.content
-
-        # Try multiple strategies to extract steps
-        found_steps = []
-
-        # Strategy 1: Numbered lists (1., 2., 3., etc.)
-        numbered_pattern = r"(?i)^\s*(\d+)[\.\)]\s+(.+?)(?=\n\s*\d+[\.\)]|\n\n\n|\Z)"
-        matches = re.finditer(numbered_pattern, content, re.MULTILINE | re.DOTALL)
-        for match in matches:
-            step_text = match.group(2).strip()
-            if step_text and len(step_text) > 5:
-                found_steps.append(step_text)
-
-        # Strategy 2: "Step N:" or "Step N." patterns
-        if not found_steps:
-            step_pattern = r"(?i)^\s*step\s+(\d+)[:\.]\s+(.+?)(?=\n\s*step\s+\d+|$)"
-            matches = re.finditer(step_pattern, content, re.MULTILINE | re.DOTALL)
-            for match in matches:
-                step_text = match.group(2).strip()
-                if step_text and len(step_text) > 5:
-                    found_steps.append(step_text)
-
-        # Strategy 3: Bullet points (- or *)
-        if not found_steps:
-            bullet_pattern = r"(?i)^\s*[-*•]\s+(.+?)(?=\n\s*[-*•]|\n\n|\Z)"
-            matches = re.finditer(bullet_pattern, content, re.MULTILINE | re.DOTALL)
-            for match in matches:
-                step_text = match.group(1).strip()
-                if step_text and len(step_text) > 5:
-                    found_steps.append(step_text)
-
-        # Strategy 4: Split by double newlines (paragraphs)
-        if not found_steps:
-            paragraphs = re.split(r"\n\s*\n+", content)
-            for para in paragraphs:
-                para = para.strip()
-                if para and len(para) > 20:  # Only meaningful paragraphs
-                    found_steps.append(para)
-
-        # Strategy 5: Split by single newlines if content is structured
-        if not found_steps and "\n" in content:
-            lines = [line.strip() for line in content.split("\n") if line.strip()]
-            # Group consecutive non-empty lines as steps
-            current_step = []
-            for line in lines:
-                if len(line) > 10:  # Meaningful line
-                    current_step.append(line)
-                elif current_step:
-                    found_steps.append(" ".join(current_step))
-                    current_step = []
-            if current_step:
-                found_steps.append(" ".join(current_step))
-
-        # Last resort: treat entire content as one step (but log a warning)
-        if not found_steps:
-            if content and content.strip():
-                # Split content into paragraphs and treat each as a step
-                paragraphs = [
-                    p.strip() for p in content.split("\n\n") if p.strip() and len(p.strip()) > 20
-                ]
-                if paragraphs:
-                    found_steps = paragraphs
-                else:
-                    # If no paragraphs, split by single newlines
-                    lines = [
-                        line.strip()
-                        for line in content.split("\n")
-                        if line.strip() and len(line.strip()) > 20
-                    ]
-                    if lines:
-                        found_steps = lines
-                    else:
-                        # Absolute last resort: use entire content
-                        found_steps = [content.strip()]
-                try:
-                    from ai_service.core import get_logger
-
-                    logger = get_logger(__name__)
-                    logger.warning(
-                        f"Could not extract structured steps from runbook {runbook_id}. "
-                        f"Using {len(found_steps)} paragraph(s) as steps. Content length: {len(content)}"
-                    )
-                except:
-                    pass
-            else:
-                try:
-                    from ai_service.core import get_logger
-
-                    logger = get_logger(__name__)
-                    logger.error(f"Runbook {runbook_id} has no content to extract steps from!")
-                except:
-                    pass
-
-        # Create RunbookStep objects
-        for idx, step_text in enumerate(found_steps, 1):
-            step_id = f"{runbook_id}-S{idx}"
-
-            # Extract condition and action if possible
-            condition = None
-            action = step_text
-
-            if "if" in step_text.lower() or "when" in step_text.lower():
-                parts = re.split(r"\s+then\s+|\s+do\s+", step_text, flags=re.IGNORECASE)
-                if len(parts) >= 2:
-                    condition = parts[0].strip()
-                    action = parts[1].strip()
-
-            # Handle rollback procedures
-            rollback = None
-            if runbook.rollback_procedures:
-                if isinstance(runbook.rollback_procedures, dict):
-                    rollback_steps = runbook.rollback_procedures.get("steps", [])
-                    if rollback_steps:
-                        rollback = (
-                            "\n".join(rollback_steps)
-                            if isinstance(rollback_steps, list)
-                            else str(rollback_steps)
-                        )
-                else:
-                    rollback = str(runbook.rollback_procedures)
-
-            steps.append(
-                RunbookStep(
-                    step_id=step_id,
-                    runbook_id=runbook_id,
-                    condition=condition or f"Step {idx} applies",
+                    condition=f"Step {idx}",
                     action=action,
                     expected_outcome=None,
-                    rollback=rollback,
+                    rollback=None,
                     risk_level=None,
                     service=normalized_service or runbook.service,
                     component=normalized_component or runbook.component,
                 )
             )
+        return steps
 
-    # Ensure we have at least one step if there's any content
-    if len(steps) == 0 and runbook.content and runbook.content.strip():
-        # Create a single step from the entire content as absolute last resort
-        step_id = f"{runbook_id}-S1"
+    # ---- Unstructured parsing ----
+    content = runbook.content or ""
+    found_steps = []
+
+    # Strategy 1: Numbered lists
+    numbered_pattern = r"(?i)^\s*(\d+)[\.\)]\s+(.+?)(?=\n\s*\d+[\.\)]|\Z)"
+    for m in re.finditer(numbered_pattern, content, re.MULTILINE | re.DOTALL):
+        found_steps.append(m.group(2).strip())
+
+    # Strategy 2: Step N
+    if not found_steps:
+        step_pattern = r"(?i)^\s*step\s+\d+[:\.]\s+(.+?)(?=\n\s*step\s+\d+|\Z)"
+        for m in re.finditer(step_pattern, content, re.MULTILINE | re.DOTALL):
+            found_steps.append(m.group(1).strip())
+
+    # Strategy 3: Bullets
+    if not found_steps:
+        bullet_pattern = r"(?m)^\s*[-*•]\s+(.+)"
+        for m in re.finditer(bullet_pattern, content):
+            found_steps.append(m.group(1).strip())
+
+    # Strategy 3.5: Colon-terminated headers (CPU fix)
+    if not found_steps:
+        header_pattern = r"(?m)^\s*([A-Z][^\n]{3,100}:)\s*\n+(.+?)(?=\n[A-Z][^\n]{3,100}:|\n\n[A-Z]|\Z)"
+        for m in re.finditer(header_pattern, content, re.DOTALL):
+            found_steps.append(f"{m.group(1)} {m.group(2)}".strip())
+
+    # Strategy 4: Paragraphs (guarded)
+    if not found_steps:
+        for para in re.split(r"\n\s*\n+", content):
+            para = para.strip()
+            if 20 < len(para) < 1200:
+                found_steps.append(para)
+
+    # Last resort
+    if not found_steps and content.strip():
+        found_steps = [content.strip()]
+
+    # ---- Reduce oversized step chunks (HIGH PRIORITY FIX) ----
+    MAX_STEP_LEN = 600
+    refined_steps = []
+
+    for step in found_steps:
+        if len(step) <= MAX_STEP_LEN:
+            refined_steps.append(step)
+            continue
+
+        parts = re.split(r"\n[-*•]|\n{1,2}", step)
+        buffer = ""
+
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+
+            if len(buffer) + len(part) <= MAX_STEP_LEN:
+                buffer = f"{buffer} {part}".strip()
+            else:
+                refined_steps.append(buffer)
+                buffer = part
+
+        if buffer:
+            refined_steps.append(buffer)
+
+    found_steps = refined_steps
+
+    # ---- Create RunbookStep objects ----
+    for idx, step_text in enumerate(found_steps, 1):
+        step_id = f"{runbook_id}-S{idx}"
+        first_sentence = step_text.split(".")[0][:120]
+        condition = derive_step_title(step_text, idx)
+
         steps.append(
             RunbookStep(
                 step_id=step_id,
                 runbook_id=runbook_id,
-                condition="Runbook applies",
-                action=runbook.content.strip()[
-                    : INGESTION_CONFIG.get("formatting", {}).get("max_fallback_title_length", 1000)
-                ],  # Limit from config
+                condition=condition,
+                action=normalize_technical_terms(step_text),
                 expected_outcome=None,
                 rollback=None,
                 risk_level=None,
@@ -580,29 +439,22 @@ def extract_runbook_steps(
                 component=normalized_component or runbook.component,
             )
         )
-        try:
-            from ai_service.core import get_logger
-
-            logger = get_logger(__name__)
-            logger.warning(
-                f"Created single fallback step for runbook {runbook.title} "
-                f"because no steps could be extracted. Content length: {len(runbook.content)}"
-            )
-        except:
-            pass
-
-    # Log final result
-    try:
-        from ai_service.core import get_logger
-
-        logger = get_logger(__name__)
-        logger.info(
-            f"Extracted {len(steps)} steps from runbook {runbook.title} (runbook_id: {runbook_id})"
-        )
-    except:
-        pass
 
     return steps
+
+def derive_step_title(step_text: str, idx: int) -> str:
+    # Prefer colon-style headers (best signal)
+    if ":" in step_text:
+        header = step_text.split(":", 1)[0].strip()
+        if 5 < len(header) <= 80:
+            return header
+
+    # Fallback to first sentence
+    sentence = step_text.split(".")[0].strip()
+    if 5 < len(sentence) <= 120:
+        return sentence
+
+    return f"Step {idx}"
 
 
 def validate_service_component_value(value: Optional[str], field_name: str) -> Optional[str]:
