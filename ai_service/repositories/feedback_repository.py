@@ -401,7 +401,7 @@ class FeedbackRepository:
                     len(results),
                     incident_id,
                     len(rows),
-                )
+                
                 return results
             except Exception as e:
                 # Extract detailed error information from psycopg exceptions

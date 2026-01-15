@@ -121,8 +121,7 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-            f"policy_band={policy_band}"
-        )
+       
 
         # If policy_band or policy_decision not provided, preserve existing values
         if policy_band is None or policy_decision is None:

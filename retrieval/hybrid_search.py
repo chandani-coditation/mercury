@@ -326,9 +326,6 @@ def hybrid_search(
                 )
                 raise ValueError(error_msg)
 
-                f"service={repr(service_val)}, component={repr(component_val)}"
-            )
-
             try:
                 cur.execute(query, exec_params)
             except Exception as e:
@@ -512,16 +509,10 @@ def triage_retrieval(
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned
 
-    # For runbooks, use the enhanced query_text directly (original behavior)
-    # This gives runbooks more context to match properly
-    # Note: We still clean it to remove URLs/IPs that break plainto_tsquery, but keep more context
     runbook_fulltext_query = clean_query_for_runbooks(query_text) if query_text else fulltext_query
-    # If cleaned query is empty or too short, fall back to fulltext_query
     if not runbook_fulltext_query or len(runbook_fulltext_query.strip()) < 10:
         runbook_fulltext_query = fulltext_query
-        f"fulltext_query='{fulltext_query[:100]}...', "
-        f"service={service}, component={component}, limit={limit}"
-    )
+
 
     try:
         from retrieval.metrics import record_retrieval
@@ -546,19 +537,10 @@ def triage_retrieval(
             service_val = service if service and str(service).strip() else None
             component_val = component if component and str(component).strip() else None
 
-            # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
-            # Service/component are now used as score boosters in ORDER BY, not WHERE filters
-            # This allows semantic search to find relevant incident signatures even with mismatches
             filter_clause = (
-                ""  # No hard filters - all results included, ranked by relevance + match boosts
+                ""
             )
 
-            # Retrieve incident signatures directly from incident_signatures table
-            # (No need for chunks table - embeddings and tsvector are already in incident_signatures)
-            # Parameter order:
-            # Vector: $1 (score), $2 (rank), $3 (ORDER BY), $4 (limit), [filters for vector]
-            # Fulltext: $5 (score), $6 (rank), $7 (WHERE), $8 (ORDER BY), $9 (limit), [filters for fulltext]
-            # Final: $last (final limit)
             incident_sig_query = f"""
         WITH vector_results AS (
             SELECT 
@@ -714,21 +696,17 @@ def triage_retrieval(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(
                     service_val, component_val
                 )
-            )  # 11-18: Service (dual) and component boost params
-            # Combined results params - fulltext query for calculating ts_rank for non-matching signatures
+            ) 
             sig_params.append(
                 str(fulltext_query)
-            )  # 19: fulltext_query for length check in combined_results
+            ) 
             sig_params.append(
                 str(fulltext_query)
-            )  # 20: fulltext_query for ts_rank in combined_results
-            # Final limit
-            sig_params.append(limit)  # 21: final limit
-            # Execute incident signatures query
+            )
+            sig_params.append(limit)
             cur.execute(incident_sig_query, sig_params)
             incident_sig_rows = cur.fetchall()
 
-            # Collect all source_incident_ids to fetch descriptions
             all_source_incident_ids = []
             for row in incident_sig_rows:
                 if isinstance(row, dict):
@@ -849,22 +827,10 @@ def triage_retrieval(
                         }
                     )
 
-            # Retrieve runbook metadata (documents only, NOT steps)
-            # Runbook metadata is in documents table, not chunks
-            # PHASE 1: No hard filters - use soft filter boosts in ORDER BY
-            # Use cleaned enhanced query for runbooks (defined above at function start)
             runbook_params = [
                 runbook_fulltext_query
-            ]  # For full-text search (use cleaned enhanced query)
-
-            # PHASE 1: Soft Filters - Remove hard WHERE filters for runbook metadata
-            # Service/component are now used as relevance boosters, not WHERE filters
-            # This allows semantic search to find relevant runbooks even with mismatches
-            runbook_filter_clause = (
-                ""  # No hard filters - all results included, ranked by relevance
-            )
-            runbook_params.append(limit)  # For LIMIT
-
+            ]
+            runbook_params.append(limit)
             runbook_meta_query = f"""
             SELECT *
             FROM (
@@ -891,14 +857,9 @@ def triage_retrieval(
             LIMIT %s
             """
 
-            # Build params for runbook metadata query with soft filter boosts
-            # Query params: runbook_fulltext_query (ts_rank), soft filter boosts (SELECT only), limit
-            # Note: ORDER BY doesn't use parameters - it just references the calculated columns
-            # Use cleaned enhanced query for runbooks (more context than fulltext_query_text, but cleaned)
             runbook_params_extended = [
-                runbook_fulltext_query,  # 1: fulltext search for ts_rank
+                runbook_fulltext_query,
             ]
-            # Add soft filter boost params for SELECT only (6 params: 3 for service, 3 for component)
             runbook_params_extended.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
             )
@@ -959,9 +920,6 @@ def triage_retrieval(
                             ),
                         }
                     )
-
-                f"{len(runbook_metadata)} runbook metadata"
-            )
 
             result = {
                 "incident_signatures": incident_signatures,
