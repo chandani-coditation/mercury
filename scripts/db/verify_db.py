@@ -139,7 +139,7 @@ def verify_db():
         logger.info("=" * 70)
 
         # 1. Check documents count
-        logger.info("\n📄 Documents:")
+        logger.info("\nDocuments:")
         total_docs = int(execute_sql_single("SELECT COUNT(*) FROM documents;"))
         logger.info(f"  Total documents: {total_docs}")
 
@@ -154,7 +154,7 @@ def verify_db():
                 logger.info(f"    {parts[0]}: {parts[1]}")
 
         # 2. Check chunks count
-        logger.info("\n📦 Chunks:")
+        logger.info("\nChunks:")
         total_chunks = int(execute_sql_single("SELECT COUNT(*) FROM chunks;"))
         logger.info(f"  Total chunks: {total_chunks}")
 
@@ -175,7 +175,7 @@ def verify_db():
 
         logger.info(f"  Chunks with embeddings: {with_embedding}/{total}")
         if missing_embedding > 0:
-            logger.warning(f"    ⚠️  WARNING: {missing_embedding} chunks missing embeddings!")
+            logger.warning(f"    WARNING: {missing_embedding} chunks missing embeddings!")
 
         # Chunks with tsvector
         tsv_stats_line = execute_sql_single(
@@ -193,10 +193,10 @@ def verify_db():
 
         logger.info(f"  Chunks with tsvector: {with_tsv}/{total}")
         if missing_tsv > 0:
-            logger.warning(f"    ⚠️  WARNING: {missing_tsv} chunks missing tsvector!")
+            logger.warning(f"    WARNING: {missing_tsv} chunks missing tsvector!")
 
         # 3. Check embedding dimensions
-        logger.info("\n🔢 Embedding Details:")
+        logger.info("\nEmbedding Details:")
         total_with_emb = int(
             execute_sql_single("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL;")
         )
@@ -204,7 +204,7 @@ def verify_db():
         logger.info("  Expected dimension: 1536 (text-embedding-3-small)")
 
         # 4. Check chunks per document
-        logger.info("\n📊 Chunks per Document:")
+        logger.info("\nChunks per Document:")
         chunk_per_doc = execute_sql(
             """
             SELECT 
@@ -231,7 +231,7 @@ def verify_db():
                 )
 
         # 5. Check for documents without chunks
-        logger.info("\n🔗 Document-Chunk Relationships:")
+        logger.info("\nDocument-Chunk Relationships:")
         orphaned = int(
             execute_sql_single(
                 """
@@ -243,12 +243,12 @@ def verify_db():
             )
         )
         if orphaned > 0:
-            logger.warning(f"    ⚠️  WARNING: {orphaned} documents have no chunks!")
+            logger.warning(f"    WARNING: {orphaned} documents have no chunks!")
         else:
-            logger.info("   ✅ All documents have chunks")
+            logger.info("   All documents have chunks")
 
         # 6. Ingestion Quality Checks
-        logger.info("\n📊 Ingestion Quality Checks:")
+        logger.info("\nIngestion Quality Checks:")
 
         # Service normalization check (check incident_signatures table, not documents)
         services = execute_sql(
@@ -274,13 +274,13 @@ def verify_db():
 
         if server_incidents > 0:
             logger.warning(
-                f"  ⚠️  Found {server_incidents} incidents with 'Server' service (should be normalized)"
+                f"  Found {server_incidents} incidents with 'Server' service (should be normalized)"
             )
         else:
-            logger.info("  ✅ Service normalization working (no 'Server' incidents)")
+            logger.info("  Service normalization working (no 'Server' incidents)")
 
         if total_incidents > 0:
-            logger.info(f"  ✅ Total incident signatures: {total_incidents}")
+            logger.info(f"  Total incident signatures: {total_incidents}")
 
         # Runbook deduplication check
         duplicates = execute_sql(
@@ -294,20 +294,20 @@ def verify_db():
         """
         )
         if duplicates:
-            logger.warning(f"  ⚠️  Found duplicate runbooks:")
+            logger.warning(f"  Found duplicate runbooks:")
             for line in duplicates:
                 parts = line.split("|")
                 if len(parts) >= 2:
                     logger.warning(f"     - '{parts[0]}': {parts[1]} duplicates")
         else:
-            logger.info("  ✅ Runbook deduplication working (no duplicates)")
+            logger.info("  Runbook deduplication working (no duplicates)")
 
         # Runbook steps check
         total_steps = int(execute_sql_single("SELECT COUNT(*) FROM runbook_steps;"))
         if total_steps == 0:
-            logger.warning(f"  ⚠️  No runbook steps found in database")
+            logger.warning(f"  No runbook steps found in database")
         else:
-            logger.info(f"  ✅ Found {total_steps} runbook steps")
+            logger.info(f"  Found {total_steps} runbook steps")
             runbooks_without_steps = execute_sql(
                 """
                 SELECT d.title, COUNT(rs.id)::text as step_count 
@@ -320,7 +320,7 @@ def verify_db():
             """
             )
             if runbooks_without_steps:
-                logger.warning(f"     ⚠️  {len(runbooks_without_steps)} runbooks have no steps")
+                logger.warning(f"     {len(runbooks_without_steps)} runbooks have no steps")
 
         # 7. Summary
         logger.info("\n" + "=" * 70)
@@ -329,48 +329,48 @@ def verify_db():
 
         all_good = True
         if total_docs == 0:
-            logger.warning("    ⚠️  No documents found!")
+            logger.warning("    No documents found!")
             all_good = False
         else:
-            logger.info(f"   ✅ {total_docs} documents ingested")
+            logger.info(f"   {total_docs} documents ingested")
 
         if total_chunks == 0:
-            logger.warning("    ⚠️  No chunks found!")
+            logger.warning("    No chunks found!")
             all_good = False
         else:
-            logger.info(f"   ✅ {total_chunks} chunks created")
+            logger.info(f"   {total_chunks} chunks created")
 
         if missing_embedding > 0:
-            logger.warning(f"    ⚠️  {missing_embedding} chunks missing embeddings")
+            logger.warning(f"    {missing_embedding} chunks missing embeddings")
             all_good = False
         else:
-            logger.info(f"   ✅ All {total_chunks} chunks have embeddings")
+            logger.info(f"   All {total_chunks} chunks have embeddings")
 
         if missing_tsv > 0:
-            logger.warning(f"    ⚠️  {missing_tsv} chunks missing tsvector")
+            logger.warning(f"    {missing_tsv} chunks missing tsvector")
             all_good = False
         else:
-            logger.info(f"   ✅ All {total_chunks} chunks have tsvector")
+            logger.info(f"   All {total_chunks} chunks have tsvector")
 
         if orphaned > 0:
-            logger.warning(f"    ⚠️  {orphaned} documents without chunks")
+            logger.warning(f"    {orphaned} documents without chunks")
             all_good = False
 
         if server_incidents > 0 or duplicates or total_steps == 0:
             all_good = False
 
         if all_good:
-            logger.info("\n   ✅ Database is correctly set up and all embeddings generated!")
+            logger.info("\n   Database is correctly set up and all embeddings generated!")
         else:
-            logger.warning("\n    ⚠️  Some issues detected. Please review above.")
+            logger.warning("\n    Some issues detected. Please review above.")
 
         logger.info("=" * 70)
 
     except RuntimeError as e:
-        logger.error(f"\n❌ Error: {e}")
+        logger.error(f"\nError: {e}")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"\n❌ Error during verification: {type(e).__name__}: {e}")
+        logger.error(f"\nError during verification: {type(e).__name__}: {e}")
         import traceback
 
         traceback.print_exc()

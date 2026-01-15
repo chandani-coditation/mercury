@@ -13,17 +13,11 @@ from ai_service.services import IncidentService
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Feature flag for LangGraph (can be enabled via environment variable)
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
 
 
 def _record_triage_latency_and_update_incident(result: dict, start_time: datetime) -> float:
-    """
-    Attach end-to-end API latency to triage output and persist to the incident.
-
-    This helper is intentionally defensive: failures are logged but do not
-    break the main /triage flow.
-    """
+    """Attach end-to-end API latency to triage output and persist to the incident."""
     latency = (datetime.utcnow() - start_time).total_seconds()
 
     try:
@@ -69,29 +63,18 @@ async def triage(
     - evidence_chunks: Retrieved context chunks used for triage
     - policy_band: Policy decision (AUTO/PROPOSE/REVIEW)
     """
-    # Determine if LangGraph should be used
     use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH
-
-    logger.info(
-        f"Triage request received: alert={alert.title}, use_state={use_state}, use_langgraph={use_lg}"
-    )
 
     start_time = datetime.utcnow()
     try:
-        # Convert alert to dict
         alert_dict = alert.model_dump(mode="json", exclude_none=True)
-        # Handle ts: use provided timestamp or default to current time
         if alert.ts:
             alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
         else:
             alert_dict["ts"] = datetime.utcnow().isoformat()
-        # Ensure affected_services is preserved if present
         if hasattr(alert, "affected_services") and alert.affected_services is not None:
             alert_dict["affected_services"] = alert.affected_services
-        # Also preserve from raw dict if Alert model didn't capture it
         if "affected_services" not in alert_dict and hasattr(alert, "__dict__"):
-            # Check if it was in the original request
-            logger.debug(f"Alert model dump keys: {list(alert_dict.keys())}")
             if hasattr(alert, "affected_services"):
                 logger.debug(f"Alert.affected_services attribute: {alert.affected_services}")
 

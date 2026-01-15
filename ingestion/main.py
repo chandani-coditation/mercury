@@ -34,14 +34,12 @@ except ImportError:
 
 load_dotenv()
 
-# Setup logging
 log_level = os.getenv("LOG_LEVEL", "INFO")
 log_file = os.getenv("LOG_FILE", None)
 log_dir = os.getenv("LOG_DIR", None)
 setup_logging(log_level=log_level, log_file=log_file, log_dir=log_dir, service_name="ingestion")
 logger = get_logger(__name__)
 
-# FastAPI app with increased body size limit for large logs
 app = FastAPI(
     title="NOC Ingestion Service",
     version="1.0.0",
@@ -51,17 +49,12 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# CORS middleware - Security: Use explicit allowed origins from environment variable
-# In production, set CORS_ALLOWED_ORIGINS to a comma-separated list of allowed origins
-# Example: CORS_ALLOWED_ORIGINS=http://localhost:5173,https://yourdomain.com
 allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
 if allowed_origins_env:
-    # Split by comma and strip whitespace from each origin
     allowed_origins = [
         origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()
     ]
 else:
-    # Default to localhost for development only
     allowed_origins = ["http://localhost:5173"]
     logger.warning(
         "CORS_ALLOWED_ORIGINS not set. Using default localhost origin for development. "
@@ -70,10 +63,10 @@ else:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,  # Explicit list - no wildcards
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Explicit methods
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],  # Explicit headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 

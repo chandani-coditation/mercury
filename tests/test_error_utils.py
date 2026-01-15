@@ -12,14 +12,14 @@ class TestErrorUtils:
         error = "Something went wrong"
         result = format_user_friendly_error(error)
         assert "Something went wrong" in result
-        assert "💡" in result
+        assert "Hint:" in result
 
     def test_format_exception_error(self):
         """Test formatting an exception error."""
         error = ValueError("Invalid input")
         result = format_user_friendly_error(error)
         assert "Invalid input" in result
-        assert "💡" in result
+        assert "Hint:" in result
 
     def test_format_error_with_validation_type(self):
         """Test formatting error with validation type."""

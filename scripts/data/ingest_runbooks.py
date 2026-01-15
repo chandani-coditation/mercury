@@ -213,7 +213,7 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                     full_content_parts.append(f"  • {text}\n")
                 elif current_section == "rollback_triggers":
                     rollback_triggers.append(text)
-                    full_content_parts.append(f"  ⚠ {text}\n")
+                    full_content_parts.append(f"  {text}\n")
                 else:
                     full_content_parts.append(f"{text}\n")
 
@@ -398,8 +398,6 @@ def ingest_runbook(
         response.raise_for_status()
         result = response.json()
         document_id = result.get("document_id")
-        steps_count = result.get("steps_count", 0)
-        logger.info(f"Runbook ingested: document_id={document_id}, steps_count={steps_count}")
         return True, document_id
     except Exception as e:
         logger.error(f"Failed to ingest runbook {runbook.title}: {str(e)}")
@@ -420,21 +418,17 @@ def ingest_docx_file(
 
     try:
         runbook = map_docx_to_runbook(file_path, field_mappings)
-        title_preview = (runbook.title[:50] + "...") if len(runbook.title) > 50 else runbook.title
-        logger.info(f"    Title: {title_preview}")
-
         success, document_id = ingest_runbook(runbook, ingestion_url)
 
         if success:
-            logger.info(f"     Successfully ingested (document_id: {document_id})")
+            logger.info(f"Successfully ingested: {runbook.title[:50]}")
             return 1, 0
         else:
-            logger.error(f"     Failed to ingest runbook")
+            logger.error(f"Failed to ingest runbook")
             return 0, 1
 
     except Exception as e:
-        error_msg = f"Error processing {file_path.name}: {str(e)}"
-        logger.error(f"     {error_msg}")
+        logger.error(f"Error processing {file_path.name}: {str(e)}")
         return 0, 1
 
 
@@ -458,18 +452,9 @@ def main():
     if not args.dir and not args.file:
         parser.error("Either --dir or --file must be provided")
 
-    # Startup message
-    logger.info("=" * 70)
-    logger.info("Runbook Ingestion Script")
-    logger.info("=" * 70)
-    logger.info("Starting runbook ingestion...")
-
-    # Load field mappings configuration
     try:
-        logger.info(" Loading field mappings configuration...")
         field_mappings_config = get_field_mappings_config()
         runbook_mappings = field_mappings_config.get("runbook_docx", {})
-        logger.info(" Configuration loaded successfully")
     except Exception as e:
         logger.error(f" Failed to load field mappings: {str(e)}")
         sys.exit(1)
@@ -501,10 +486,8 @@ def main():
 
         docx_files = list(dir_path.glob("*.docx"))
         if not docx_files:
-            logger.warning(f"  No DOCX files found in {dir_path}")
+            logger.warning(f"No DOCX files found in {dir_path}")
             sys.exit(0)
-
-        logger.info(f"Found {len(docx_files)} DOCX file(s) to process")
 
         for idx, docx_file in enumerate(docx_files, start=1):
             success, errors = ingest_docx_file(
@@ -513,18 +496,9 @@ def main():
             total_success += success
             total_errors += errors
 
-    logger.info(f"\n{'='*70}")
-    logger.info(f"Ingestion Summary:")
-    logger.info(f"   Successfully ingested: {total_success} runbook(s)")
-    logger.info(f"   Errors: {total_errors} runbook(s)")
-    logger.info(f"{'='*70}")
+    logger.info(f"Ingestion Summary: {total_success} successful, {total_errors} errors")
 
-    # Verify embeddings were created
     if total_success > 0:
-        logger.info("\n" + "=" * 70)
-        logger.info("Verification")
-        logger.info("=" * 70)
-        logger.info("Verifying embeddings in database...")
         try:
             from db.connection import get_db_connection_context
 
@@ -552,29 +526,19 @@ def main():
 
                 cur.close()
 
-            logger.info(f"\nDatabase Verification:")
-            logger.info(f"   Runbook documents stored: {doc_count}")
-            logger.info(f"   Runbook steps created: {step_count}")
-            logger.info(f"   Steps with embeddings: {embed_count}/{step_count}")
-
             if embed_count == step_count and step_count > 0:
-                logger.info(f"\n   SUCCESS: All {step_count} runbook steps have embeddings!")
+                logger.info(f"Verification: {step_count} runbook steps with embeddings")
             elif embed_count < step_count:
-                logger.warning(
-                    f"\n   WARNING: {step_count - embed_count} steps are missing embeddings!"
-                )
+                logger.warning(f"Warning: {step_count - embed_count} steps missing embeddings")
             else:
-                logger.warning(f"\n   WARNING: No runbook steps found in database!")
+                logger.warning("Warning: No runbook steps found in database")
 
         except Exception as e:
-            logger.warning(f"\n   Could not verify embeddings: {str(e)}")
-            logger.warning(f"   You can manually verify using: python scripts/db/verify_db.py")
+            logger.warning(f"Could not verify embeddings: {str(e)}")
 
     if total_errors > 0:
-        logger.error(f"\n  Completed with {total_errors} error(s). Check logs for details.")
+        logger.error(f"Completed with {total_errors} error(s). Check logs for details.")
         sys.exit(1)
-    else:
-        logger.info(f"\n Ingestion completed successfully!")
 
 
 if __name__ == "__main__":

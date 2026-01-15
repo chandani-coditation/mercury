@@ -80,12 +80,12 @@ Retrieved Evidence from Knowledge Base:
 {context_text}
 
 CRITICAL CONSTRAINTS - YOU MUST FOLLOW THESE STRICTLY:
-- ❌ MUST NOT generate resolution steps
-- ❌ MUST NOT rank or suggest actions
-- ❌ MUST NOT invent root causes
-- ❌ MUST NOT read runbook steps (only use runbook metadata: IDs, failure types)
-- ✅ MUST base your response ONLY on the evidence provided above
-- ✅ MUST use EXACT IDs from the evidence (do not invent or guess)
+- MUST NOT generate resolution steps
+- MUST NOT rank or suggest actions
+- MUST NOT invent root causes
+- MUST NOT read runbook steps (only use runbook metadata: IDs, failure types)
+- MUST base your response ONLY on the evidence provided above
+- MUST use EXACT IDs from the evidence (do not invent or guess)
 
 Your task is to:
 1. Analyze the alert description and match it to incident signatures in the evidence
@@ -253,11 +253,11 @@ Be specific, production-safe, and ONLY use rollback procedures from runbooks. Ci
 RESOLUTION_RANKING_PROMPT_TEMPLATE = """You are a Resolution Agent. Your ONLY responsibility is to RANK and ASSEMBLE existing runbook steps.
 
 CRITICAL CONSTRAINTS - YOU MUST FOLLOW THESE:
-- ❌ MUST NOT invent new steps
-- ❌ MUST NOT generate generic advice
-- ❌ MUST NOT re-classify the incident (use triage output as-is)
-- ✅ ONLY rank and order the provided steps
-- ✅ ONLY assemble recommendations from existing steps
+- MUST NOT invent new steps
+- MUST NOT generate generic advice
+- MUST NOT re-classify the incident (use triage output as-is)
+- ONLY rank and order the provided steps
+- ONLY assemble recommendations from existing steps
 
 Triage Output (IMMUTABLE - DO NOT CHANGE):
 {{

@@ -116,21 +116,13 @@ def hybrid_search(
         return []
 
     start_time = time.time()
-    logger.debug(
-        f"Starting hybrid search: query='{query_text[:100]}...', "
-        f"fulltext_query='{fulltext_query[:100]}...', "
-        f"service={service}, component={component}, limit={limit}"
-    )
 
-    # TASK #7: Track retrieval metrics
     try:
         from retrieval.metrics import record_retrieval
-
         _track_metrics = True
     except ImportError:
         _track_metrics = False
 
-    # Use context manager to ensure connection is returned to pool
     with get_db_connection_context() as conn:
         cur = conn.cursor()
 
@@ -334,9 +326,6 @@ def hybrid_search(
                 )
                 raise ValueError(error_msg)
 
-            # Log using standardized logger (DEBUG level for diagnostic info)
-            logger.debug(
-                f"HYBRID_SEARCH: params={len(exec_params)}, candidate_limit={candidate_limit}, "
                 f"service={repr(service_val)}, component={repr(component_val)}"
             )
 
@@ -350,38 +339,8 @@ def hybrid_search(
 
             results = cur.fetchall()
 
-            duration = time.time() - start_time
-            logger.debug(
-                f"Hybrid search completed: found {len(results)} results in {duration:.3f}s"
-            )
-
-            # Diagnostic: log top fused hits to verify RRF/MMR behavior
-            top_preview = []
-            for row in results[:3]:
-                top_preview.append(
-                    {
-                        "doc_id": str(row["document_id"]),
-                        "doc_type": row["doc_type"],
-                        "vector_score": float(row["vector_score"]) if row["vector_score"] else 0.0,
-                        "fulltext_score": (
-                            float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
-                        ),
-                        "rrf_score": float(row["rrf_score"]),
-                        "title": (row["doc_title"] or "")[:80],
-                    }
-                )
-            logger.info(
-                "HYBRID_SEARCH TOP RESULTS: "
-                f"count={len(results)}, duration_sec={duration:.3f}, "
-                f"service={repr(service_val)}, component={repr(component_val)}, "
-                f"vector_weight={vector_weight}, fulltext_weight={fulltext_weight}, "
-                f"preview={top_preview}"
-            )
-
-            # Convert to list of dicts
             chunks = []
             for row in results:
-                # Safe metadata access - ensure it's a dict (psycopg with dict_row should always return dicts)
                 metadata = row.get("metadata") if isinstance(row, dict) else {}
                 if not isinstance(metadata, dict):
                     logger.warning(f"Metadata is not a dict, converting: {type(metadata)}")
@@ -411,7 +370,6 @@ def hybrid_search(
                     }
                 )
 
-            # TASK #7: Record retrieval metrics
             if _track_metrics:
                 retrieval_time_ms = (time.time() - start_time) * 1000
                 try:
@@ -425,7 +383,7 @@ def hybrid_search(
                         retrieval_time_ms=retrieval_time_ms,
                     )
                 except Exception as e:
-                    logger.debug(f"Failed to record retrieval metrics: {e}")
+                    pass
 
             return chunks
 
@@ -561,21 +519,16 @@ def triage_retrieval(
     # If cleaned query is empty or too short, fall back to fulltext_query
     if not runbook_fulltext_query or len(runbook_fulltext_query.strip()) < 10:
         runbook_fulltext_query = fulltext_query
-    logger.debug(
-        f"Starting triage retrieval: query='{query_text[:100]}...', "
         f"fulltext_query='{fulltext_query[:100]}...', "
         f"service={service}, component={component}, limit={limit}"
     )
 
-    # TASK #7: Track retrieval metrics
     try:
         from retrieval.metrics import record_retrieval
-
         _track_metrics = True
     except ImportError:
         _track_metrics = False
 
-    # Use context manager to ensure connection is returned to pool
     with get_db_connection_context() as conn:
         cur = conn.cursor()
 
@@ -1007,8 +960,6 @@ def triage_retrieval(
                         }
                     )
 
-            logger.debug(
-                f"Triage retrieval completed: {len(incident_signatures)} signatures, "
                 f"{len(runbook_metadata)} runbook metadata"
             )
 
@@ -1017,7 +968,6 @@ def triage_retrieval(
                 "runbook_metadata": runbook_metadata,
             }
 
-            # TASK #7: Record retrieval metrics
             if _track_metrics:
                 retrieval_time_ms = (time.time() - start_time) * 1000
                 try:
@@ -1033,7 +983,7 @@ def triage_retrieval(
                         retrieval_time_ms=retrieval_time_ms,
                     )
                 except Exception as e:
-                    logger.debug(f"Failed to record triage retrieval metrics: {e}")
+                    pass
 
             return result
 

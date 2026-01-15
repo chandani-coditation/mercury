@@ -59,13 +59,11 @@ const Index = () => {
   const [incidentsPage, setIncidentsPage] = useState<number>(1);
   const [incidentsLimit] = useState<number>(20);
   const [incidentsTotal, setIncidentsTotal] = useState<number>(0);
-  // Field-specific ratings for triage: severity, impact, urgency
   const [triageRatings, setTriageRatings] = useState<{
     severity?: string | null;
     impact?: string | null;
     urgency?: string | null;
   }>({});
-  // Step-specific ratings for resolution: step index -> rating
   const [resolutionRatings, setResolutionRatings] = useState<Record<number, string | null>>({});
   const [ratingStatus, setRatingStatus] = useState<{
     triage: { severity?: string; impact?: string; urgency?: string };
@@ -74,7 +72,6 @@ const Index = () => {
     triage: {},
     resolution: {},
   });
-  // Step edit status for resolution steps: step index -> status
   const [stepEditStatus, setStepEditStatus] = useState<Record<number, "idle" | "loading" | "success" | "error">>({});
 
   // Update URL when state changes
@@ -120,10 +117,8 @@ const Index = () => {
     window.history.replaceState({}, "", newURL);
   };
 
-  // Load incident data from URL on mount if incidentId is present
   useEffect(() => {
     const loadIncidentFromURL = async () => {
-      // Read URL params fresh from the URL (not from urlState which is captured at init)
       const params = new URLSearchParams(window.location.search);
       const urlIncidentId = params.get("incidentId");
       const urlStep = params.get("step") as WorkflowStep;
@@ -132,14 +127,9 @@ const Index = () => {
       // If we have an incidentId in URL, load it using the comprehensive function
       if (urlIncidentId) {
         try {
-          // Use the comprehensive loadIncidentById function which handles all data transformation
-          // This will set all the state (alertData, triageData, policyData, etc.)
-          // Pass the URL step to preserve it on refresh (e.g., stay on triage when refreshing)
           const validStep = urlStep && ["form", "triage", "policy", "resolution", "complete"].includes(urlStep) ? urlStep : undefined;
           await loadIncidentById(urlIncidentId, validStep);
 
-          // Step is already set by loadIncidentById, no need to set it again
-          // Just update view from URL if needed
           if (urlView && ["workflow", "incidents"].includes(urlView)) {
             if (urlView !== currentView) {
               setCurrentView(urlView);
@@ -150,8 +140,6 @@ const Index = () => {
           setError("Failed to load incident from URL");
         }
       } else if (urlStep || urlView) {
-        // Steps that require incident data: triage, policy, resolution, complete
-        // If we're trying to load one of these steps without an incidentId, redirect to form
         const stepsRequiringIncident = ["triage", "policy", "resolution", "complete"];
 
         if (urlStep && stepsRequiringIncident.includes(urlStep)) {
@@ -160,7 +148,6 @@ const Index = () => {
           setCurrentView("workflow");
           updateURL("form", "workflow", "", "triage"); // Form step doesn't have tabs, use default
         } else if (urlStep && ["form"].includes(urlStep)) {
-          // Only form step is allowed without incidentId
           if (urlStep !== currentStep) {
             setCurrentStep(urlStep);
           }
@@ -175,33 +162,23 @@ const Index = () => {
     };
 
     loadIncidentFromURL();
-  }, []); // Only run on mount
+  }, []);
 
   // Wrapper functions that update both state and URL
   const setStep = (step: WorkflowStep) => {
     setCurrentStep(step);
-    // Only "triage" step has tabs, clear tab parameter for other steps
-    const tabParam = step === "triage" ? activeTab : "triage"; // "triage" is default, will be deleted by updateURL
+    const tabParam = step === "triage" ? activeTab : "triage";
     updateURL(step, currentView, incidentId, tabParam);
   };
 
   const setView = (view: "workflow" | "incidents") => {
     setCurrentView(view);
 
-    // When switching to incidents view, clear step, incidentId, and tab from URL
-    // The incidents list doesn't need these workflow-specific parameters
-    // Pass "form" to delete step param, "" to delete incidentId, and "triage" to delete tab
     if (view === "incidents") {
       updateURL("form", view, "", "triage");
     } else {
-      // For workflow view, keep current step and incidentId
       updateURL(currentStep, view, incidentId, activeTab);
     }
-  };
-
-  const setIncidentIdAndUpdateURL = (id: string) => {
-    setIncidentId(id);
-    updateURL(currentStep, currentView, id, activeTab);
   };
 
   const setActiveTabAndUpdateURL = (tab: string) => {
@@ -217,25 +194,18 @@ const Index = () => {
     try {
       const data = await postTriage(alert);
 
-      // Store the incident_id for use in URL update
       const newIncidentId = data.incident_id;
       setIncidentId(newIncidentId);
 
-      // Extract triage data with new fields
       const triage = data.triage || {};
 
-      // Derive summary and likely_cause from alert if not in triage output
-      // Summary: Use alert description if no summary in triage
       const summary =
         triage.summary || alert.description || "";
 
-      // Likely cause: Extracted directly from matched incident signatures' descriptions/symptoms (RAG-only, no LLM generation)
-      // If not provided, use a simple fallback
       const likely_cause =
         triage.likely_cause ||
         "Unknown (no matching historical evidence available).";
 
-      // Recommended actions: Can be derived from matched runbooks or left empty
       const recommended_actions = triage.recommended_actions || [];
 
       setTriageData({
@@ -263,14 +233,11 @@ const Index = () => {
         policy_band: data.policy_band,
         policy_decision: data.policy_decision,
       });
-      // Transform evidence structure for RetrievalTab
       const evidence = data.evidence || data.evidence_chunks || {};
 
-      // Use chunks from evidence if available (full content), otherwise build from incident_signatures/runbook_metadata
       let chunks = evidence.chunks || [];
 
       if (chunks.length === 0) {
-        // Fallback: build chunks from incident_signatures and runbook_metadata
         const incidentSigs = evidence.incident_signatures || [];
         const runbookMeta = evidence.runbook_metadata || [];
 
@@ -318,15 +285,12 @@ const Index = () => {
         retrieval_method: evidence.retrieval_method || "triage_retrieval",
         retrieval_params: evidence.retrieval_params || {},
       });
-      // Reset ratings when new triage is generated
       setTriageRatings({});
       setRatingStatus(prev => ({ ...prev, triage: {} }));
-      // Navigate to triage step with the new incident ID
-      // Use the actual returned incident_id instead of relying on state to avoid race conditions
       setCurrentStep("triage");
       updateURL("triage", currentView, newIncidentId, activeTab);
     } catch (err: any) {
-      console.error("❌ Triage FAILED!");
+      console.error("Triage FAILED!");
       console.error("Error object:", err);
       console.error("Error message:", err.message);
       console.error("Error response:", err.response);
@@ -360,7 +324,6 @@ const Index = () => {
       return;
     }
 
-    // Check if resolution already exists in state - if so, just navigate to it
     const hasResolutionInState = resolutionData && (
       (resolutionData.steps && resolutionData.steps.length > 0) ||
       (resolutionData.resolution_steps && resolutionData.resolution_steps.length > 0) ||
@@ -373,7 +336,6 @@ const Index = () => {
       return;
     }
 
-    // Also check database - if resolution exists there, fetch it instead of regenerating
     try {
       const incident = await getIncident(incidentId);
       if (incident.resolution_output) {
@@ -401,7 +363,6 @@ const Index = () => {
       }
     } catch (dbCheckErr) {
       console.warn("Could not check database for existing resolution, will generate new one:", dbCheckErr);
-      // Continue to generate new resolution
     }
 
     setIsLoading(true);
@@ -413,17 +374,16 @@ const Index = () => {
         feedback_type: "triage",
         user_edited: triageData,
         notes: "Approved via UI",
-        policy_band: "AUTO", // Override to AUTO to allow resolution
+        policy_band: "AUTO",
       };
 
       await putFeedback(incidentId, feedbackPayload);
 
       const data = await postResolution(incidentId);
       const resolution = data.resolution || data;
-      const stepsArray = resolution.steps || []; // New format: array of objects
-      const recommendations = resolution.recommendations || []; // Old format
+      const stepsArray = resolution.steps || [];
+      const recommendations = resolution.recommendations || [];
 
-      // For legacy compatibility, create string array from steps if needed
       const stepsAsStrings =
         stepsArray.length > 0 && typeof stepsArray[0] === "object"
           ? stepsArray.map((step: any) => step.action || step.title || "")
@@ -431,25 +391,20 @@ const Index = () => {
             ? recommendations.map((rec: any) => rec.action || rec.step || "")
             : resolution.resolution_steps || [];
 
-      // Store all resolution data including rollback_plan if present
-      // Preserve the original structure to handle both string and object rollback_plan
       setResolutionData({
-        ...resolution, // Spread first to get all fields
-        steps: stepsArray, // New format: array of step objects
-        recommendations: recommendations, // Old format
-        resolution_steps: stepsAsStrings, // Legacy format: array of strings
-        // Keep rollback_plan as-is (can be string or object)
+        ...resolution,
+        steps: stepsArray,
+        recommendations: recommendations,
+        resolution_steps: stepsAsStrings,
         overall_confidence:
           resolution.overall_confidence || resolution.confidence || null,
       });
 
-      // Update policy data to reflect approval
       setPolicyData({
         ...policyData,
         policy_band: "AUTO",
       });
 
-      // Reset resolution ratings when new resolution is generated
       setResolutionRatings({});
       setRatingStatus(prev => ({ ...prev, resolution: {} }));
       setStep("resolution");
@@ -460,7 +415,6 @@ const Index = () => {
 
       let errorMessage = "Failed to approve and generate resolution. ";
 
-      // Parse the actual error from the response
       if (err.response?.data?.detail) {
         const detail = err.response.data.detail;
         if (typeof detail === "string") {
@@ -474,7 +428,6 @@ const Index = () => {
         errorMessage += err.message;
       }
 
-      // Add helpful context
       if (errorMessage.includes("rollback_plan")) {
         errorMessage +=
           "\n\nThis is a backend validation issue. The resolution generator needs to include a rollback plan for high-risk operations.";
@@ -508,16 +461,13 @@ const Index = () => {
     setResolutionData(null);
     setError("");
     setSearchIncidentId("");
-    // Reset ratings
     setTriageRatings({});
     setResolutionRatings({});
     setRatingStatus({ triage: {}, resolution: {} });
     setFeedbackHistory([]);
 
-    // Set view and step, then update URL with empty incidentId
     setCurrentView("workflow");
     setCurrentStep("form");
-    // updateURL will delete both step (when "form"), incidentId (when empty), and tab (when "triage"), resulting in clean URL "/"
     updateURL("form", "workflow", "", "triage");
   };
 
@@ -528,14 +478,12 @@ const Index = () => {
   ) => {
     if (!incidentId || !triageData) return;
     
-    // Optimistic UI update - update immediately for better UX
     setTriageRatings(prev => ({ ...prev, [field]: rating }));
     setRatingStatus(prev => ({
       ...prev,
       triage: { ...prev.triage, [field]: "loading" },
     }));
 
-    // Try to submit to API, but don't let failures break the UI
     try {
       await putFeedback(incidentId, {
         feedback_type: "triage",
@@ -543,16 +491,12 @@ const Index = () => {
         rating: rating,
         notes: `Rating for ${field}: ${rating}`,
       });
-      // Update status to success after API call succeeds
       setRatingStatus(prev => ({
         ...prev,
         triage: { ...prev.triage, [field]: "success" },
       }));
     } catch (err) {
-      // Even if API fails, keep the rating in the UI (optimistic update)
-      // Just show success state after a brief delay to indicate it "worked"
       console.warn(`API call failed for triage ${field} feedback, but UI updated:`, err);
-      // Show success state anyway after a short delay
       setTimeout(() => {
         setRatingStatus(prev => ({
           ...prev,
@@ -562,7 +506,6 @@ const Index = () => {
     }
   };
 
-  // Handler for resolution step-specific rating feedback
   const handleResolutionStepRating = async (
     stepIndex: number,
     rating: "thumbs_up" | "thumbs_down",
@@ -574,7 +517,6 @@ const Index = () => {
       return;
     }
 
-    // Optimistic UI update - update immediately for better UX
     setResolutionRatings(prev => ({ ...prev, [stepIndex]: rating }));
     setRatingStatus(prev => ({
       ...prev,
@@ -597,10 +539,7 @@ const Index = () => {
       }));
       console.log("Rating submitted successfully for step", stepIndex);
     } catch (err) {
-      // Even if API fails, keep the rating in the UI (optimistic update)
-      // Just show success state after a brief delay to indicate it "worked"
       console.warn(`API call failed for resolution step ${stepIndex} feedback, but UI updated:`, err);
-      // Show success state anyway after a short delay
       setTimeout(() => {
         setRatingStatus(prev => ({
           ...prev,
@@ -610,7 +549,6 @@ const Index = () => {
     }
   };
 
-  // Handler for resolution step editing
   const handleResolutionStepEdit = async (
     stepIndex: number,
     editedStep: any,
@@ -622,46 +560,37 @@ const Index = () => {
       throw new Error("Missing incidentId or resolutionData");
     }
 
-    // Set loading status
     setStepEditStatus(prev => ({ ...prev, [stepIndex]: "loading" }));
 
     try {
-      // Get the current resolution data
       const currentResolution = resolutionData.resolution || resolutionData;
       const currentSteps = currentResolution.steps || [];
 
-      // Create updated steps array with the edited step
       const updatedSteps = currentSteps.map((step: any, idx: number) => {
-        // Match by original index or by step content
         if (idx === stepIndex) {
           return editedStep;
         }
         return step;
       });
 
-      // Create updated resolution data with edited step
       const updatedResolution = {
         ...currentResolution,
         steps: updatedSteps,
       };
 
-      // Submit feedback with edited resolution
       await putFeedback(incidentId, {
         feedback_type: "resolution",
         user_edited: updatedResolution,
         notes: `User edited resolution step ${stepIndex + 1}: "${editedStep.action || editedStep.title || 'Step edited'}"`,
       });
 
-      // Update local resolution data to reflect the edit
       setResolutionData((prev: any) => ({
         ...prev,
         resolution: updatedResolution,
       }));
 
-      // Set success status
       setStepEditStatus(prev => ({ ...prev, [stepIndex]: "success" }));
 
-      // Clear success status after a short delay
       setTimeout(() => {
         setStepEditStatus(prev => ({ ...prev, [stepIndex]: "idle" }));
       }, 2000);
@@ -671,12 +600,11 @@ const Index = () => {
       console.error(`Failed to save edited step ${stepIndex}:`, err);
       setStepEditStatus(prev => ({ ...prev, [stepIndex]: "error" }));
       
-      // Clear error status after a delay
       setTimeout(() => {
         setStepEditStatus(prev => ({ ...prev, [stepIndex]: "idle" }));
       }, 3000);
       
-      throw err; // Re-throw so component can handle it
+      throw err;
     }
   };
 
@@ -690,7 +618,6 @@ const Index = () => {
     setIsLoading(true);
     setError("");
 
-    // Initialize with safe defaults to prevent empty page
     let safeAlertData: any = {};
     let safeTriageData: any = {};
     let safePolicyData: any = { policy_band: null, policy_decision: {} };
@@ -711,22 +638,17 @@ const Index = () => {
     try {
       const incident = await getIncident(incidentKey);
 
-      // Extract data from incident
       const extractedIncidentId = incident.incident_id || incident.id;
       setIncidentId(extractedIncidentId || "");
       const rawAlert = incident.alert || incident.raw_alert || {};
       safeAlertData = rawAlert;
       setAlertData(safeAlertData);
 
-      // Set triage data (always set, even if empty, to avoid rendering issues)
       const triageOutput = incident.triage_output || {};
 
-      // Derive summary and likely_cause if missing
       const summary =
         triageOutput.summary || rawAlert.description || "";
 
-      // Likely cause: Extracted directly from matched incident signatures' descriptions/symptoms (RAG-only, no LLM generation)
-      // If not provided, use a simple fallback
       const likely_cause =
         triageOutput.likely_cause ||
         "Unknown (no matching historical evidence available).";
@@ -744,22 +666,18 @@ const Index = () => {
       };
       setTriageData(safeTriageData);
 
-      // Set policy data (always set, even if empty)
       safePolicyData = {
         policy_band: incident.policy_band || null,
         policy_decision: incident.policy_decision || {},
       };
       setPolicyData(safePolicyData);
 
-      // Set retrieval/evidence data (always set, even if empty)
       const evidence =
         incident.triage_evidence || incident.resolution_evidence || {};
 
-      // Use chunks from evidence if available (full content), otherwise build from incident_signatures/runbook_metadata
       let chunks = evidence.chunks || [];
 
       if (chunks.length === 0) {
-        // Fallback: build chunks from incident_signatures and runbook_metadata
         const incidentSigs = evidence.incident_signatures || [];
         const runbookMeta = evidence.runbook_metadata || [];
 
@@ -809,7 +727,6 @@ const Index = () => {
       };
       setRetrievalData(safeRetrievalData);
 
-      // Ensure resolution exists: if not stored yet, call resolution API once for this incident
       let resolutionOutput = incident.resolution_output;
       const resolvedIncidentId = incident.incident_id || incident.id;
 
@@ -826,9 +743,7 @@ const Index = () => {
         }
       }
 
-      // Set resolution data from stored or newly generated output
       if (resolutionOutput) {
-        // Normalize resolution data structure to ensure it has all expected fields
         const stepsArray = resolutionOutput.steps || [];
         const recommendations = resolutionOutput.recommendations || [];
         const stepsAsStrings =
@@ -847,10 +762,8 @@ const Index = () => {
             resolutionOutput.overall_confidence || resolutionOutput.confidence || null,
         };
       }
-      // Always set resolution data (even if empty) to prevent rendering issues
       setResolutionData(safeResolutionData);
 
-      // Load feedback history (thumbs up/down, notes)
       try {
         const feedbackResponse = await getIncidentFeedback(
           incident.incident_id || incident.id,
@@ -859,39 +772,29 @@ const Index = () => {
         const feedbackList = feedbackResponse.feedback || [];
         setFeedbackHistory(feedbackList);
         
-        // Parse feedback history to populate rating state
-        // Extract triage ratings (severity, impact, urgency)
         const parsedTriageRatings: {
           severity?: string | null;
           impact?: string | null;
           urgency?: string | null;
         } = {};
         
-        // Extract resolution ratings (by step index)
         const parsedResolutionRatings: Record<number, string | null> = {};
         
         feedbackList.forEach((fb: any) => {
           if (!fb.rating || !fb.notes) return;
           
-          // Parse notes to extract field/step identifier
-          // Format: "Rating for {field}: {rating}" or "Rating for resolution step {index}: {rating}"
           const notesMatch = fb.notes.match(/Rating for (.+?):/);
           if (!notesMatch) return;
           
           const identifier = notesMatch[1].trim();
           
           if (fb.feedback_type === "triage") {
-            // Check if it's a triage field (severity, impact, urgency)
             if (identifier === "severity" || identifier === "impact" || identifier === "urgency") {
               parsedTriageRatings[identifier as "severity" | "impact" | "urgency"] = fb.rating;
             }
           } else if (fb.feedback_type === "resolution") {
-            // Extract step index from "resolution step X"
-            // Notes format: "Rating for resolution step X: rating"
-            // Where X = originalIndex + 1 (1-based display number)
             const stepMatch = identifier.match(/resolution step (\d+)/i);
             if (stepMatch) {
-              // Step numbers in notes are 1-based (originalIndex + 1), convert to 0-based index
               const stepNumber = parseInt(stepMatch[1], 10);
               const originalIndex = stepNumber - 1; // Convert to 0-based original index
               parsedResolutionRatings[originalIndex] = fb.rating;
@@ -899,7 +802,6 @@ const Index = () => {
           }
         });
         
-        // Set the parsed ratings into state
         if (Object.keys(parsedTriageRatings).length > 0) {
           setTriageRatings(parsedTriageRatings);
         }
@@ -914,28 +816,19 @@ const Index = () => {
         setFeedbackHistory([]);
       }
 
-      // When loading an existing incident, navigate to the target step (default: complete summary page)
-      // If targetStep is provided (e.g., from URL on refresh), preserve that step
-      // Otherwise, default to complete page which shows all available data in one place
-      // The CompleteSummary component handles missing data gracefully
-      // Update state first, then update URL in a single call to avoid race conditions
       const stepToNavigate = targetStep || "complete";
       setCurrentStep(stepToNavigate);
       setCurrentView("workflow");
-      // Update URL with all values at once
-      // Only preserve tab parameter if going to triage step (which has tabs)
       const tabParam = stepToNavigate === "triage" ? activeTab : "triage";
       updateURL(stepToNavigate, "workflow", extractedIncidentId || "", tabParam);
 
       setShowSearch(false);
     } catch (err: any) {
-      console.error("❌ Failed to load incident:", err);
+      console.error("Failed to load incident:", err);
       const errorMessage =
         err.response?.data?.detail || err.message || "Failed to load incident";
       setError(errorMessage);
       
-      // Even on error, set safe defaults to prevent empty page
-      // This allows the user to see the error message and navigate back
       setAlertData(safeAlertData);
       setTriageData(safeTriageData);
       setPolicyData(safePolicyData);
@@ -943,10 +836,7 @@ const Index = () => {
       setResolutionData(safeResolutionData);
       setFeedbackHistory([]);
       
-      // Don't navigate to complete page if there was an error
-      // Stay on current view or go back to form
       if (currentView === "incidents") {
-        // If we're in incidents view, stay there
         setView("incidents");
       } else {
         // Otherwise, go back to form
@@ -986,17 +876,14 @@ const Index = () => {
     }
   };
 
-  // Load incidents when switching to incidents view (including on page load)
   useEffect(() => {
     if (currentView === "incidents" && incidents.length === 0 && !isLoadingIncidents) {
       loadIncidents(1, incidentsSearch);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentView]); // Only run when view changes, not when incidents/search changes
+  }, [currentView]);
 
   const handleOpenIncidentsView = async () => {
     setView("incidents");
-    // No need to call loadIncidents here anymore - the useEffect above will handle it
   };
 
   const handleIncidentsSearch = async () => {
@@ -1008,8 +895,6 @@ const Index = () => {
   };
 
   const handleMarkComplete = () => {
-    // Simply navigate to complete page - no API call needed
-    // The resolution is already stored in the database from when it was generated
     setStep("complete");
   };
 

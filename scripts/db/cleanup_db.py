@@ -131,9 +131,9 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
             result = subprocess.run(docker_cmd + [s], capture_output=True, text=True, check=True)
             if result.stdout:
                 logger.info(result.stdout.strip())
-        logger.info("\n✅ Cleanup complete.")
+        logger.info("\nCleanup complete.")
     except subprocess.CalledProcessError as e:
-        logger.error(f"\n❌ Cleanup failed: {e}")
+        logger.error(f"\nCleanup failed: {e}")
         if e.stderr:
             logger.error(f"Error: {e.stderr}")
         raise

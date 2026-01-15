@@ -41,7 +41,6 @@ class IncidentRepository:
         Raises:
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Creating incident for alert: {alert.get('alert_id', 'unknown')}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -78,7 +77,6 @@ class IncidentRepository:
                 )
 
                 conn.commit()
-                logger.debug(f"Incident created: {incident_id}")
                 return str(incident_id)
 
             except Exception as e:
@@ -103,7 +101,6 @@ class IncidentRepository:
             IncidentNotFoundError: If incident not found
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Getting incident: {incident_id}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -139,7 +136,6 @@ class IncidentRepository:
             IncidentNotFoundError: If incident not found
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Getting incident by alert_id: {alert_id}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -183,7 +179,6 @@ class IncidentRepository:
         Raises:
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Listing incidents: limit={limit}, offset={offset}, search={search}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -264,7 +259,6 @@ class IncidentRepository:
 
                     result.append(incident_dict)
 
-                logger.debug(f"Listed {len(result)} incidents (total: {total_count})")
                 return result, total_count
             except Exception as e:
                 logger.error(f"Failed to list incidents: {str(e)}", exc_info=True)
@@ -294,7 +288,6 @@ class IncidentRepository:
             IncidentNotFoundError: If incident not found
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Updating resolution for incident: {incident_id}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -325,7 +318,6 @@ class IncidentRepository:
                     ),
                 )
                 conn.commit()
-                logger.info(f"Resolution updated for incident: {incident_id}")
             except IncidentNotFoundError:
                 raise
             except Exception as e:
@@ -354,7 +346,6 @@ class IncidentRepository:
             IncidentNotFoundError: If incident not found
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Updating policy for incident: {incident_id}, policy_band={policy_band}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -389,9 +380,6 @@ class IncidentRepository:
                 )
                 conn.commit()
 
-                # Log before/after for verification
-                logger.info(
-                    f"Policy updated for incident: {incident_id}, "
                     f"policy_band: {old_policy_band} -> {policy_band}, "
                     f"policy_decision updated: {old_policy_decision is not None} -> {policy_decision is not None}"
                 )
@@ -410,8 +398,6 @@ class IncidentRepository:
                             f"Policy update verification failed: expected policy_band={policy_band}, "
                             f"got {verified_policy_band}"
                         )
-                    else:
-                        logger.debug(f"Policy update verified: policy_band={verified_policy_band}")
             except IncidentNotFoundError:
                 raise
             except Exception as e:
@@ -436,7 +422,6 @@ class IncidentRepository:
             IncidentNotFoundError: If incident not found
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Updating triage_output for incident: {incident_id}")
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -459,7 +444,6 @@ class IncidentRepository:
                     ),
                 )
                 conn.commit()
-                logger.info(f"Triage output updated for incident: {incident_id}")
             except IncidentNotFoundError:
                 raise
             except Exception as e:

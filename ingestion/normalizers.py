@@ -693,7 +693,6 @@ def normalize_service_component(
         - If no mapping, returns validated original value (or None)
         - If component maps to null, returns None for component
     """
-    # TASK #9: Validate service/component values first
     validated_service = validate_service_component_value(service, "service")
     validated_component = validate_service_component_value(component, "component")
 

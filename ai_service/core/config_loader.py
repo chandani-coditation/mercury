@@ -49,14 +49,12 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
 
     # Return cached config if available
     if _CONFIG_CACHE is not None:
-        logger.debug("Returning cached configuration")
         return _CONFIG_CACHE
 
     # Determine config directory
     if config_dir is None:
         config_dir = _get_config_dir()
 
-    logger.info(f"Loading configuration from: {config_dir}")
 
     # Config files to load (in order)
     config_files = {
@@ -81,7 +79,6 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
             with open(config_path, "r") as f:
                 file_config = json.load(f)
 
-            logger.debug(f"Loaded config file: {filename}")
 
             # Special handling for schemas.json (contains multiple top-level keys)
             if filename == "schemas.json":
@@ -100,7 +97,6 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
             raise ValueError(f"Invalid JSON in configuration file {config_path}: {e}")
 
     _CONFIG_CACHE = merged_config
-    logger.debug("Configuration loaded and cached")
     return merged_config
 
 
@@ -115,7 +111,6 @@ def reload_config(config_dir: Optional[str] = None) -> Dict:
         Configuration dictionary
     """
     global _CONFIG_CACHE
-    logger.info("Reloading configuration (clearing cache)")
     _CONFIG_CACHE = None
     return load_config(config_dir)
 

@@ -62,7 +62,6 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
     """
     handler = get_llm_handler()
 
-    # Get LLM config (with defaults)
     llm_config = get_llm_config()
     triage_config = llm_config.get("triage", {})
 
@@ -76,15 +75,8 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
     incident_signatures = triage_evidence.get("incident_signatures", [])
     runbook_metadata = triage_evidence.get("runbook_metadata", [])
 
-    logger.debug(
-        f"Calling LLM for triage: model={model}, temperature={temperature}, "
-        f"signatures={len(incident_signatures)}, runbooks={len(runbook_metadata)}"
-    )
-
-    # Build context text from incident signatures and runbook metadata
     context_parts = []
 
-    # Add incident signatures
     if incident_signatures:
         context_parts.append("=== INCIDENT SIGNATURES ===")
         for sig in incident_signatures[:5]:  # Top 5 signatures
@@ -104,7 +96,6 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
                 f"Content: {sig.get('content', '')[:500]}"
             )
 
-    # Add runbook metadata (NOT steps)
     if runbook_metadata:
         context_parts.append("\n=== RUNBOOK METADATA ===")
         for rb in runbook_metadata[:5]:  # Top 5 runbooks
@@ -125,7 +116,6 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
         "\n\n---\n\n".join(context_parts) if context_parts else "No matching evidence found."
     )
 
-    # Build user prompt from template
     prompt = TRIAGE_USER_PROMPT_TEMPLATE.format(
         alert_title=alert["title"],
         alert_description=alert["description"],
@@ -134,7 +124,6 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
         context_text=context_text,
     )
 
-    # Build request parameters
     request_params = {
         "model": model,
         "messages": [
@@ -144,30 +133,22 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
         "temperature": temperature,
     }
 
-    # Add response format if json_object
     if response_format_type == "json_object":
         request_params["response_format"] = {"type": "json_object"}
 
-    # Add max_tokens if specified
     if max_tokens:
         request_params["max_tokens"] = max_tokens
 
-    # Call LLM with retry logic
     try:
         response = _call_llm_with_retry(handler, request_params, "triage", model)
 
-        # Extract token usage if available
         usage = response.usage
         if usage:
             prompt_tokens = usage.prompt_tokens or 0
             completion_tokens = usage.completion_tokens or 0
-            logger.debug(
-                f"LLM triage tokens: prompt={prompt_tokens}, completion={completion_tokens}"
-            )
 
         result_text = response.choices[0].message.content
         result = json.loads(result_text)
-        # Removed unnecessary debug log - success is implied by no exception
         return result
 
     except Exception as e:
@@ -192,24 +173,17 @@ def call_llm_for_resolution(
     """
     handler = get_llm_handler()
 
-    # Get LLM config (with defaults)
     llm_config = get_llm_config()
     resolution_config = llm_config.get("resolution", {})
 
-    # Use provided model or config, with fallback
     model = model or resolution_config.get("model", "gpt-4-turbo-preview")
     temperature = resolution_config.get("temperature", 0.2)
     system_prompt = resolution_config.get("system_prompt", RESOLUTION_SYSTEM_PROMPT_DEFAULT)
     response_format_type = resolution_config.get("response_format", "json_object")
     max_tokens = resolution_config.get("max_tokens")
 
-    logger.debug(
-        f"Calling LLM for resolution: model={model}, temperature={temperature}, chunks={len(context_chunks)}"
-    )
-
-    # Build context from chunks (prefer runbooks) with provenance info
     context_parts = []
-    for chunk in context_chunks[:10]:  # Include more chunks for better context
+    for chunk in context_chunks[:10]:
         chunk_id = chunk.get("chunk_id", "unknown")
         doc_id = chunk.get("document_id", "unknown")
         doc_title = chunk.get("doc_title", "Unknown")
@@ -221,7 +195,6 @@ def call_llm_for_resolution(
         )
     context_text = "\n\n---\n\n".join(context_parts)
 
-    # Build user prompt from template
     prompt = RESOLUTION_USER_PROMPT_TEMPLATE.format(
         alert_title=alert["title"],
         alert_description=alert["description"],
@@ -231,7 +204,6 @@ def call_llm_for_resolution(
         context_text=context_text,
     )
 
-    # Build request parameters
     request_params = {
         "model": model,
         "messages": [
@@ -241,30 +213,22 @@ def call_llm_for_resolution(
         "temperature": temperature,
     }
 
-    # Add response format if json_object
     if response_format_type == "json_object":
         request_params["response_format"] = {"type": "json_object"}
 
-    # Add max_tokens if specified
     if max_tokens:
         request_params["max_tokens"] = max_tokens
 
-    # Call LLM with retry logic
     try:
         response = _call_llm_with_retry(handler, request_params, "resolution", model)
 
-        # Extract token usage if available
         usage = response.usage
         if usage:
             prompt_tokens = usage.prompt_tokens or 0
             completion_tokens = usage.completion_tokens or 0
-            logger.debug(
-                f"LLM resolution tokens: prompt={prompt_tokens}, completion={completion_tokens}"
-            )
 
         result_text = response.choices[0].message.content
         result = json.loads(result_text)
-        # Removed unnecessary debug log - success is implied by no exception
         return result
 
     except Exception as e:

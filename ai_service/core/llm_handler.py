@@ -48,10 +48,8 @@ class LLMHandler:
 
         if self._use_gateway:
             self._gateway_config = self._load_gateway_config()
-            logger.info("LLM Handler initialized in GATEWAY mode")
         else:
             self._openai_client = self._create_openai_client()
-            logger.info("LLM Handler initialized in OPENAI mode")
 
     @staticmethod
     def _detect_gateway_mode() -> bool:

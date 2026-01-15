@@ -20,19 +20,13 @@ from ai_service.services import IncidentService
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Feature flag for LangGraph (can be enabled via environment variable)
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
 
 
 def _record_resolution_latency_and_update_incident(
     result: dict, incident_id: Optional[str], start_time: datetime
 ) -> float:
-    """
-    Attach end-to-end API latency to resolution output and persist to the incident.
-
-    This helper is intentionally defensive: failures are logged but do not
-    break the main /resolution flow.
-    """
+    """Attach end-to-end API latency to resolution output and persist to the incident."""
     latency = (datetime.utcnow() - start_time).total_seconds()
 
     try:
@@ -75,25 +69,17 @@ async def resolution(
     Returns:
         Dictionary with incident_id, resolution steps, and evidence
     """
-    # Determine if LangGraph should be used
     use_lg = use_langgraph if use_langgraph is not None else USE_LANGGRAPH
-
-    logger.info(
-        f"Resolution request received: incident_id={incident_id}, use_state={use_state}, use_langgraph={use_lg}"
-    )
 
     start_time = datetime.utcnow()
 
     try:
-        # Convert alert to dict if provided
         alert_dict = None
         if alert:
             alert_dict = alert.model_dump()
             alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
 
-        # Call resolution agent (LangGraph, state-based, or synchronous)
         if use_lg:
-            # Use LangGraph
             from ai_service.agents.langgraph_wrapper import run_resolution_graph
 
             result = run_resolution_graph(incident_id=incident_id, alert=alert_dict)
@@ -126,7 +112,6 @@ async def resolution(
                         )
                         raise HTTPException(status_code=400, detail=error_msg)
 
-                    # Parse JSON string if needed (psycopg may return JSONB as string)
                     import json
 
                     if isinstance(triage_output, str):
@@ -136,8 +121,6 @@ async def resolution(
                             logger.error(f"Failed to parse triage_output JSON: {e}")
                             raise ValueError(f"Invalid triage_output format: {e}")
 
-                    # CRITICAL: Get triage_evidence from database and merge into triage_output
-                    # The evidence (runbook_metadata) is stored separately as triage_evidence, not inside triage_output
                     triage_evidence = incident.get("triage_evidence")
                     if triage_evidence:
                         if isinstance(triage_evidence, str):
@@ -147,13 +130,8 @@ async def resolution(
                                 logger.warning(f"Failed to parse triage_evidence JSON: {e}")
                                 triage_evidence = {}
 
-                        # Merge evidence into triage_output so resolution_agent can access runbook_metadata
                         if isinstance(triage_output, dict):
                             triage_output["evidence"] = triage_evidence
-                            logger.debug(
-                                f"Merged triage_evidence into triage_output: "
-                                f"{len(triage_evidence.get('runbook_metadata', []))} runbook(s) found"
-                            )
                         else:
                             logger.warning("triage_output is not a dict, cannot merge evidence")
                     else:
@@ -212,7 +190,6 @@ async def resolution(
 
     except ApprovalRequiredError as e:
         error_msg = format_user_friendly_error(e, error_type="approval_required")
-        logger.info(f"Resolution requires approval: {str(e)}")
         raise HTTPException(
             status_code=403,
             detail={

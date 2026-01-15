@@ -39,8 +39,6 @@ class FeedbackRepository:
         Raises:
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Creating feedback for incident: {incident_id}, type={feedback_type}")
-        # Use context manager to ensure connection is returned to pool
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -85,7 +83,6 @@ class FeedbackRepository:
                     )
 
                 conn.commit()
-                logger.info(f"Feedback created: {feedback_id} for incident {incident_id}")
                 return str(feedback_id)
 
             except Exception as e:
@@ -110,8 +107,6 @@ class FeedbackRepository:
         Raises:
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Listing feedback between {start_ts} and {end_ts}")
-        # Use context manager to ensure connection is returned to pool
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -142,7 +137,6 @@ class FeedbackRepository:
                             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                         }
                     )
-                logger.debug(f"Listed {len(results)} feedback records")
                 return results
             except Exception as e:
                 logger.error(f"Failed to list feedback: {str(e)}", exc_info=True)
@@ -174,9 +168,6 @@ class FeedbackRepository:
         if not notes:
             return None
 
-        logger.debug(
-            f"Finding existing rating feedback for incident: {incident_id}, type={feedback_type}, notes={notes}"
-        )
 
         with get_db_connection_context() as conn:
             cur = conn.cursor()
@@ -235,9 +226,6 @@ class FeedbackRepository:
 
                         # If identifiers match, this is the same field/step
                         if existing_id and new_id and existing_id == new_id:
-                            logger.debug(
-                                f"Found existing feedback for {feedback_type} {existing_id}: {row['id']}"
-                            )
                             return {
                                 "id": str(row["id"]),
                                 "incident_id": (
@@ -278,7 +266,6 @@ class FeedbackRepository:
         Returns:
             True if update successful, False otherwise
         """
-        logger.debug(f"Updating feedback rating: {feedback_id}, rating={rating}")
 
         with get_db_connection_context() as conn:
             cur = conn.cursor()
@@ -314,7 +301,6 @@ class FeedbackRepository:
                 )
 
                 conn.commit()
-                logger.info(f"Feedback rating updated: {feedback_id}")
                 return True
             except Exception as e:
                 conn.rollback()
@@ -343,7 +329,6 @@ class FeedbackRepository:
         Raises:
             DatabaseError: If database operation fails
         """
-        logger.debug(f"Listing feedback for incident_id={incident_id}")
 
         # Validate and convert UUID format in Python for better error messages
         try:
@@ -413,8 +398,6 @@ class FeedbackRepository:
 
                     results.append(feedback_record)
 
-                logger.debug(
-                    "Listed %d feedback records (after deduplication) for incident_id=%s (total before dedup: %d)",
                     len(results),
                     incident_id,
                     len(rows),

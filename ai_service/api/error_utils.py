@@ -79,6 +79,6 @@ def format_user_friendly_error(error: Exception, error_type: str = None) -> str:
     # Format final message consistently
     if hints:
         hint_text = " ".join(hints)
-        return f"{message} 💡 Hint: {hint_text}"
+        return f"{message} Hint: {hint_text}"
 
-    return f"{message} 💡 If the issue persists, retry or check the service logs for more details."
+    return f"{message} If the issue persists, retry or check the service logs for more details."

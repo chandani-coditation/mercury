@@ -110,9 +110,6 @@ class AgentStateRepository:
                     state_id = result["id"] if isinstance(result, dict) else result[0]
 
                 conn.commit()
-                logger.debug(
-                    f"Agent state saved: state_id={state_id}, incident_id={state.incident_id}"
-                )
                 return str(state_id)
 
             except Exception as e:

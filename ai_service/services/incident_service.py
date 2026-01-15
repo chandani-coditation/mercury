@@ -44,7 +44,6 @@ class IncidentService:
         Returns:
             Incident ID
         """
-        logger.debug(f"Creating incident via service for alert: {alert.get('alert_id', 'unknown')}")
         return self.repository.create(
             alert=alert,
             triage_output=triage_output,
@@ -68,7 +67,6 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-        logger.debug(f"Getting incident via service: {incident_id}")
         return self.repository.get_by_id(incident_id)
 
     def get_incident_by_alert_id(self, alert_id: str) -> Dict:
@@ -84,7 +82,6 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-        logger.debug(f"Getting incident by alert_id via service: {alert_id}")
         return self.repository.get_by_alert_id(alert_id)
 
     def list_incidents(
@@ -101,9 +98,6 @@ class IncidentService:
         Returns:
             Tuple of (list of incident dictionaries, total count)
         """
-        logger.debug(
-            f"Listing incidents via service: limit={limit}, offset={offset}, search={search}"
-        )
         return self.repository.list_all(limit=limit, offset=offset, search=search)
 
     def update_resolution(
@@ -127,8 +121,6 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-        logger.debug(
-            f"Updating resolution via service for incident: {incident_id}, "
             f"policy_band={policy_band}"
         )
 
@@ -141,7 +133,6 @@ class IncidentService:
                 if policy_decision is None:
                     policy_decision = current.get("policy_decision")
             except IncidentNotFoundError:
-                # Let repository.raise a clearer error later
                 logger.warning(
                     f"Incident {incident_id} not found when trying to preserve policy during resolution update"
                 )
@@ -168,9 +159,6 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-        logger.debug(
-            f"Updating policy via service for incident: {incident_id}, policy_band={policy_band}"
-        )
         self.repository.update_policy(
             incident_id=incident_id, policy_band=policy_band, policy_decision=policy_decision
         )
@@ -186,5 +174,4 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-        logger.debug(f"Updating triage_output via service for incident: {incident_id}")
         self.repository.update_triage_output(incident_id=incident_id, triage_output=triage_output)
