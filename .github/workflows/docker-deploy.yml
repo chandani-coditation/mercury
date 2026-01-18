@@ -8,8 +8,8 @@ on:
         required: true
         type: choice
         options:
-          - development
-          - production
+          - np
+          - pr
   push:
     branches:
       - main
@@ -25,7 +25,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'pr' || 'np') }}
     
     steps:
       - name: Checkout code
@@ -37,7 +37,7 @@ jobs:
       - name: Generate .env file from GitHub Secrets
         run: |
           chmod +x scripts/utils/generate-env-from-secrets.sh
-          scripts/utils/generate-env-from-secrets.sh "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}"
+          scripts/utils/generate-env-from-secrets.sh "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'pr' || 'np') }}"
         env:
           # Database Configuration
           # Secrets (sensitive) - stored in GitHub Secrets

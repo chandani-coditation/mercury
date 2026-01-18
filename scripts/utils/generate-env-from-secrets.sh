@@ -1,34 +1,26 @@
 #!/bin/bash
 
-# Script to generate .env file from GitHub Secrets based on environment
+# Generate .env file from GitHub Secrets based on environment
 # Usage: ./generate-env-from-secrets.sh <environment>
-# Example: ./generate-env-from-secrets.sh production
-#
-# This script reads environment variables passed from GitHub Actions workflow
-# and generates a .env file for docker-compose.
 
 set -euo pipefail
 
-ENVIRONMENT="${1:-non-production}"
+ENVIRONMENT="${1:-np}"
 ENV_FILE="${ENV_FILE:-.env.github}"
 
-# Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${GREEN}Generating .env file for environment: ${ENVIRONMENT}${NC}"
 
-# Function to get environment variable value
 get_secret() {
     local var_name="$1"
-    # Use indirect variable reference to get the value
     local value="${!var_name:-}"
     echo "$value"
 }
 
-# Function to write env variable to file
 write_env_var() {
     local var_name="$1"
     local value="$2"
@@ -41,10 +33,8 @@ write_env_var() {
     fi
 }
 
-# Remove existing .env file if it exists
 rm -f "$ENV_FILE"
 
-# Database Configuration
 echo "# Database Configuration" >> "$ENV_FILE"
 echo "# Generated from GitHub Secrets for environment: ${ENVIRONMENT}" >> "$ENV_FILE"
 echo "# Generated at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> "$ENV_FILE"
@@ -56,7 +46,6 @@ write_env_var "POSTGRES_DB" "$(get_secret 'POSTGRES_DB')" "nocdb"
 write_env_var "POSTGRES_USER" "$(get_secret 'POSTGRES_USER')" "noc_ai"
 write_env_var "POSTGRES_PASSWORD" "$(get_secret 'POSTGRES_PASSWORD')"
 
-# Validate required database secrets
 if [ -z "$(get_secret 'POSTGRES_PASSWORD')" ]; then
     echo -e "${RED}Error: POSTGRES_PASSWORD secret is required but not set${NC}"
     exit 1
@@ -65,13 +54,11 @@ fi
 echo "" >> "$ENV_FILE"
 echo "# LLM Configuration" >> "$ENV_FILE"
 
-# LLM Configuration - OpenAI API Key
 OPENAI_KEY=$(get_secret 'OPENAI_API_KEY')
 if [ -n "$OPENAI_KEY" ]; then
     write_env_var "OPENAI_API_KEY" "$OPENAI_KEY"
 fi
 
-# LLM Configuration - Private Gateway
 PRIVATE_GATEWAY=$(get_secret 'PRIVATE_LLM_GATEWAY')
 if [ -n "$PRIVATE_GATEWAY" ]; then
     write_env_var "PRIVATE_LLM_GATEWAY" "$PRIVATE_GATEWAY"
@@ -111,4 +98,3 @@ write_env_var "DB_POOL_MAX" "$(get_secret 'DB_POOL_MAX')" "20"
 write_env_var "DB_POOL_WAIT_TIMEOUT" "$(get_secret 'DB_POOL_WAIT_TIMEOUT')" "30"
 
 echo -e "${GREEN}Successfully generated ${ENV_FILE} for ${ENVIRONMENT} environment${NC}"
-echo -e "${YELLOW}Note: Sensitive values (passwords, keys) are masked in logs${NC}"
