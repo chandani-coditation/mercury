@@ -25,6 +25,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'pr' || 'np') }}
     
     steps:
@@ -64,10 +65,11 @@ jobs:
       - name: Validate .env file
         run: |
           [ -f "$ENV_FILE" ] || { echo "Error: $ENV_FILE not created"; exit 1; }
+          [ -n "$(grep -v '^#' "$ENV_FILE" | grep POSTGRES_PASSWORD)" ] || { echo "Error: POSTGRES_PASSWORD not set"; exit 1; }
 
       - name: Prepare logs directory
         run: |
-          mkdir -p logs && chmod 777 logs
+          mkdir -p logs && chmod 755 logs
 
       - name: Build and start services
         run: |
