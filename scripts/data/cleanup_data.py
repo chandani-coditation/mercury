@@ -38,7 +38,7 @@ except ImportError:
 setup_logging(log_level="INFO", service_name="cleanup_data_script")
 logger = get_logger(__name__)
 
-from db.connection import get_db_connection
+from db.connection import get_db_connection_context
 
 ALL_TARGETS = ["documents", "chunks", "incidents", "feedback"]
 
@@ -56,6 +56,12 @@ def build_statements(targets: List[str]) -> List[str]:
         ordered.append("TRUNCATE TABLE feedback RESTART IDENTITY CASCADE;")
     if "incidents" in targets:
         ordered.append("TRUNCATE TABLE incidents RESTART IDENTITY CASCADE;")
+    if "incident_signatures" in targets:
+        ordered.append("TRUNCATE TABLE incident_signatures RESTART IDENTITY CASCADE;")
+    if "runbook_steps" in targets:
+        ordered.append("TRUNCATE TABLE runbook_steps RESTART IDENTITY CASCADE;")
+    if "agent_state" in targets:
+        ordered.append("TRUNCATE TABLE agent_state RESTART IDENTITY CASCADE;")
     return ordered
 
 
@@ -70,21 +76,17 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
         logger.info(f"\n  This would delete all data from: {', '.join(targets)}")
         return
 
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        for s in stmts:
-            logger.info(f"Executing: {s.strip()}")
-            cur.execute(s)
-        conn.commit()
-        logger.info(f"\n Cleanup complete. Deleted all data from: {', '.join(targets)}")
+        with get_db_connection_context() as conn:
+            cur = conn.cursor()
+            for s in stmts:
+                logger.info(f"Executing: {s.strip()}")
+                cur.execute(s)
+            conn.commit()
+            logger.info(f"\n Cleanup complete. Deleted all data from: {', '.join(targets)}")
     except Exception as e:
-        conn.rollback()
         logger.error(f"\n Cleanup failed: {type(e).__name__}: {e}")
         raise
-    finally:
-        cur.close()
-        conn.close()
 
 
 def main():
@@ -120,6 +122,9 @@ Examples:
             ("chunks", args.chunks),
             ("incidents", args.incidents),
             ("feedback", args.feedback),
+            ("incident_signatures", args.incident_signatures),
+            ("runbook_steps", args.runbook_steps),
+            ("agent_state", args.agent_state),
         )
         if flag
     ]

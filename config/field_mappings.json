@@ -209,37 +209,33 @@
   },
   
   "severity_mapping": {
-  "_description": "Maps ServiceNow impact/urgency (1=High, 5=Low) to operational severity levels",
+  "_description": "Maps ServiceNow impact/urgency to operational severity levels. Customer uses 1-4 scale: 1=High, 2=Medium, 3=Low, 4=Planning",
+  "_customer_scale": {
+    "1": "High",
+    "2": "Medium", 
+    "3": "Low",
+    "4": "Planning"
+  },
   "impact_urgency_to_severity": {
-    "1-1": "critical",
-    "1-2": "critical",
+    "1-1": "high",
+    "1-2": "high",
     "1-3": "high",
-    "1-4": "high",
-    "1-5": "medium",
+    "1-4": "medium",
 
-    "2-1": "critical",
+    "2-1": "high",
     "2-2": "high",
     "2-3": "medium",
-    "2-4": "medium",
-    "2-5": "low",
+    "2-4": "low",
 
     "3-1": "high",
     "3-2": "medium",
     "3-3": "medium",
     "3-4": "low",
-    "3-5": "low",
 
     "4-1": "medium",
-    "4-2": "medium",
+    "4-2": "low",
     "4-3": "low",
-    "4-4": "low",
-    "4-5": "low",
-
-    "5-1": "medium",
-    "5-2": "low",
-    "5-3": "low",
-    "5-4": "low",
-    "5-5": "low"
+    "4-4": "low"
   },
   "default_severity": "medium"
 }
