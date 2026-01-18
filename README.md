@@ -330,41 +330,26 @@ There are also helper scripts under `tests/` (e.g. `test_approve_and_resolve.sh`
 
 ---
 
-## 8. CI/CD and GitHub Secrets Configuration
+## 8. CI/CD with GitHub Actions
 
-For CI/CD pipelines (e.g., GitHub Actions), you can configure LLM access using GitHub Secrets.
+The project includes a GitHub Actions workflow for automated testing and validation. The workflow uses GitHub Environments to manage secrets and variables for different environments.
 
-### Using OpenAI API Key in GitHub Actions
+### Setup
 
-If your GitHub secret is named `OPENAI_API_KEY`:
+1. Create GitHub Environments (`np` and `pr`) in your repository settings
+2. Add required secrets and variables to each environment
+3. The workflow automatically selects the environment based on the branch or manual selection
 
-```yaml
-env:
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-```
+### Workflow Behavior
 
-If your GitHub secret has a different name (e.g., `OPENAI_KEY`), map it to the expected environment variable:
+- **Manual trigger**: Select environment (`np` or `pr`) when running the workflow
+- **Push to `main`**: Uses `pr` environment
+- **Push to `dev`**: Uses `np` environment
+- **Pull requests**: Uses `np` environment
 
-```yaml
-env:
-  OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
-```
+The workflow builds services, runs health checks, and cleans up resources automatically. See `.github/workflows/docker-deploy.yml` for details.
 
-### Using Private LLM Gateway in GitHub Actions
-
-For production deployments, configure the gateway settings:
-
-```yaml
-env:
-  PRIVATE_LLM_GATEWAY: "true"
-  PRIVATE_LLM_GATEWAY_URL: ${{ secrets.PRIVATE_LLM_GATEWAY_URL }}
-  PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL: ${{ secrets.PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL }}
-  PRIVATE_LLM_AUTH_KEY: ${{ secrets.PRIVATE_LLM_AUTH_KEY }}
-  # Optional: Only if custom SSL certificate is required
-  PRIVATE_LLM_CERT_PATH: ${{ secrets.PRIVATE_LLM_CERT_PATH }}
-```
-
-**Note**: The application reads environment variables directly, so no code changes are required when using GitHub Secrets. Simply ensure the environment variable names match what the application expects (as documented in `env.template`).
+**Note**: This workflow is for CI/CD testing. For production deployments, use a dedicated hosting platform (AWS, GCP, Azure, etc.).
 
 ---
 
@@ -393,9 +378,9 @@ env:
 
 ### API Key Security
 
-- **OpenAI API Keys**: Store in `.env` file, never in code or configuration files
+- **OpenAI API Keys**: Store in `.env` file for local development, or in GitHub Secrets for CI/CD
 - **Gateway Credentials**: Private LLM Gateway authentication keys must be kept secure
-- **Secrets Management**: For production, consider using a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.)
+- **Secrets Management**: Use GitHub Secrets for CI/CD, or a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.) for production
 
 ### General Security
 
