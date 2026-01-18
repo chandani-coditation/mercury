@@ -11,6 +11,7 @@ from ai_service.core.config_loader import (
     get_llm_config,
     get_field_mappings_config,
     get_embeddings_config,
+    get_triage_prediction_config,
 )
 from ai_service.core.exceptions import (
     NOCAgentError,
@@ -39,6 +40,7 @@ __all__ = [
     "get_llm_config",
     "get_field_mappings_config",
     "get_embeddings_config",
+    "get_triage_prediction_config",
     "get_llm_handler",
     "LLMHandler",
     "reset_llm_handler",

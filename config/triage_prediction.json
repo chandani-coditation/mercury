@@ -1,0 +1,35 @@
+{
+  "prediction": {
+    "method": "weighted",
+    "weighted": {
+      "weight_by": "rank",
+      "top_k": 5,
+      "min_confidence": 0.2,
+      "min_signatures": 2
+    },
+    "fallback": {
+      "use_simple_frequency": true
+    },
+    "weights": {
+      "rank_based": {
+        "rank_1": 100.0,
+        "rank_2": 1.0,
+        "rank_3": 0.3,
+        "rank_4": 0.1,
+        "rank_5": 0.05
+      },
+      "score_based": {
+        "min_score": 0.0,
+        "normalize_scores": true,
+        "score_multiplier": 1.0
+      },
+      "hybrid": {
+        "rank_weight": 0.6,
+        "score_weight": 0.4
+      }
+    },
+    "impact_urgency": {
+      "weight_by_rank": true
+    }
+  }
+}

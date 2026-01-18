@@ -295,58 +295,31 @@ def _create_runbook_step_embedding_text(
     return "\n".join(parts)
 
 
-def _create_incident_signature_embedding_text(signature: IncidentSignature) -> str:
+def _create_incident_signature_embedding_text(
+    signature: IncidentSignature,
+    incident_title: Optional[str] = None,
+    incident_description: Optional[str] = None,
+) -> str:
     """
     Create embedding text for an incident signature.
 
-    Per architecture: Embeddings represent conditions, failure patterns, and resolution references.
-    This text should capture:
-    - Failure type (condition)
-    - Error class (failure pattern)
-    - Symptoms (failure patterns)
-    - Resolution references
+    
     """
     parts = []
 
-    # Failure type - condition for matching
-    parts.append(f"Failure Type: {signature.failure_type}")
+    # ONLY include title and description - this matches what's in the query text
+    if incident_title:
+        parts.append(incident_title)
+    if incident_description:
+        # Truncate description to first 1000 chars (increased from 500 for better context)
+        # Query text can be long, so we need enough context in embedding
+        desc_truncated = incident_description[:1000] + ("..." if len(incident_description) > 1000 else "")
+        parts.append(desc_truncated)
 
-    # Error class - failure pattern
-    parts.append(f"Error Class: {signature.error_class}")
-
-    # Symptoms - failure patterns
-    if signature.symptoms:
-        symptoms_text = ", ".join(signature.symptoms)
-        parts.append(f"Symptoms: {symptoms_text}")
-
-    # Resolution references - links to runbook steps
-    if signature.resolution_refs:
-        refs_text = ", ".join(signature.resolution_refs)
-        parts.append(f"Resolution References: {refs_text}")
-
-    # Service/component context
-    if signature.service:
-        parts.append(f"Service: {signature.service}")
-    if signature.component:
-        parts.append(f"Component: {signature.component}")
-    if signature.affected_service:
-        parts.append(f"Affected Service: {signature.affected_service}")
-
-    # Assignment group - important for routing
-    if signature.assignment_group:
-        parts.append(f"Assignment Group: {signature.assignment_group}")
-
-    # Impact and urgency - typical severity patterns from historical incidents
-    if signature.impact:
-        parts.append(f"Impact: {signature.impact}")
-    if signature.urgency:
-        parts.append(f"Urgency: {signature.urgency}")
-
-    # Close notes - resolution information for resolution agent
-    if signature.close_notes:
-        parts.append(f"Resolution Notes: {signature.close_notes}")
-
-    return "\n".join(parts)
+    # Join with space (same as query text format)
+    embedding_text = " ".join(parts).strip()
+    
+    return embedding_text
 
 
 def insert_runbook_with_steps(
@@ -841,8 +814,16 @@ def insert_incident_signature(
         cur = conn.cursor()
 
         try:
-            # Create embedding text for signature
-            signature_text = _create_incident_signature_embedding_text(signature)
+            # Clean description to ensure consistency with query text normalization
+            from ingestion.normalizers import clean_description_text
+            cleaned_description = clean_description_text(incident_description) if incident_description else None
+            
+            # Create embedding text for signature (include original title/description for better matching)
+            signature_text = _create_incident_signature_embedding_text(
+                signature,
+                incident_title=incident_title,
+                incident_description=cleaned_description,
+            )
 
             # Generate embedding
             embedding_model = DEFAULT_MODEL
@@ -869,17 +850,25 @@ def insert_incident_signature(
             source_incident_ids_array = [source_incident_id] if source_incident_id else []
 
             # Insert signature into incident_signatures table
-            # Build tsv text for full-text search - include title/description for better matching
-            tsv_text = (
-                f"{signature.failure_type or ''} "
-                f"{signature.error_class or ''} "
-                f"{signature.assignment_group or ''} "
-                f"{signature.impact or ''} "
-                f"{signature.urgency or ''} "
-                f"{' '.join(signature.symptoms) if signature.symptoms else ''} "
-                f"{incident_title or ''} "
-                f"{incident_description or ''}"
-            ).strip()
+            # Build tsv text for full-text search - include title/description FIRST for better matching
+            # Priority: Original text (title/description) comes first for better fulltext matching
+            # IMPORTANT: Clean description to match query normalization during triage
+            tsv_text_parts = []
+            if incident_title:
+                tsv_text_parts.append(incident_title)
+            if cleaned_description :
+                desc_for_tsv = cleaned_description[:1000]
+                tsv_text_parts.append(desc_for_tsv)
+            # Then add structured fields
+            tsv_text_parts.extend([
+                signature.failure_type or '',
+                signature.error_class or '',
+                signature.assignment_group or '',
+                signature.impact or '',
+                signature.urgency or '',
+                ' '.join(signature.symptoms) if signature.symptoms else '',
+            ])
+            tsv_text = ' '.join([p for p in tsv_text_parts if p]).strip()
 
             signature_id = uuid.uuid4()
             cur.execute(
@@ -894,13 +883,26 @@ def insert_incident_signature(
                     failure_type = EXCLUDED.failure_type,
                     error_class = EXCLUDED.error_class,
                     symptoms = EXCLUDED.symptoms,
-                    affected_service = EXCLUDED.affected_service,
-                    service = EXCLUDED.service,
-                    component = EXCLUDED.component,
-                    assignment_group = EXCLUDED.assignment_group,
-                    impact = EXCLUDED.impact,
-                    urgency = EXCLUDED.urgency,
-                    close_notes = EXCLUDED.close_notes,
+                    affected_service = COALESCE(EXCLUDED.affected_service, incident_signatures.affected_service),
+                    service = COALESCE(EXCLUDED.service, incident_signatures.service),
+                    component = COALESCE(EXCLUDED.component, incident_signatures.component),
+                    -- Aggregate assignment_group, impact, urgency using most common value from all tickets
+                    -- Use a subquery to find the mode (most common value) from source_incident_ids
+                    -- For now, keep existing value to prevent overwriting with wrong values from later tickets
+                    -- TODO: Implement proper aggregation using arrays to track all values and calculate mode
+                    assignment_group = COALESCE(
+                        incident_signatures.assignment_group,
+                        EXCLUDED.assignment_group
+                    ),
+                    impact = COALESCE(
+                        incident_signatures.impact,
+                        EXCLUDED.impact
+                    ),
+                    urgency = COALESCE(
+                        incident_signatures.urgency,
+                        EXCLUDED.urgency
+                    ),
+                    close_notes = COALESCE(EXCLUDED.close_notes, incident_signatures.close_notes),
                     resolution_refs = EXCLUDED.resolution_refs,
                     embedding = EXCLUDED.embedding,
                     source_incident_ids = array_cat(incident_signatures.source_incident_ids, EXCLUDED.source_incident_ids),
@@ -909,14 +911,14 @@ def insert_incident_signature(
                     match_count = incident_signatures.match_count + 1,
                     updated_at = now(),
                     tsv = to_tsvector('english', 
+                        COALESCE(%s, '') || ' ' ||  -- incident_title (first for better matching)
+                        COALESCE(%s, '') || ' ' ||  -- incident_description (first for better matching)
                         COALESCE(EXCLUDED.failure_type, '') || ' ' || 
                         COALESCE(EXCLUDED.error_class, '') || ' ' || 
                         COALESCE(EXCLUDED.assignment_group, '') || ' ' ||
                         COALESCE(EXCLUDED.impact, '') || ' ' ||
                         COALESCE(EXCLUDED.urgency, '') || ' ' ||
-                        COALESCE(array_to_string(EXCLUDED.symptoms, ' '), '') || ' ' ||
-                        COALESCE(%s, '') || ' ' ||
-                        COALESCE(%s, '')
+                        COALESCE(array_to_string(EXCLUDED.symptoms, ' '), '')
                     )
                 """,
                 (
@@ -938,16 +940,12 @@ def insert_incident_signature(
                     source_document_id,
                     datetime.now(),  # last_seen_at
                     tsv_text,  # tsv text for full-text search
-                    incident_title or "",  # For ON CONFLICT UPDATE
-                    incident_description or "",  # For ON CONFLICT UPDATE
+                    incident_title or "",  # For ON CONFLICT UPDATE (tsv - first param)
+                    (clean_description_text(incident_description)[:1000] if incident_description else ""),  # For ON CONFLICT UPDATE (tsv - second param, cleaned and truncated)
                 ),
             )
 
             conn.commit()
-
-            # NOTE: Chunk creation is NO LONGER NEEDED
-            # Triage retrieval now queries incident_signatures table directly
-            # (embeddings and tsvector are already in incident_signatures table)
 
             return str(signature_id)
 

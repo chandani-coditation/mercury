@@ -25,10 +25,14 @@
   
   "component_aliases": {
     "_description": "Maps various component name variations to canonical component names",
-    "High Disk Alerts": "Disk",
-    "High Disk Alert": "Disk",
-    "Disk Alerts": "Disk",
-    "Disk": "Disk",
+    "_user_specification": "Database: Database | Network: NULL | CPU: CPU | Memory: Memory | Disk/Volume: Volume",
+    "High Disk Alerts": "Volume",
+    "High Disk Alert": "Volume",
+    "Disk Alerts": "Volume",
+    "Disk": "Volume",
+    "Volume": "Volume",
+    "High Volume": "Volume",
+    "Disk utilisation": "Volume",
     "High CPU Alerts": "CPU",
     "High CPU Alert": "CPU",
     "CPU Alerts": "CPU",
@@ -37,8 +41,13 @@
     "High Memory Alert": "Memory",
     "Memory Alerts": "Memory",
     "Memory": "Memory",
+    "Database-SQL": "Database",
+    "Database SQL": "Database",
+    "SQL": "Database",
+    "Database": "Database",
+    "Network": null,
     "Alerts": null,
-    "_note": "null values mean the component should be removed/ignored"
+    "_note": "null values mean the component should be removed/ignored (e.g., Network has no component)"
   },
   
   "service_component_combinations": {
@@ -60,6 +69,7 @@
   "component_detection_patterns": {
     "_description": "Regex patterns to detect component from text when component is missing. Used for intelligent component extraction from incident titles/descriptions.",
     "_note": "Patterns are matched in order, first match wins. Use word boundaries (\\b) to avoid false positives.",
+    "_user_specification": "Database: Database | Network: NULL | CPU: CPU | Memory: Memory | Disk/Volume: Volume",
     "CPU": [
       "\\bcpu\\b",
       "\\bhigh cpu\\b",
@@ -77,7 +87,7 @@
       "\\bmemory percent\\b",
       "\\bmem\\b"
     ],
-    "Disk": [
+    "Volume": [
       "\\bdisk\\b",
       "\\bvolume\\b",
       "\\bhigh disk\\b",
@@ -88,16 +98,27 @@
       "\\bvolume utilization\\b",
       "\\bvolume usage\\b",
       "\\bstorage\\b"
+    ],
+    "Database": [
+      "\\bdatabase\\b",
+      "\\bsql\\b",
+      "\\bdb\\b",
+      "\\boracle\\b",
+      "\\bpostgres\\b",
+      "\\bmysql\\b"
     ]
   },
   
   "component_to_service_mapping": {
     "_description": "Maps detected components to their corresponding services. Used when service is 'Server' to intelligently map to the correct service.",
     "_note": "This mapping is used for intelligent service resolution when the service is ambiguous (e.g., 'Server').",
+    "_user_specification": "Database: Database/Database | Network: Network/NULL | CPU: Infrastructure/CPU | Memory: Infrastructure/Memory | Disk: Storage/Volume",
     "CPU": "Infrastructure",
     "Memory": "Infrastructure",
     "Disk": "Storage",
-    "Database": "Database"
+    "Volume": "Storage",
+    "Database": "Database",
+    "Network": "Network"
   },
   
   "failure_type_to_component_mapping": {

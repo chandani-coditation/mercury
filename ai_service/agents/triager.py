@@ -10,7 +10,7 @@ from ai_service.guardrails import (
     validate_triage_no_hallucination,
     validate_triage_retrieval_boundaries,
 )
-from ai_service.core import get_retrieval_config, get_workflow_config, get_logger, load_config
+from ai_service.core import get_retrieval_config, get_workflow_config, get_logger, load_config, get_triage_prediction_config
 from retrieval.hybrid_search import triage_retrieval
 
 logger = get_logger(__name__)
@@ -59,62 +59,190 @@ def extract_routing_from_alert(alert: Dict[str, Any]) -> Optional[str]:
     return routing
 
 
-def predict_routing_from_evidence(incident_signatures: List[Dict[str, Any]]) -> Optional[str]:
+def predict_routing_from_evidence(
+    incident_signatures: List[Dict[str, Any]], 
+    alert: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
     """
     Predict routing (assignment_group) from matched incident signatures.
 
-    Uses the most common assignment_group from historical incident signatures.
-    This is the primary method - alert labels are only used as fallback.
+    Uses weighted prediction based on retrieval rank/score by default.
+    Falls back to simple frequency if weighted prediction fails or is disabled.
 
     Args:
         incident_signatures: List of retrieved incident signature chunks with metadata
+        alert: Optional alert dictionary for context-aware prediction
 
     Returns:
-        Most common assignment_group from signatures, or None if none found
+        Predicted assignment_group from signatures, or None if none found
     """
     if not incident_signatures:
         logger.debug("No incident signatures provided for routing prediction")
         return None
 
-    assignment_groups = []
-    for sig in incident_signatures:
+    # Load prediction config
+    pred_config = get_triage_prediction_config()
+    prediction_method = pred_config.get("prediction", {}).get("method", "weighted")
+    weighted_config = pred_config.get("prediction", {}).get("weighted", {})
+    fallback_config = pred_config.get("prediction", {}).get("fallback", {})
+
+    # Extract assignment groups with metadata
+    assignment_group_data = []
+    for rank, sig in enumerate(incident_signatures, 1):
         metadata = sig.get("metadata", {})
         assignment_group = metadata.get("assignment_group")
         if assignment_group and str(assignment_group).strip():
-            assignment_groups.append(str(assignment_group).strip())
+            # Get score - try multiple possible keys
+            score = (
+                sig.get("score") or 
+                sig.get("rrf_score") or 
+                sig.get("final_score") or 
+                sig.get("vector_score") or 
+                0.0
+            )
+            assignment_group_data.append({
+                "assignment_group": str(assignment_group).strip(),
+                "rank": rank,
+                "score": float(score) if score else 0.0,
+                "metadata": metadata
+            })
 
-    if not assignment_groups:
+    if not assignment_group_data:
         logger.warning(
             f"No assignment_group found in {len(incident_signatures)} incident signatures. Available metadata keys: {[list(sig.get('metadata', {}).keys()) for sig in incident_signatures[:2]]}"
         )
         return None
 
-    # Return the most common assignment_group
-    from collections import Counter
+    # Use weighted prediction if enabled
+    logger.info(f"Routing prediction: method={prediction_method}, data_count={len(assignment_group_data)}, min_signatures={weighted_config.get('min_signatures', 2)}")
+    if prediction_method == "weighted":
+        min_signatures = weighted_config.get("min_signatures", 2)
+        if len(assignment_group_data) >= min_signatures:
+            predicted = _predict_routing_weighted(
+                assignment_group_data, 
+                weighted_config
+            )
+            if predicted:
+                return predicted
 
-    counter = Counter(assignment_groups)
-    most_common = counter.most_common(1)
-    if most_common:
-        routing = most_common[0][0]
-        logger.info(
-            f"Predicted routing from {len(assignment_groups)} signatures: {routing} (appeared {most_common[0][1]} times)"
-        )
-        return routing
+    # Fallback to simple frequency
+    if fallback_config.get("use_simple_frequency", True):
+        from collections import Counter
+        assignment_groups = [d["assignment_group"] for d in assignment_group_data]
+        counter = Counter(assignment_groups)
+        most_common = counter.most_common(1)
+        if most_common:
+            routing = most_common[0][0]
+            logger.info(
+                f"Predicted routing (simple frequency) from {len(assignment_groups)} signatures: {routing} (appeared {most_common[0][1]} times)"
+            )
+            return routing
 
     return None
 
 
+def _predict_routing_weighted(
+    assignment_group_data: List[Dict[str, Any]],
+    weighted_config: Dict[str, Any]
+) -> Optional[str]:
+    """Weighted prediction for routing using rank/score."""
+    weight_by = weighted_config.get("weight_by", "rank")
+    top_k = weighted_config.get("top_k", 5)
+    min_confidence = weighted_config.get("min_confidence", 0.3)
+    weights_config = weighted_config.get("weights", {})
+    
+    # Limit to top_k
+    assignment_group_data = assignment_group_data[:top_k]
+    
+    # Calculate weights for each assignment group
+    assignment_group_scores = {}
+    total_weight = 0.0
+    
+    for data in assignment_group_data:
+        ag = data["assignment_group"]
+        rank = data["rank"]
+        score = data["score"]
+        
+        # Calculate weight based on method
+        if weight_by == "rank":
+            # Use configured rank weights or reciprocal rank
+            rank_weights = weights_config.get("rank_based", {})
+            weight_key = f"rank_{rank}"
+            if weight_key in rank_weights:
+                weight = rank_weights[weight_key]
+            else:
+                # Default: reciprocal rank
+                weight = 1.0 / rank
+        elif weight_by == "score":
+            # Use score directly (normalize if needed)
+            score_config = weights_config.get("score_based", {})
+            if score_config.get("normalize_scores", True):
+                # Normalize to 0-1 range (assuming scores are already normalized)
+                weight = max(0.0, min(1.0, score))
+            else:
+                weight = score * score_config.get("score_multiplier", 1.0)
+        elif weight_by == "hybrid":
+            # Combine rank and score
+            hybrid_config = weights_config.get("hybrid", {})
+            rank_weight = hybrid_config.get("rank_weight", 0.6)
+            score_weight = hybrid_config.get("score_weight", 0.4)
+            rank_w = 1.0 / rank
+            score_w = max(0.0, min(1.0, score))
+            weight = (rank_weight * rank_w) + (score_weight * score_w)
+        else:
+            # Default: reciprocal rank
+            weight = 1.0 / rank
+        
+        if ag not in assignment_group_scores:
+            assignment_group_scores[ag] = 0.0
+        assignment_group_scores[ag] += weight
+        total_weight += weight
+    
+    if not assignment_group_scores:
+        return None
+    
+    # Find best assignment group
+    best_ag = max(assignment_group_scores.items(), key=lambda x: x[1])[0]
+    best_score = assignment_group_scores[best_ag]
+    
+    # Calculate confidence
+    confidence = best_score / total_weight if total_weight > 0 else 0.0
+    
+    # Check minimum confidence threshold
+    # Log all scores for debugging
+    logger.debug(
+        f"Weighted prediction scores: {dict(sorted(assignment_group_scores.items(), key=lambda x: x[1], reverse=True))}, "
+        f"total_weight={total_weight:.3f}, best={best_ag} (score={best_score:.3f}, confidence={confidence:.3f})"
+    )
+    
+    if confidence >= min_confidence:
+        logger.info(
+            f"Predicted routing (weighted) from {len(assignment_group_data)} signatures: {best_ag} "
+            f"(confidence: {confidence:.3f}, method: {weight_by})"
+        )
+        return best_ag
+    else:
+        logger.warning(
+            f"Weighted prediction confidence {confidence:.3f} below threshold {min_confidence}, "
+            f"falling back to simple frequency. Scores: {assignment_group_scores}"
+        )
+        return None
+
+
 def predict_impact_urgency_from_evidence(
     incident_signatures: List[Dict[str, Any]],
+    alert: Optional[Dict[str, Any]] = None
 ) -> Optional[tuple[str, str]]:
     """
     Predict impact and urgency from matched incident signatures.
 
-    Uses the most common impact/urgency combination from historical incident signatures.
-    This is the primary method - alert labels are only used as fallback.
+    Uses weighted prediction based on retrieval rank/score by default.
+    Falls back to simple frequency if weighted prediction fails or is disabled.
+    Can also consider alert severity keywords for context-aware prediction.
 
     Args:
         incident_signatures: List of retrieved incident signature chunks with metadata
+        alert: Optional alert dictionary for context-aware prediction
 
     Returns:
         Tuple of (impact, urgency) or None if none found
@@ -122,29 +250,60 @@ def predict_impact_urgency_from_evidence(
     if not incident_signatures:
         return None
 
-    impact_urgency_pairs = []
-    for sig in incident_signatures:
+    # Load prediction config
+    pred_config = get_triage_prediction_config()
+    impact_urgency_config = pred_config.get("prediction", {}).get("impact_urgency", {})
+    weighted_config = pred_config.get("prediction", {}).get("weighted", {})
+
+    # Extract impact/urgency pairs with metadata
+    impact_urgency_data = []
+    for rank, sig in enumerate(incident_signatures, 1):
         metadata = sig.get("metadata", {})
         impact = metadata.get("impact")
         urgency = metadata.get("urgency")
         if impact and urgency:
-            impact_urgency_pairs.append((str(impact).strip(), str(urgency).strip()))
+            # Get score - try multiple possible keys
+            score = (
+                sig.get("score") or 
+                sig.get("rrf_score") or 
+                sig.get("final_score") or 
+                sig.get("vector_score") or 
+                0.0
+            )
+            impact_urgency_data.append({
+                "impact": str(impact).strip(),
+                "urgency": str(urgency).strip(),
+                "rank": rank,
+                "score": float(score) if score else 0.0,
+                "metadata": metadata
+            })
 
-    if not impact_urgency_pairs:
+    if not impact_urgency_data:
         logger.warning(
             f"No impact/urgency found in {len(incident_signatures)} incident signatures. Available metadata keys: {[list(sig.get('metadata', {}).keys()) for sig in incident_signatures[:2]]}"
         )
         return None
 
-    # Find the most common impact/urgency combination
-    from collections import Counter
+    # Use weighted prediction if enabled
+    if impact_urgency_config.get("weight_by_rank", True):
+        min_signatures = weighted_config.get("min_signatures", 2)
+        if len(impact_urgency_data) >= min_signatures:
+            predicted = _predict_impact_urgency_weighted(
+                impact_urgency_data,
+                weighted_config
+            )
+            if predicted:
+                return predicted
 
+    # Fallback to simple frequency
+    from collections import Counter
+    impact_urgency_pairs = [(d["impact"], d["urgency"]) for d in impact_urgency_data]
     counter = Counter(impact_urgency_pairs)
     most_common = counter.most_common(1)
     if most_common:
         impact, urgency = most_common[0][0]
         logger.info(
-            f"Predicted impact/urgency from {len(impact_urgency_pairs)} signatures: "
+            f"Predicted impact/urgency (simple frequency) from {len(impact_urgency_pairs)} signatures: "
             f"impact={impact}, urgency={urgency} "
             f"(appeared {most_common[0][1]} times)"
         )
@@ -153,7 +312,90 @@ def predict_impact_urgency_from_evidence(
     return None
 
 
-def predict_severity_from_evidence(incident_signatures: List[Dict[str, Any]]) -> Optional[str]:
+def _predict_impact_urgency_weighted(
+    impact_urgency_data: List[Dict[str, Any]],
+    weighted_config: Dict[str, Any]
+) -> Optional[tuple[str, str]]:
+    """Weighted prediction for impact/urgency using rank/score."""
+    weight_by = weighted_config.get("weight_by", "rank")
+    top_k = weighted_config.get("top_k", 5)
+    weights_config = weighted_config.get("weights", {})
+    
+    # Limit to top_k
+    impact_urgency_data = impact_urgency_data[:top_k]
+    
+    # Calculate weights for each impact/urgency combination
+    impact_urgency_scores = {}
+    total_weight = 0.0
+    
+    for data in impact_urgency_data:
+        impact = data["impact"]
+        urgency = data["urgency"]
+        rank = data["rank"]
+        score = data["score"]
+        pair_key = (impact, urgency)
+        
+        # Calculate weight (same logic as routing)
+        if weight_by == "rank":
+            # Use configured rank weights or reciprocal rank
+            rank_weights = weights_config.get("rank_based", {})
+            weight_key = f"rank_{rank}"
+            if weight_key in rank_weights:
+                weight = rank_weights[weight_key]
+            else:
+                # Default: reciprocal rank
+                weight = 1.0 / rank
+        elif weight_by == "score":
+            score_config = weights_config.get("score_based", {})
+            if score_config.get("normalize_scores", True):
+                weight = max(0.0, min(1.0, score))
+            else:
+                weight = score * score_config.get("score_multiplier", 1.0)
+        elif weight_by == "hybrid":
+            hybrid_config = weights_config.get("hybrid", {})
+            rank_weight = hybrid_config.get("rank_weight", 0.6)
+            score_weight = hybrid_config.get("score_weight", 0.4)
+            rank_w = 1.0 / rank
+            score_w = max(0.0, min(1.0, score))
+            weight = (rank_weight * rank_w) + (score_weight * score_w)
+        else:
+            # Default: reciprocal rank
+            weight = 1.0 / rank
+        
+        if pair_key not in impact_urgency_scores:
+            impact_urgency_scores[pair_key] = 0.0
+        impact_urgency_scores[pair_key] += weight
+        total_weight += weight
+    
+    if not impact_urgency_scores:
+        return None
+    
+    # Find best impact/urgency combination
+    best_pair = max(impact_urgency_scores.items(), key=lambda x: x[1])[0]
+    best_score = impact_urgency_scores[best_pair]
+    
+    impact, urgency = best_pair
+    confidence = best_score / total_weight if total_weight > 0 else 0.0
+    
+    # Log all scores for debugging
+    logger.debug(
+        f"Weighted impact/urgency scores: {dict(sorted(impact_urgency_scores.items(), key=lambda x: x[1], reverse=True))}, "
+        f"total_weight={total_weight:.3f}, best={best_pair} (score={best_score:.3f}, confidence={confidence:.3f})"
+    )
+    
+    logger.info(
+        f"Predicted impact/urgency (weighted) from {len(impact_urgency_data)} signatures: "
+        f"impact={impact}, urgency={urgency} "
+        f"(confidence: {confidence:.3f}, method: {weight_by})"
+    )
+    
+    return (impact, urgency)
+
+
+def predict_severity_from_evidence(
+    incident_signatures: List[Dict[str, Any]], 
+    alert: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
     """
     Predict severity from matched incident signatures based on impact/urgency.
 
@@ -162,11 +404,12 @@ def predict_severity_from_evidence(incident_signatures: List[Dict[str, Any]]) ->
 
     Args:
         incident_signatures: List of retrieved incident signature chunks with metadata
+        alert: Optional alert dictionary for context-aware prediction
 
     Returns:
         Predicted severity (critical, high, medium, low) or None if none found
     """
-    impact_urgency = predict_impact_urgency_from_evidence(incident_signatures)
+    impact_urgency = predict_impact_urgency_from_evidence(incident_signatures, alert)
     if impact_urgency:
         impact, urgency = impact_urgency
         severity = derive_severity_from_impact_urgency(impact, urgency)
@@ -406,25 +649,33 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     description = alert.get("description", "") or ""
 
     import re
+    from ingestion.normalizers import clean_description_text
 
-    description_lines = description.split("\n")
-    first_line = description_lines[0] if description_lines else ""
-    first_line_cleaned = re.sub(r"[^\w\s-]", " ", first_line)
-    first_line_cleaned = re.sub(r"\s+", " ", first_line_cleaned).strip()
-
-    if first_line_cleaned and len(first_line_cleaned) > 5:
-        fulltext_query_text = f"{title} {first_line_cleaned}".strip()
-    else:
-        fulltext_query_text = title.strip()
-
+    # For fulltext search: use enhanced query with synonyms (better keyword matching)
     try:
         from retrieval.query_enhancer import enhance_query
-
-        query_text = enhance_query(alert)  # Enhanced query for vector search
+        fulltext_query_text = enhance_query(alert)  # Enhanced query for fulltext search
     except Exception as e:
-        # Fallback to basic query if enhancement fails
+        # Fallback: use first line of description
         logger.warning(f"Query enhancement failed, using basic query: {e}")
-        query_text = fulltext_query_text
+        description_lines = description.split("\n")
+        first_line = description_lines[0] if description_lines else ""
+        first_line_cleaned = re.sub(r"[^\w\s-]", " ", first_line)
+        first_line_cleaned = re.sub(r"\s+", " ", first_line_cleaned).strip()
+        if first_line_cleaned and len(first_line_cleaned) > 5:
+            fulltext_query_text = f"{title} {first_line_cleaned}".strip()
+        else:
+            fulltext_query_text = title.strip()
+
+    # For vector search: use SIMPLE query (title + cleaned description) to match ingested text
+    # IMPORTANT: Ingested embeddings only contain title + description (cleaned), so query must match
+    # Enhancement (synonyms, technical terms) is NOT applied during ingestion, so don't use it for vector search
+    cleaned_desc = clean_description_text(description)
+    query_text = f"{title} {cleaned_desc}".strip() if cleaned_desc else title.strip()
+    
+    # Truncate to match ingestion limit (1000 chars for description)
+    if len(query_text) > 1000 + len(title):
+        query_text = f"{title} {cleaned_desc[:1000]}".strip()
 
     labels = alert.get("labels", {}) or {}
     service_val = labels.get("service") if isinstance(labels, dict) else None
@@ -675,14 +926,19 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         else:
             triage_output["likely_cause"] = "Unknown (no matching historical evidence available)."
 
-        predicted_impact_urgency = predict_impact_urgency_from_evidence(incident_signatures)
+        # Extract impact/urgency - PRIMARY: from incident signatures (historical learning), FALLBACK: from alert labels
+        predicted_impact_urgency = predict_impact_urgency_from_evidence(incident_signatures, alert)
         if predicted_impact_urgency:
             impact, urgency = predicted_impact_urgency
             triage_output["impact"] = impact
             triage_output["urgency"] = urgency
             predicted_severity = derive_severity_from_impact_urgency(impact, urgency)
             triage_output["severity"] = predicted_severity
+            logger.info(
+                f"Impact/urgency/severity predicted from evidence: impact={impact}, urgency={urgency}, severity={predicted_severity}"
+            )
         else:
+            # FALLBACK: Use alert labels if no matching incident signatures found
             labels = alert.get("labels", {})
             impact = labels.get("impact")
             urgency = labels.get("urgency")
@@ -691,14 +947,21 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 triage_output["urgency"] = urgency
                 mapped_severity = derive_severity_from_impact_urgency(impact, urgency)
                 triage_output["severity"] = mapped_severity
+                logger.info(
+                    f"Impact/urgency/severity from alert labels (fallback): impact={impact}, urgency={urgency}, severity={mapped_severity}"
+                )
 
-        predicted_routing = predict_routing_from_evidence(incident_signatures)
+        # Extract routing - PRIMARY: from incident signatures (historical learning), FALLBACK: from alert labels
+        predicted_routing = predict_routing_from_evidence(incident_signatures, alert)
         if predicted_routing:
             triage_output["routing"] = predicted_routing
+            logger.info(f"Routing predicted from evidence: {predicted_routing}")
         else:
+            # FALLBACK: Use alert labels if no matching incident signatures found
             routing = extract_routing_from_alert(alert)
             if routing:
                 triage_output["routing"] = routing
+                logger.info(f"Routing from alert labels (fallback): {routing}")
 
         category = None
         if incident_signatures:
@@ -906,6 +1169,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     else:
         title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"
 
+        # Extract routing, impact, urgency from alert labels (no evidence available)
         routing = extract_routing_from_alert(alert)
         labels = alert.get("labels", {})
         impact = labels.get("impact", "3 - Low")
@@ -934,6 +1198,10 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
         if routing:
             triage_output["routing"] = routing
+        if impact:
+            triage_output["impact"] = impact
+        if urgency:
+            triage_output["urgency"] = urgency
 
         # Extract affected_services - FALLBACK: from alert (no evidence available)
         affected_services = extract_affected_services_from_alert(alert)

@@ -22,6 +22,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from ai_service.core import get_field_mappings_config, get_logger, setup_logging
+from ingestion.normalizers import clean_description_text
 from ingestion.models import IngestIncident
 import requests
 
@@ -84,6 +85,9 @@ def map_csv_row_to_incident(
     title = row.get(mappings.get("title", {}).get("source_column", "short_description"), "")
     description = row.get(mappings.get("description", {}).get("source_column", "description"), "")
     category = row.get(mappings.get("category", {}).get("source_column", "category"), "")
+
+    # Clean description to normalize whitespace (matches query normalization during triage)
+    description = clean_description_text(description)
 
     # Validate required fields before proceeding
     if not title or not title.strip():

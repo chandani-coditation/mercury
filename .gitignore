@@ -93,3 +93,5 @@ scripts/data/runbooks/
 scripts/data/runbooks/*
 runbooks/*
 runbooks/
+tmp/
+tmp/*

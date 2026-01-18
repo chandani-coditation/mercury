@@ -524,7 +524,11 @@ def triage_retrieval(
         cur = conn.cursor()
 
         try:
-            # Generate query embedding
+            # Normalize service and component
+            service_val = service if service and str(service).strip() else None
+            component_val = component if component and str(component).strip() else None
+
+            # Generate query embedding for vector similarity search
             query_embedding = embed_text(query_text)
             if query_embedding is None:
                 logger.error(
@@ -532,10 +536,6 @@ def triage_retrieval(
                 )
                 return {"incident_signatures": [], "runbook_metadata": []}
             query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
-
-            # Normalize service and component
-            service_val = service if service and str(service).strip() else None
-            component_val = component if component and str(component).strip() else None
 
             filter_clause = (
                 ""

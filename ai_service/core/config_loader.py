@@ -65,6 +65,7 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
         "workflow": "workflow.json",
         "field_mappings": "field_mappings.json",
         "embeddings": "embeddings.json",
+        "triage_prediction": "triage_prediction.json",
         "historical_data_inputs": "schemas.json",  # Will extract this key
         "alert_metadata": "schemas.json",  # Will extract this key
     }
@@ -212,3 +213,18 @@ def get_embeddings_config() -> Dict:
     """
     config = load_config()
     return config.get("embeddings", {})
+
+
+def get_triage_prediction_config() -> Dict:
+    """
+    Get triage prediction configuration.
+
+    Returns the triage prediction configuration which defines parameters for
+    weighted prediction, including rank-based weighting, score-based weighting,
+    context-aware boosting, and impact/urgency prediction settings.
+
+    Returns:
+        Dict: Triage prediction configuration dictionary
+    """
+    config = load_config()
+    return config.get("triage_prediction", {})

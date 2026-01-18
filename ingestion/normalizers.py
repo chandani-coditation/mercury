@@ -113,6 +113,36 @@ def _validate_with_schema(data: dict, schema_name: str) -> tuple[bool, list]:
         return True, []  # Don't fail on validation errors, just log
 
 
+def clean_description_text(text: Optional[str]) -> str:
+    """
+    Clean description text by normalizing whitespace and removing formatting artifacts.
+    
+    The normalization steps are:
+    1. Remove extra whitespace (collapse to single space)
+    2. Remove multiple periods
+    3. Strip leading/trailing whitespace
+    
+    """
+    if not text:
+        return ""
+    
+    # Convert to string if not already
+    if not isinstance(text, str):
+        text = str(text)
+    
+    # MATCH normalize_query_text logic exactly:
+    # 1. Remove extra whitespace (collapses newlines, tabs, multiple spaces to single space)
+    text = re.sub(r"\s+", " ", text)
+    
+    # 2. Remove multiple consecutive periods (formatting artifacts)
+    text = re.sub(r"\.\s*\.+", ".", text)
+    
+    # 3. Remove leading/trailing whitespace
+    text = text.strip()
+    
+    return text
+
+
 def normalize_technical_terms(text: str) -> str:
     """
     Normalize technical terms in text during ingestion using config file.
