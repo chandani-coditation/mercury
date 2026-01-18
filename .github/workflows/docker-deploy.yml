@@ -39,38 +39,23 @@ jobs:
           chmod +x scripts/utils/generate-env-from-secrets.sh
           scripts/utils/generate-env-from-secrets.sh "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'pr' || 'np') }}"
         env:
-          # Database Configuration
-          # Secrets (sensitive) - stored in GitHub Secrets
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          # Variables (non-sensitive) - stored in GitHub Variables
           POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
           POSTGRES_PORT: ${{ vars.POSTGRES_PORT }}
           POSTGRES_DB: ${{ vars.POSTGRES_DB }}
           POSTGRES_USER: ${{ vars.POSTGRES_USER }}
-          
-          # LLM Configuration
-          # Secrets (sensitive)
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PRIVATE_LLM_AUTH_KEY: ${{ secrets.PRIVATE_LLM_AUTH_KEY }}
           PRIVATE_LLM_CERT_PATH: ${{ secrets.PRIVATE_LLM_CERT_PATH }}
-          # Variables (non-sensitive)
           PRIVATE_LLM_GATEWAY: ${{ vars.PRIVATE_LLM_GATEWAY }}
           PRIVATE_LLM_GATEWAY_URL: ${{ vars.PRIVATE_LLM_GATEWAY_URL }}
           PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL: ${{ vars.PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL }}
-          
-          # Service Configuration - Variables (non-sensitive)
           INGESTION_SERVICE_HOST: ${{ vars.INGESTION_SERVICE_HOST }}
           INGESTION_SERVICE_PORT: ${{ vars.INGESTION_SERVICE_PORT }}
           AI_SERVICE_HOST: ${{ vars.AI_SERVICE_HOST }}
           AI_SERVICE_PORT: ${{ vars.AI_SERVICE_PORT }}
-          
-          # Frontend Configuration - Variables (non-sensitive)
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-          
-          # CORS Configuration - Variables (non-sensitive)
           CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
-          
-          # Logging and Database Pool Configuration - Variables (non-sensitive)
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           DB_POOL_MIN: ${{ vars.DB_POOL_MIN }}
           DB_POOL_MAX: ${{ vars.DB_POOL_MAX }}
@@ -78,45 +63,46 @@ jobs:
 
       - name: Validate .env file
         run: |
-          if [ ! -f "$ENV_FILE" ]; then
-            echo "Error: $ENV_FILE file was not created"
-            exit 1
-          fi
-          echo ".env file generated successfully"
+          [ -f "$ENV_FILE" ] || { echo "Error: $ENV_FILE not created"; exit 1; }
 
       - name: Prepare logs directory
         run: |
-          mkdir -p logs
-          chmod 777 logs
-          touch logs/.gitkeep
+          mkdir -p logs && chmod 777 logs
 
       - name: Build and start services
         run: |
           ENV_FILE=${{ env.ENV_FILE }} docker compose up -d --build
 
-      - name: Wait for services to be healthy
+      - name: Wait for services
         run: |
-          echo "Waiting for services to be ready..."
           sleep 15
           docker compose ps
 
-      - name: Check service health
+      - name: Health check
         run: |
           max_attempts=30
-          attempt=0
-          while [ $attempt -lt $max_attempts ]; do
-            if curl -f http://localhost:8001/api/v1/health > /dev/null 2>&1; then
-              echo "Services are healthy!"
-              exit 0
-            fi
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            curl -sf http://localhost:8001/api/v1/health > /dev/null && exit 0
+            [ $attempt -lt $max_attempts ] && sleep 5
             attempt=$((attempt + 1))
-            echo "Health check attempt $attempt/$max_attempts failed, retrying in 5 seconds..."
-            sleep 5
           done
-          echo "Health check failed after $max_attempts attempts"
           exit 1
+
+      - name: Verify services
+        run: |
+          curl -sf http://localhost:8001/api/v1/health > /dev/null || exit 1
+          curl -sf http://localhost:5173 > /dev/null || exit 1
+          docker compose ps
 
       - name: Show service logs
         if: failure()
         run: |
           docker compose logs
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans || true
+          docker system prune -af --volumes || true
+          rm -rf logs/* ${{ env.ENV_FILE }} || true
