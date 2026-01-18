@@ -648,34 +648,16 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     title = alert.get("title", "") or ""
     description = alert.get("description", "") or ""
 
-    import re
     from ingestion.normalizers import clean_description_text
 
-    # For fulltext search: use enhanced query with synonyms (better keyword matching)
-    try:
-        from retrieval.query_enhancer import enhance_query
-        fulltext_query_text = enhance_query(alert)  # Enhanced query for fulltext search
-    except Exception as e:
-        # Fallback: use first line of description
-        logger.warning(f"Query enhancement failed, using basic query: {e}")
-        description_lines = description.split("\n")
-        first_line = description_lines[0] if description_lines else ""
-        first_line_cleaned = re.sub(r"[^\w\s-]", " ", first_line)
-        first_line_cleaned = re.sub(r"\s+", " ", first_line_cleaned).strip()
-        if first_line_cleaned and len(first_line_cleaned) > 5:
-            fulltext_query_text = f"{title} {first_line_cleaned}".strip()
-        else:
-            fulltext_query_text = title.strip()
-
-    # For vector search: use SIMPLE query (title + cleaned description) to match ingested text
-    # IMPORTANT: Ingested embeddings only contain title + description (cleaned), so query must match
-    # Enhancement (synonyms, technical terms) is NOT applied during ingestion, so don't use it for vector search
     cleaned_desc = clean_description_text(description)
-    query_text = f"{title} {cleaned_desc}".strip() if cleaned_desc else title.strip()
     
     # Truncate to match ingestion limit (1000 chars for description)
+    query_text = f"{title} {cleaned_desc}".strip() if cleaned_desc else title.strip()
     if len(query_text) > 1000 + len(title):
         query_text = f"{title} {cleaned_desc[:1000]}".strip()
+    
+    fulltext_query_text = query_text
 
     labels = alert.get("labels", {}) or {}
     service_val = labels.get("service") if isinstance(labels, dict) else None
