@@ -1,0 +1,108 @@
+name: Docker Compose Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  ENV_FILE: .env.github
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate .env file from GitHub Secrets
+        run: |
+          chmod +x scripts/utils/generate-env-from-secrets.sh
+          scripts/utils/generate-env-from-secrets.sh "${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'development') }}"
+        env:
+          # Database Configuration
+          # Secrets (sensitive) - stored in GitHub Secrets
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          # Variables (non-sensitive) - stored in GitHub Variables
+          POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+          POSTGRES_PORT: ${{ vars.POSTGRES_PORT }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+          
+          # LLM Configuration
+          # Secrets (sensitive)
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PRIVATE_LLM_AUTH_KEY: ${{ secrets.PRIVATE_LLM_AUTH_KEY }}
+          PRIVATE_LLM_CERT_PATH: ${{ secrets.PRIVATE_LLM_CERT_PATH }}
+          # Variables (non-sensitive)
+          PRIVATE_LLM_GATEWAY: ${{ vars.PRIVATE_LLM_GATEWAY }}
+          PRIVATE_LLM_GATEWAY_URL: ${{ vars.PRIVATE_LLM_GATEWAY_URL }}
+          PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL: ${{ vars.PRIVATE_LLM_GATEWAY_EMBEDDINGS_URL }}
+          
+          # Service Configuration - Variables (non-sensitive)
+          INGESTION_SERVICE_HOST: ${{ vars.INGESTION_SERVICE_HOST }}
+          INGESTION_SERVICE_PORT: ${{ vars.INGESTION_SERVICE_PORT }}
+          AI_SERVICE_HOST: ${{ vars.AI_SERVICE_HOST }}
+          AI_SERVICE_PORT: ${{ vars.AI_SERVICE_PORT }}
+          
+          # Frontend Configuration - Variables (non-sensitive)
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          
+          # CORS Configuration - Variables (non-sensitive)
+          CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
+          
+          # Logging and Database Pool Configuration - Variables (non-sensitive)
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          DB_POOL_MIN: ${{ vars.DB_POOL_MIN }}
+          DB_POOL_MAX: ${{ vars.DB_POOL_MAX }}
+          DB_POOL_WAIT_TIMEOUT: ${{ vars.DB_POOL_WAIT_TIMEOUT }}
+
+      - name: Validate .env file
+        run: |
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "Error: $ENV_FILE file was not created"
+            exit 1
+          fi
+          echo "Generated .env file:"
+          # Show non-sensitive info (mask passwords)
+          grep -v "PASSWORD\|KEY\|AUTH" "$ENV_FILE" || true
+
+      - name: Build and start services
+        run: |
+          ENV_FILE=${{ env.ENV_FILE }} docker compose up -d --build
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for services to be ready..."
+          sleep 10
+          docker compose ps
+
+      - name: Check service health
+        run: |
+          # Check AI service health
+          curl -f http://localhost:8001/api/v1/health || exit 1
+          echo "Services are healthy!"
+
+      - name: Show service logs
+        if: failure()
+        run: |
+          docker compose logs
