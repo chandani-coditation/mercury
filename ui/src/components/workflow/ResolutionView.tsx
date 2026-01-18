@@ -303,7 +303,6 @@ export const ResolutionView = ({
                 const stepNumber = step.step_number || displayIndex + 1;
                 const stepTitle = step.title || "";
                 const stepAction = step.action || "";
-                const stepExpectedOutcome = step.expected_outcome || "";
                 // Use originalIndex for rating lookup to match the original step position in the array
                 const ratingIndex = step.originalIndex !== undefined ? step.originalIndex : displayIndex;
                 const stepCommands =
@@ -414,12 +413,6 @@ export const ResolutionView = ({
                             )}
                           </div>
                         </div>
-                        {stepExpectedOutcome && (
-                          <div className="text-xs text-muted-foreground">
-                            <span className="font-medium">Outcome: </span>
-                            <span>{stepExpectedOutcome}</span>
-                          </div>
-                        )}
                         {hasCommands && (
                           <div className="mt-1 space-y-1">
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
