@@ -364,7 +364,6 @@ def _resolution_copilot_agent_internal(
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
-
     resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
 
     if not resolution_output.get("provenance"):
@@ -407,7 +406,6 @@ def _resolution_copilot_agent_internal(
             ]
         else:
             resolution_output["provenance"] = valid_provenance
-
 
     if "estimated_time_minutes" not in resolution_output:
         resolution_output["estimated_time_minutes"] = None

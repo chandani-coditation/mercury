@@ -55,7 +55,6 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
     if config_dir is None:
         config_dir = _get_config_dir()
 
-
     # Config files to load (in order)
     config_files = {
         "policy_gate": "policy.json",
@@ -79,7 +78,6 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
         try:
             with open(config_path, "r") as f:
                 file_config = json.load(f)
-
 
             # Special handling for schemas.json (contains multiple top-level keys)
             if filename == "schemas.json":

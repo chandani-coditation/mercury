@@ -303,7 +303,7 @@ def _create_incident_signature_embedding_text(
     """
     Create embedding text for an incident signature.
 
-    
+
     """
     parts = []
 
@@ -313,12 +313,14 @@ def _create_incident_signature_embedding_text(
     if incident_description:
         # Truncate description to first 1000 chars (increased from 500 for better context)
         # Query text can be long, so we need enough context in embedding
-        desc_truncated = incident_description[:1000] + ("..." if len(incident_description) > 1000 else "")
+        desc_truncated = incident_description[:1000] + (
+            "..." if len(incident_description) > 1000 else ""
+        )
         parts.append(desc_truncated)
 
     # Join with space (same as query text format)
     embedding_text = " ".join(parts).strip()
-    
+
     return embedding_text
 
 
@@ -816,8 +818,11 @@ def insert_incident_signature(
         try:
             # Clean description to ensure consistency with query text normalization
             from ingestion.normalizers import clean_description_text
-            cleaned_description = clean_description_text(incident_description) if incident_description else None
-            
+
+            cleaned_description = (
+                clean_description_text(incident_description) if incident_description else None
+            )
+
             # Create embedding text for signature (include original title/description for better matching)
             signature_text = _create_incident_signature_embedding_text(
                 signature,
@@ -856,19 +861,21 @@ def insert_incident_signature(
             tsv_text_parts = []
             if incident_title:
                 tsv_text_parts.append(incident_title)
-            if cleaned_description :
+            if cleaned_description:
                 desc_for_tsv = cleaned_description[:1000]
                 tsv_text_parts.append(desc_for_tsv)
             # Then add structured fields
-            tsv_text_parts.extend([
-                signature.failure_type or '',
-                signature.error_class or '',
-                signature.assignment_group or '',
-                signature.impact or '',
-                signature.urgency or '',
-                ' '.join(signature.symptoms) if signature.symptoms else '',
-            ])
-            tsv_text = ' '.join([p for p in tsv_text_parts if p]).strip()
+            tsv_text_parts.extend(
+                [
+                    signature.failure_type or "",
+                    signature.error_class or "",
+                    signature.assignment_group or "",
+                    signature.impact or "",
+                    signature.urgency or "",
+                    " ".join(signature.symptoms) if signature.symptoms else "",
+                ]
+            )
+            tsv_text = " ".join([p for p in tsv_text_parts if p]).strip()
 
             signature_id = uuid.uuid4()
             cur.execute(
@@ -941,7 +948,11 @@ def insert_incident_signature(
                     datetime.now(),  # last_seen_at
                     tsv_text,  # tsv text for full-text search
                     incident_title or "",  # For ON CONFLICT UPDATE (tsv - first param)
-                    (clean_description_text(incident_description)[:1000] if incident_description else ""),  # For ON CONFLICT UPDATE (tsv - second param, cleaned and truncated)
+                    (
+                        clean_description_text(incident_description)[:1000]
+                        if incident_description
+                        else ""
+                    ),  # For ON CONFLICT UPDATE (tsv - second param, cleaned and truncated)
                 ),
             )
 

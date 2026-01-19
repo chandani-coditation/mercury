@@ -10,7 +10,13 @@ from ai_service.guardrails import (
     validate_triage_no_hallucination,
     validate_triage_retrieval_boundaries,
 )
-from ai_service.core import get_retrieval_config, get_workflow_config, get_logger, load_config, get_triage_prediction_config
+from ai_service.core import (
+    get_retrieval_config,
+    get_workflow_config,
+    get_logger,
+    load_config,
+    get_triage_prediction_config,
+)
 from retrieval.hybrid_search import triage_retrieval
 
 logger = get_logger(__name__)
@@ -60,8 +66,7 @@ def extract_routing_from_alert(alert: Dict[str, Any]) -> Optional[str]:
 
 
 def predict_routing_from_evidence(
-    incident_signatures: List[Dict[str, Any]], 
-    alert: Optional[Dict[str, Any]] = None
+    incident_signatures: List[Dict[str, Any]], alert: Optional[Dict[str, Any]] = None
 ) -> Optional[str]:
     """
     Predict routing (assignment_group) from matched incident signatures.
@@ -94,18 +99,20 @@ def predict_routing_from_evidence(
         if assignment_group and str(assignment_group).strip():
             # Get score - try multiple possible keys
             score = (
-                sig.get("score") or 
-                sig.get("rrf_score") or 
-                sig.get("final_score") or 
-                sig.get("vector_score") or 
-                0.0
+                sig.get("score")
+                or sig.get("rrf_score")
+                or sig.get("final_score")
+                or sig.get("vector_score")
+                or 0.0
             )
-            assignment_group_data.append({
-                "assignment_group": str(assignment_group).strip(),
-                "rank": rank,
-                "score": float(score) if score else 0.0,
-                "metadata": metadata
-            })
+            assignment_group_data.append(
+                {
+                    "assignment_group": str(assignment_group).strip(),
+                    "rank": rank,
+                    "score": float(score) if score else 0.0,
+                    "metadata": metadata,
+                }
+            )
 
     if not assignment_group_data:
         logger.warning(
@@ -114,20 +121,20 @@ def predict_routing_from_evidence(
         return None
 
     # Use weighted prediction if enabled
-    logger.info(f"Routing prediction: method={prediction_method}, data_count={len(assignment_group_data)}, min_signatures={weighted_config.get('min_signatures', 2)}")
+    logger.info(
+        f"Routing prediction: method={prediction_method}, data_count={len(assignment_group_data)}, min_signatures={weighted_config.get('min_signatures', 2)}"
+    )
     if prediction_method == "weighted":
         min_signatures = weighted_config.get("min_signatures", 2)
         if len(assignment_group_data) >= min_signatures:
-            predicted = _predict_routing_weighted(
-                assignment_group_data, 
-                weighted_config
-            )
+            predicted = _predict_routing_weighted(assignment_group_data, weighted_config)
             if predicted:
                 return predicted
 
     # Fallback to simple frequency
     if fallback_config.get("use_simple_frequency", True):
         from collections import Counter
+
         assignment_groups = [d["assignment_group"] for d in assignment_group_data]
         counter = Counter(assignment_groups)
         most_common = counter.most_common(1)
@@ -142,27 +149,26 @@ def predict_routing_from_evidence(
 
 
 def _predict_routing_weighted(
-    assignment_group_data: List[Dict[str, Any]],
-    weighted_config: Dict[str, Any]
+    assignment_group_data: List[Dict[str, Any]], weighted_config: Dict[str, Any]
 ) -> Optional[str]:
     """Weighted prediction for routing using rank/score."""
     weight_by = weighted_config.get("weight_by", "rank")
     top_k = weighted_config.get("top_k", 5)
     min_confidence = weighted_config.get("min_confidence", 0.3)
     weights_config = weighted_config.get("weights", {})
-    
+
     # Limit to top_k
     assignment_group_data = assignment_group_data[:top_k]
-    
+
     # Calculate weights for each assignment group
     assignment_group_scores = {}
     total_weight = 0.0
-    
+
     for data in assignment_group_data:
         ag = data["assignment_group"]
         rank = data["rank"]
         score = data["score"]
-        
+
         # Calculate weight based on method
         if weight_by == "rank":
             # Use configured rank weights or reciprocal rank
@@ -192,29 +198,29 @@ def _predict_routing_weighted(
         else:
             # Default: reciprocal rank
             weight = 1.0 / rank
-        
+
         if ag not in assignment_group_scores:
             assignment_group_scores[ag] = 0.0
         assignment_group_scores[ag] += weight
         total_weight += weight
-    
+
     if not assignment_group_scores:
         return None
-    
+
     # Find best assignment group
     best_ag = max(assignment_group_scores.items(), key=lambda x: x[1])[0]
     best_score = assignment_group_scores[best_ag]
-    
+
     # Calculate confidence
     confidence = best_score / total_weight if total_weight > 0 else 0.0
-    
+
     # Check minimum confidence threshold
     # Log all scores for debugging
     logger.debug(
         f"Weighted prediction scores: {dict(sorted(assignment_group_scores.items(), key=lambda x: x[1], reverse=True))}, "
         f"total_weight={total_weight:.3f}, best={best_ag} (score={best_score:.3f}, confidence={confidence:.3f})"
     )
-    
+
     if confidence >= min_confidence:
         logger.info(
             f"Predicted routing (weighted) from {len(assignment_group_data)} signatures: {best_ag} "
@@ -230,8 +236,7 @@ def _predict_routing_weighted(
 
 
 def predict_impact_urgency_from_evidence(
-    incident_signatures: List[Dict[str, Any]],
-    alert: Optional[Dict[str, Any]] = None
+    incident_signatures: List[Dict[str, Any]], alert: Optional[Dict[str, Any]] = None
 ) -> Optional[tuple[str, str]]:
     """
     Predict impact and urgency from matched incident signatures.
@@ -264,19 +269,21 @@ def predict_impact_urgency_from_evidence(
         if impact and urgency:
             # Get score - try multiple possible keys
             score = (
-                sig.get("score") or 
-                sig.get("rrf_score") or 
-                sig.get("final_score") or 
-                sig.get("vector_score") or 
-                0.0
+                sig.get("score")
+                or sig.get("rrf_score")
+                or sig.get("final_score")
+                or sig.get("vector_score")
+                or 0.0
             )
-            impact_urgency_data.append({
-                "impact": str(impact).strip(),
-                "urgency": str(urgency).strip(),
-                "rank": rank,
-                "score": float(score) if score else 0.0,
-                "metadata": metadata
-            })
+            impact_urgency_data.append(
+                {
+                    "impact": str(impact).strip(),
+                    "urgency": str(urgency).strip(),
+                    "rank": rank,
+                    "score": float(score) if score else 0.0,
+                    "metadata": metadata,
+                }
+            )
 
     if not impact_urgency_data:
         logger.warning(
@@ -288,15 +295,13 @@ def predict_impact_urgency_from_evidence(
     if impact_urgency_config.get("weight_by_rank", True):
         min_signatures = weighted_config.get("min_signatures", 2)
         if len(impact_urgency_data) >= min_signatures:
-            predicted = _predict_impact_urgency_weighted(
-                impact_urgency_data,
-                weighted_config
-            )
+            predicted = _predict_impact_urgency_weighted(impact_urgency_data, weighted_config)
             if predicted:
                 return predicted
 
     # Fallback to simple frequency
     from collections import Counter
+
     impact_urgency_pairs = [(d["impact"], d["urgency"]) for d in impact_urgency_data]
     counter = Counter(impact_urgency_pairs)
     most_common = counter.most_common(1)
@@ -313,28 +318,27 @@ def predict_impact_urgency_from_evidence(
 
 
 def _predict_impact_urgency_weighted(
-    impact_urgency_data: List[Dict[str, Any]],
-    weighted_config: Dict[str, Any]
+    impact_urgency_data: List[Dict[str, Any]], weighted_config: Dict[str, Any]
 ) -> Optional[tuple[str, str]]:
     """Weighted prediction for impact/urgency using rank/score."""
     weight_by = weighted_config.get("weight_by", "rank")
     top_k = weighted_config.get("top_k", 5)
     weights_config = weighted_config.get("weights", {})
-    
+
     # Limit to top_k
     impact_urgency_data = impact_urgency_data[:top_k]
-    
+
     # Calculate weights for each impact/urgency combination
     impact_urgency_scores = {}
     total_weight = 0.0
-    
+
     for data in impact_urgency_data:
         impact = data["impact"]
         urgency = data["urgency"]
         rank = data["rank"]
         score = data["score"]
         pair_key = (impact, urgency)
-        
+
         # Calculate weight (same logic as routing)
         if weight_by == "rank":
             # Use configured rank weights or reciprocal rank
@@ -361,40 +365,39 @@ def _predict_impact_urgency_weighted(
         else:
             # Default: reciprocal rank
             weight = 1.0 / rank
-        
+
         if pair_key not in impact_urgency_scores:
             impact_urgency_scores[pair_key] = 0.0
         impact_urgency_scores[pair_key] += weight
         total_weight += weight
-    
+
     if not impact_urgency_scores:
         return None
-    
+
     # Find best impact/urgency combination
     best_pair = max(impact_urgency_scores.items(), key=lambda x: x[1])[0]
     best_score = impact_urgency_scores[best_pair]
-    
+
     impact, urgency = best_pair
     confidence = best_score / total_weight if total_weight > 0 else 0.0
-    
+
     # Log all scores for debugging
     logger.debug(
         f"Weighted impact/urgency scores: {dict(sorted(impact_urgency_scores.items(), key=lambda x: x[1], reverse=True))}, "
         f"total_weight={total_weight:.3f}, best={best_pair} (score={best_score:.3f}, confidence={confidence:.3f})"
     )
-    
+
     logger.info(
         f"Predicted impact/urgency (weighted) from {len(impact_urgency_data)} signatures: "
         f"impact={impact}, urgency={urgency} "
         f"(confidence: {confidence:.3f}, method: {weight_by})"
     )
-    
+
     return (impact, urgency)
 
 
 def predict_severity_from_evidence(
-    incident_signatures: List[Dict[str, Any]], 
-    alert: Optional[Dict[str, Any]] = None
+    incident_signatures: List[Dict[str, Any]], alert: Optional[Dict[str, Any]] = None
 ) -> Optional[str]:
     """
     Predict severity from matched incident signatures based on impact/urgency.
@@ -503,7 +506,9 @@ def extract_affected_services_from_alert(alert: Dict[str, Any]) -> Optional[List
                 elif aff_svc:
                     affected_services = [str(aff_svc)]
                 if affected_services and len(affected_services) > 0:
-                    logger.info(f"Extracted affected_services from alert labels: {affected_services}")
+                    logger.info(
+                        f"Extracted affected_services from alert labels: {affected_services}"
+                    )
                     return affected_services
         # Also check for 'cmdb_ci' which maps to affected_services per field_mappings.json
         if "cmdb_ci" in labels:
@@ -651,12 +656,12 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     from ingestion.normalizers import clean_description_text
 
     cleaned_desc = clean_description_text(description)
-    
+
     # Truncate to match ingestion limit (1000 chars for description)
     query_text = f"{title} {cleaned_desc}".strip() if cleaned_desc else title.strip()
     if len(query_text) > 1000 + len(title):
         query_text = f"{title} {cleaned_desc[:1000]}".strip()
-    
+
     fulltext_query_text = query_text
 
     labels = alert.get("labels", {}) or {}
@@ -974,7 +979,7 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         affected_services = extract_affected_services_from_evidence(incident_signatures)
         if not affected_services:
             affected_services = extract_affected_services_from_alert(alert)
-        
+
         if affected_services and len(affected_services) > 0:
             triage_output["affected_services"] = affected_services
 
@@ -1220,7 +1225,6 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         policy_band=policy_band,
         policy_decision=policy_decision,
     )
-
 
     result = {
         "incident_id": incident_id,

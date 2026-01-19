@@ -119,6 +119,7 @@ def hybrid_search(
 
     try:
         from retrieval.metrics import record_retrieval
+
         _track_metrics = True
     except ImportError:
         _track_metrics = False
@@ -513,9 +514,9 @@ def triage_retrieval(
     if not runbook_fulltext_query or len(runbook_fulltext_query.strip()) < 10:
         runbook_fulltext_query = fulltext_query
 
-
     try:
         from retrieval.metrics import record_retrieval
+
         _track_metrics = True
     except ImportError:
         _track_metrics = False
@@ -537,9 +538,7 @@ def triage_retrieval(
                 return {"incident_signatures": [], "runbook_metadata": []}
             query_embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
 
-            filter_clause = (
-                ""
-            )
+            filter_clause = ""
 
             incident_sig_query = f"""
         WITH vector_results AS (
@@ -696,13 +695,9 @@ def triage_retrieval(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(
                     service_val, component_val
                 )
-            ) 
-            sig_params.append(
-                str(fulltext_query)
-            ) 
-            sig_params.append(
-                str(fulltext_query)
             )
+            sig_params.append(str(fulltext_query))
+            sig_params.append(str(fulltext_query))
             sig_params.append(limit)
             cur.execute(incident_sig_query, sig_params)
             incident_sig_rows = cur.fetchall()
@@ -827,9 +822,7 @@ def triage_retrieval(
                         }
                     )
 
-            runbook_params = [
-                runbook_fulltext_query
-            ]
+            runbook_params = [runbook_fulltext_query]
             runbook_params.append(limit)
             runbook_meta_query = f"""
             SELECT *

@@ -168,7 +168,6 @@ class FeedbackRepository:
         if not notes:
             return None
 
-
         with get_db_connection_context() as conn:
             cur = conn.cursor()
 
@@ -401,7 +400,7 @@ class FeedbackRepository:
                     len(results),
                     incident_id,
                     len(rows),
-                
+
                 return results
             except Exception as e:
                 # Extract detailed error information from psycopg exceptions

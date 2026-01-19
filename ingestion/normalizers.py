@@ -116,30 +116,30 @@ def _validate_with_schema(data: dict, schema_name: str) -> tuple[bool, list]:
 def clean_description_text(text: Optional[str]) -> str:
     """
     Clean description text by normalizing whitespace and removing formatting artifacts.
-    
+
     The normalization steps are:
     1. Remove extra whitespace (collapse to single space)
     2. Remove multiple periods
     3. Strip leading/trailing whitespace
-    
+
     """
     if not text:
         return ""
-    
+
     # Convert to string if not already
     if not isinstance(text, str):
         text = str(text)
-    
+
     # MATCH normalize_query_text logic exactly:
     # 1. Remove extra whitespace (collapses newlines, tabs, multiple spaces to single space)
     text = re.sub(r"\s+", " ", text)
-    
+
     # 2. Remove multiple consecutive periods (formatting artifacts)
     text = re.sub(r"\.\s*\.+", ".", text)
-    
+
     # 3. Remove leading/trailing whitespace
     text = text.strip()
-    
+
     return text
 
 
@@ -407,7 +407,9 @@ def extract_runbook_steps(
 
     # Strategy 3.5: Colon-terminated headers (CPU fix)
     if not found_steps:
-        header_pattern = r"(?m)^\s*([A-Z][^\n]{3,100}:)\s*\n+(.+?)(?=\n[A-Z][^\n]{3,100}:|\n\n[A-Z]|\Z)"
+        header_pattern = (
+            r"(?m)^\s*([A-Z][^\n]{3,100}:)\s*\n+(.+?)(?=\n[A-Z][^\n]{3,100}:|\n\n[A-Z]|\Z)"
+        )
         for m in re.finditer(header_pattern, content, re.DOTALL):
             found_steps.append(f"{m.group(1)} {m.group(2)}".strip())
 
@@ -471,6 +473,7 @@ def extract_runbook_steps(
         )
 
     return steps
+
 
 def derive_step_title(step_text: str, idx: int) -> str:
     # Prefer colon-style headers (best signal)
