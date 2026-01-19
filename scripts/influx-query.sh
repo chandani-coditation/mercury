@@ -45,13 +45,15 @@ EOM
 )
 
 # ---------- FETCH ----------
-curl -sS \
-  -X POST "$INFLUX_URL/api/v2/query?org=$ORG" \
-  -H "Authorization: Token $INFLUX_TOKEN" \
-  -H "Content-Type: application/vnd.flux" \
-  -H "Accept: application/csv" \
-  --data-binary "$FLUX_QUERY" \
-  -o "$OUTFILE"
+# curl -sS \
+#   -X POST "$INFLUX_URL/api/v2/query?org=$ORG" \
+#   -H "Authorization: Token $INFLUX_TOKEN" \
+#   -H "Content-Type: application/vnd.flux" \
+#   -H "Accept: application/csv" \
+#   --data-binary "$FLUX_QUERY" \
+#   -o "$OUTFILE"
+
+curl -s https://jsonplaceholder.typicode.com/posts -o outputs/sample.json
 
 step_2=$(disk_usage_mb)
 echo "Disk after fetch: ${step_2}MB"
