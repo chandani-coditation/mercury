@@ -1,78 +1,88 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ---------- ENV VALIDATION ----------
-: "${INFLUX_URL:?missing}"
-: "${ORG:?missing}"
-: "${BUCKET:?missing}"
-: "${INFLUX_TOKEN:?missing}"
-
-TICKET_JSON="$1"
-WINDOW_MINUTES="${2:-15}"
-
+#################################
+# CONFIG
+#################################
 OUTPUT_DIR="outputs"
-mkdir -p "$OUTPUT_DIR"
+ARTIFACT_DIR="artifacts"
+TEST_DOWNLOAD_URL="https://speed.hetzner.de/10MB.bin"   # ~10MB test file
 
-disk_usage_mb() {
-  df -Pm . | awk 'NR==2 {print $3}'
+TICKETS_JSON='[
+  {"ticket_id":"INC6052856"},
+  {"ticket_id":"INC6052852"}
+]'
+
+#################################
+# FUNCTIONS
+#################################
+
+get_disk_mb() {
+  df -Pm . | awk 'NR==2 {print $4}'
 }
 
 cleanup() {
-  [[ -f "$OUTFILE" ]] && rm -f "$OUTFILE"
+  echo "🔹 Running final cleanup (EXIT trap)"
+
+  if [[ -n "${OUTFILE:-}" && -f "$OUTFILE" ]]; then
+    rm -f "$OUTFILE"
+    echo "Deleted leftover file: $OUTFILE"
+  fi
 }
+
 trap cleanup EXIT
 
-# ---------- PARSE INPUT ----------
-TICKET_ID=$(jq -r '.ticket_id' <<< "$TICKET_JSON")
-CREATED_AT=$(jq -r '.ticket_created_date' <<< "$TICKET_JSON")
+#################################
+# PREP
+#################################
 
-START=$(date -u -d "$CREATED_AT - ${WINDOW_MINUTES} minutes" +"%Y-%m-%dT%H:%M:%SZ")
-END=$(date -u -d "$CREATED_AT" +"%Y-%m-%dT%H:%M:%SZ")
+mkdir -p "$OUTPUT_DIR" "$ARTIFACT_DIR"
 
-OUTFILE="$OUTPUT_DIR/influx-${TICKET_ID}.csv"
+mapfile -t TICKET_IDS < <(echo "$TICKETS_JSON" | jq -r '.[].ticket_id')
 
-echo "Ticket: $TICKET_ID"
-echo "Time window: $START -> $END"
+#################################
+# MAIN LOOP (SEQUENTIAL)
+#################################
 
-step_1=$(disk_usage_mb)
-echo "Disk before fetch: ${step_1}MB"
+for TICKET_ID in "${TICKET_IDS[@]}"; do
+  echo "======================================"
+  echo "Ticket: $TICKET_ID"
 
-# ---------- FLUX QUERY ----------
-FLUX_QUERY=$(cat <<EOM
-from(bucket: "$BUCKET")
-  |> range(start: time(v: "$START"), stop: time(v: "$END"))
-EOM
-)
+  STEP1_DISK=$(get_disk_mb)
+  echo "Disk before fetch: ${STEP1_DISK}MB"
 
-# ---------- FETCH ----------
-# curl -sS \
-#   -X POST "$INFLUX_URL/api/v2/query?org=$ORG" \
-#   -H "Authorization: Token $INFLUX_TOKEN" \
-#   -H "Content-Type: application/vnd.flux" \
-#   -H "Accept: application/csv" \
-#   --data-binary "$FLUX_QUERY" \
-#   -o "$OUTFILE"
+  OUTFILE="${OUTPUT_DIR}/log-${TICKET_ID}.bin"
+  ARTIFACT_PATH="${ARTIFACT_DIR}/${TICKET_ID}/log.bin"
 
-curl -s https://jsonplaceholder.typicode.com/posts -o outputs/sample.json
+  mkdir -p "$(dirname "$ARTIFACT_PATH")"
 
-step_2=$(disk_usage_mb)
-echo "Disk after fetch: ${step_2}MB"
-echo "Created: $OUTFILE"
+  echo "Fetching logs (test download)..."
+  curl -sSfL "$TEST_DOWNLOAD_URL" -o "$OUTFILE"
 
-if [[ ! -s "$OUTFILE" ]]; then
-  echo "WARNING: No logs fetched for $TICKET_ID"
-fi
+  STEP2_DISK=$(get_disk_mb)
+  echo "Disk after fetch: ${STEP2_DISK}MB"
 
-echo "Artifact path: outputs/$(basename "$OUTFILE")"
+  if [[ ! -s "$OUTFILE" ]]; then
+    echo "WARNING: No logs fetched for $TICKET_ID"
+    continue
+  fi
 
-rm -f "$OUTFILE"
+  echo "Uploading to artifact path: $ARTIFACT_PATH"
+  mv "$OUTFILE" "$ARTIFACT_PATH"
 
-step_3=$(disk_usage_mb)
-echo "Disk after cleanup: ${step_3}MB"
+  echo "Local file deleted"
 
-if (( step_3 >= step_2 )); then
-  echo "ERROR: Disk cleanup failed"
-  exit 1
-fi
+  STEP3_DISK=$(get_disk_mb)
+  echo "Disk after cleanup: ${STEP3_DISK}MB"
 
-echo "Ticket $TICKET_ID completed successfully"
+  if [[ "$STEP3_DISK" -ge "$STEP2_DISK" ]]; then
+    echo "ERROR: Disk cleanup failed for $TICKET_ID"
+    exit 1
+  fi
+
+  echo "✔ Ticket $TICKET_ID processed successfully"
+done
+
+echo "======================================"
+echo "All tickets processed successfully"
+echo "Artifacts stored in: $ARTIFACT_DIR"
