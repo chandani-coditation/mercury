@@ -1,89 +1,107 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-#################################
-# CONFIG
-#################################
 OUTPUT_DIR="outputs"
-ARTIFACT_DIR="artifacts"
-TEST_DOWNLOAD_URL="https://raw.githubusercontent.com/torvalds/linux/master/README"
+OUTFILE=""
+STEP_1_DISKSIZE=0
+STEP_2_DISKSIZE=0
+STEP_3_DISKSIZE=0
 
-
-TICKETS_JSON='[
-  {"ticket_id":"INC6052856"},
-  {"ticket_id":"INC6052852"}
-]'
-
-#################################
-# FUNCTIONS
-#################################
-
-get_disk_mb() {
-  df -Pm . | awk 'NR==2 {print $4}'
-}
-
-cleanup() {
-  echo "🔹 Running final cleanup (EXIT trap)"
-
-  if [[ -n "${OUTFILE:-}" && -f "$OUTFILE" ]]; then
+cleanup_on_exit() {
+  local exit_code=$?
+  
+  if [[ $exit_code -ne 0 ]]; then
+    echo "Exit trap triggered with error (exit code: $exit_code)"
+  fi
+  
+  if [[ -f "$OUTFILE" ]]; then
+    echo "Deleting log file: $OUTFILE"
     rm -f "$OUTFILE"
-    echo "Deleted leftover file: $OUTFILE"
+    
+    STEP_3_DISKSIZE=$(disk_usage_mb)
+    echo "step_3_disksize: ${STEP_3_DISKSIZE}MB"
+    
+    if [[ $STEP_2_DISKSIZE -gt 0 ]]; then
+      disk_freed=$((STEP_2_DISKSIZE - STEP_3_DISKSIZE))
+      echo "Disk freed: ${disk_freed}MB"
+      
+      if [[ $STEP_3_DISKSIZE -gt $STEP_2_DISKSIZE ]]; then
+        echo "WARNING: Disk usage increased after cleanup"
+      fi
+    fi
   fi
+  
+  exit $exit_code
 }
 
-trap cleanup EXIT
+trap cleanup_on_exit EXIT INT TERM
 
-#################################
-# PREP
-#################################
+: "${INFLUX_URL:?missing}"
+: "${ORG:?missing}"
+: "${BUCKET:?missing}"
+: "${INFLUX_TOKEN:?missing}"
 
-mkdir -p "$OUTPUT_DIR" "$ARTIFACT_DIR"
+TICKET_ID="$1"
+CREATED_AT="$2"
+WINDOW_MINUTES="${3:-15}"
 
-mapfile -t TICKET_IDS < <(echo "$TICKETS_JSON" | jq -r '.[].ticket_id')
+if [[ -z "$TICKET_ID" ]]; then
+  echo "ERROR: Ticket ID is required"
+  exit 1
+fi
 
-#################################
-# MAIN LOOP (SEQUENTIAL)
-#################################
+if [[ -z "$CREATED_AT" ]]; then
+  echo "ERROR: Ticket creation date is required"
+  exit 1
+fi
 
-for TICKET_ID in "${TICKET_IDS[@]}"; do
-  echo "======================================"
-  echo "Ticket: $TICKET_ID"
+mkdir -p "$OUTPUT_DIR"
 
-  STEP1_DISK=$(get_disk_mb)
-  echo "Disk before fetch: ${STEP1_DISK}MB"
+disk_usage_mb() {
+  df -Pm . | awk 'NR==2 {print $3}'
+}
 
-  OUTFILE="${OUTPUT_DIR}/log-${TICKET_ID}.bin"
-  ARTIFACT_PATH="${ARTIFACT_DIR}/${TICKET_ID}/log.bin"
+START=$(date -u -d "$CREATED_AT - ${WINDOW_MINUTES} minutes" +"%Y-%m-%dT%H:%M:%SZ")
+END=$(date -u -d "$CREATED_AT" +"%Y-%m-%dT%H:%M:%SZ")
 
-  mkdir -p "$(dirname "$ARTIFACT_PATH")"
+OUTFILE="$OUTPUT_DIR/influx-${TICKET_ID}.csv"
 
-  echo "Fetching logs (test download)..."
-  curl -sSfL "$TEST_DOWNLOAD_URL" -o "$OUTFILE"
+echo "Ticket: $TICKET_ID"
+echo "Time window: $START -> $END"
 
-  STEP2_DISK=$(get_disk_mb)
-  echo "Disk after fetch: ${STEP2_DISK}MB"
+STEP_1_DISKSIZE=$(disk_usage_mb)
+echo "step_1_disksize: ${STEP_1_DISKSIZE}MB"
 
-  if [[ ! -s "$OUTFILE" ]]; then
-    echo "WARNING: No logs fetched for $TICKET_ID"
-    continue
-  fi
+FLUX_QUERY=$(cat <<EOM
+from(bucket: "$BUCKET")
+  |> range(start: time(v: "$START"), stop: time(v: "$END"))
+EOM
+)
 
-  echo "Uploading to artifact path: $ARTIFACT_PATH"
-  mv "$OUTFILE" "$ARTIFACT_PATH"
+echo "Fetching logs from InfluxDB..."
+curl -sS \
+  -X POST "$INFLUX_URL/api/v2/query?org=$ORG" \
+  -H "Authorization: Token $INFLUX_TOKEN" \
+  -H "Content-Type: application/vnd.flux" \
+  -H "Accept: application/csv" \
+  --data-binary "$FLUX_QUERY" \
+  -o "$OUTFILE"
 
-  echo "Local file deleted"
+STEP_2_DISKSIZE=$(disk_usage_mb)
+echo "step_2_disksize: ${STEP_2_DISKSIZE}MB"
+disk_increase=$((STEP_2_DISKSIZE - STEP_1_DISKSIZE))
+echo "Disk increase: ${disk_increase}MB"
 
-  STEP3_DISK=$(get_disk_mb)
-  echo "Disk after cleanup: ${STEP3_DISK}MB"
+if [[ -f "$OUTFILE" ]]; then
+  file_size=$(du -h "$OUTFILE" | cut -f1)
+  echo "Created: $OUTFILE (size: $file_size)"
+else
+  echo "ERROR: Failed to create output file"
+  exit 1
+fi
 
-  if [[ "$STEP3_DISK" -ge "$STEP2_DISK" ]]; then
-    echo "ERROR: Disk cleanup failed for $TICKET_ID"
-    exit 1
-  fi
+if [[ ! -s "$OUTFILE" ]]; then
+  echo "WARNING: No logs fetched for $TICKET_ID (empty file)"
+fi
 
-  echo "✔ Ticket $TICKET_ID processed successfully"
-done
-
-echo "======================================"
-echo "All tickets processed successfully"
-echo "Artifacts stored in: $ARTIFACT_DIR"
+echo "Ticket $TICKET_ID processing completed"
