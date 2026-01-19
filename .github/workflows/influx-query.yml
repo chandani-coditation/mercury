@@ -17,10 +17,11 @@ permissions:
 
 jobs:
   influx-query:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         ticket: ${{ fromJson(inputs.tickets) }}
