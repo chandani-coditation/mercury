@@ -2,13 +2,20 @@ rule_id,rule_type,priority,pattern_type,pattern,value,context_field,notes
 FT-001,failure_type,1,keyword,SQL Agent|sql agent|sentryone,SQL_AGENT_JOB_FAILURE,title|description,SQL Agent job failures
 FT-002,failure_type,2,keyword,database|db,DATABASE_FAILURE,title|description,Database failures (non-SQL Agent)
 FT-003,failure_type,3,keyword,volume is critical|disk|storage,STORAGE_FAILURE,title|description,Storage/Disk failures
-FT-004,failure_type,4,keyword,cpu|memory|performance,PERFORMANCE_FAILURE,title|description,Performance issues
-FT-005,failure_type,5,keyword,network|connection,CONNECTION_FAILURE,title|description,Network/Connection failures
-FT-006,failure_type,6,keyword,timeout,TIMEOUT_FAILURE,title|description,Timeout failures
-FT-007,failure_type,7,keyword,operating system|os|windows,OPERATING_SYSTEM_FAILURE,title|description,OS failures
-FT-008,failure_type,8,keyword,authentication|authorization,AUTHENTICATION_FAILURE,title|description,Auth failures
-FT-009,failure_type,9,exact_match,Monitoring/Alert,UNKNOWN_FAILURE,category,Monitoring alerts without specific failure
-FT-010,failure_type,10,fallback,,UNKNOWN_FAILURE,,Default fallback
+FT-004,failure_type,4,keyword,cpu|memory,PERFORMANCE_FAILURE,title|description,CPU/Memory performance issues
+FT-005,failure_type,5,keyword,bgp|peer|routing,NETWORK_ROUTING_FAILURE,title|description,BGP and routing failures
+FT-006,failure_type,6,keyword,node down|device down|node is down,NETWORK_NODE_DOWN,title|description,Network node/device down
+FT-007,failure_type,7,keyword,interface|port|flap|link down,NETWORK_INTERFACE_FAILURE,title|description,Network interface failures
+FT-008,failure_type,8,keyword,firewall|fw,FIREWALL_FAILURE,title|description,Firewall failures
+FT-009,failure_type,9,keyword,tunnel|vpn,NETWORK_TUNNEL_FAILURE,title|description,VPN/Tunnel failures
+FT-010,failure_type,10,keyword,switch|router,NETWORK_DEVICE_FAILURE,title|description,Network device failures
+FT-011,failure_type,11,keyword,network|connection,CONNECTION_FAILURE,title|description,General network/connection failures
+FT-012,failure_type,12,keyword,timeout,TIMEOUT_FAILURE,title|description,Timeout failures
+FT-013,failure_type,13,keyword,operating system|os|windows,OPERATING_SYSTEM_FAILURE,title|description,OS failures
+FT-014,failure_type,14,keyword,authentication|authorization,AUTHENTICATION_FAILURE,title|description,Auth failures
+FT-015,failure_type,15,keyword,performance,PERFORMANCE_FAILURE,title|description,General performance issues
+FT-016,failure_type,16,exact_match,Monitoring/Alert,UNKNOWN_FAILURE,category,Monitoring alerts without specific failure
+FT-017,failure_type,17,fallback,,UNKNOWN_FAILURE,,Default fallback
 
 
 

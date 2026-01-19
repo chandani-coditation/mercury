@@ -25,6 +25,23 @@ EC-AUTH-003,error_class,3,AUTHENTICATION_FAILURE,fallback,,AUTHENTICATION_ERROR,
 EC-PERF-001,error_class,1,PERFORMANCE_FAILURE,keyword,cpu,CPU_OVERLOAD,description,CPU issues
 EC-PERF-002,error_class,2,PERFORMANCE_FAILURE,keyword,memory|ram,MEMORY_EXHAUSTED,description,Memory issues
 EC-PERF-003,error_class,3,PERFORMANCE_FAILURE,fallback,,PERFORMANCE_DEGRADATION,,Default for performance
+EC-NET-ROUTE-001,error_class,1,NETWORK_ROUTING_FAILURE,keyword,not established|peer.*down|neighbor.*down,BGP_PEER_DOWN,title|description,BGP peer down
+EC-NET-ROUTE-002,error_class,2,NETWORK_ROUTING_FAILURE,keyword,idle|active,BGP_SESSION_IDLE,description,BGP session idle
+EC-NET-ROUTE-003,error_class,3,NETWORK_ROUTING_FAILURE,fallback,,ROUTING_PROTOCOL_ERROR,,Default for routing
+EC-NET-NODE-001,error_class,1,NETWORK_NODE_DOWN,keyword,node down|device down|node is down,DEVICE_UNREACHABLE,title|description,Node/device unreachable
+EC-NET-NODE-002,error_class,2,NETWORK_NODE_DOWN,keyword,rebooted|reboot,DEVICE_REBOOTED,title|description,Device rebooted
+EC-NET-NODE-003,error_class,3,NETWORK_NODE_DOWN,fallback,,DEVICE_OFFLINE,,Default for node down
+EC-NET-INTF-001,error_class,1,NETWORK_INTERFACE_FAILURE,keyword,flap|flapping,INTERFACE_FLAPPING,title|description,Interface flapping
+EC-NET-INTF-002,error_class,2,NETWORK_INTERFACE_FAILURE,keyword,down|link down,INTERFACE_DOWN,title|description,Interface down
+EC-NET-INTF-003,error_class,3,NETWORK_INTERFACE_FAILURE,keyword,error|packet loss,INTERFACE_ERROR,description,Interface errors/packet loss
+EC-NET-INTF-004,error_class,4,NETWORK_INTERFACE_FAILURE,fallback,,INTERFACE_ISSUE,,Default for interface
+EC-NET-FW-001,error_class,1,FIREWALL_FAILURE,keyword,rebooted|reboot,FIREWALL_REBOOTED,title|description,Firewall rebooted
+EC-NET-FW-002,error_class,2,FIREWALL_FAILURE,keyword,down|offline,FIREWALL_OFFLINE,title|description,Firewall down
+EC-NET-FW-003,error_class,3,FIREWALL_FAILURE,fallback,,FIREWALL_ERROR,,Default for firewall
+EC-NET-TUNNEL-001,error_class,1,NETWORK_TUNNEL_FAILURE,keyword,down|traffic,TUNNEL_DOWN,title|description,VPN/Tunnel down
+EC-NET-TUNNEL-002,error_class,2,NETWORK_TUNNEL_FAILURE,fallback,,TUNNEL_ERROR,,Default for tunnel
+EC-NET-DEV-001,error_class,1,NETWORK_DEVICE_FAILURE,keyword,down|offline,NETWORK_DEVICE_DOWN,title|description,Network device down
+EC-NET-DEV-002,error_class,2,NETWORK_DEVICE_FAILURE,fallback,,NETWORK_DEVICE_ERROR,,Default for network device
 EC-GENERIC-001,error_class,10,,keyword,service account.*disabled,SERVICE_ACCOUNT_DISABLED,description,Generic service account
 EC-GENERIC-002,error_class,11,,keyword,permission|access denied,PERMISSION_DENIED,description,Generic permission
 EC-GENERIC-003,error_class,12,,keyword,timeout,TIMEOUT_ERROR,description,Generic timeout
