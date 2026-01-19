@@ -650,7 +650,7 @@ function App() {
                       }}
                     >
                       <strong style={{ color: "#ffc107" }}>
-                        ⚠️ No Evidence Found:
+                        No Evidence Found:
                       </strong>{" "}
                       <span style={{ color: "#e2e8f0" }}>
                         No matching runbooks or historical incidents found in
@@ -828,7 +828,6 @@ function App() {
                               setRatingStatus(prev => ({ ...prev, triage: "success" }));
                             } catch (err) {
                               setRatingStatus(prev => ({ ...prev, triage: "error" }));
-                              console.error("Failed to submit feedback:", err);
                             }
                           }}
                           disabled={ratingStatus.triage === "loading"}
@@ -859,7 +858,6 @@ function App() {
                               setRatingStatus(prev => ({ ...prev, triage: "success" }));
                             } catch (err) {
                               setRatingStatus(prev => ({ ...prev, triage: "error" }));
-                              console.error("Failed to submit feedback:", err);
                             }
                           }}
                           disabled={ratingStatus.triage === "loading"}
@@ -930,7 +928,6 @@ function App() {
                               setRatingStatus(prev => ({ ...prev, resolution: "success" }));
                             } catch (err) {
                               setRatingStatus(prev => ({ ...prev, resolution: "error" }));
-                              console.error("Failed to submit feedback:", err);
                             }
                           }}
                           disabled={ratingStatus.resolution === "loading"}
@@ -961,7 +958,6 @@ function App() {
                               setRatingStatus(prev => ({ ...prev, resolution: "success" }));
                             } catch (err) {
                               setRatingStatus(prev => ({ ...prev, resolution: "error" }));
-                              console.error("Failed to submit feedback:", err);
                             }
                           }}
                           disabled={ratingStatus.resolution === "loading"}

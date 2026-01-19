@@ -136,14 +136,12 @@ const Index = () => {
             }
           }
         } catch (err) {
-          console.error("Failed to load incident from URL:", err);
           setError("Failed to load incident from URL");
         }
       } else if (urlStep || urlView) {
         const stepsRequiringIncident = ["triage", "policy", "resolution", "complete"];
 
         if (urlStep && stepsRequiringIncident.includes(urlStep)) {
-          console.warn(`Step "${urlStep}" requires an incidentId but none found in URL. Redirecting to form.`);
           setCurrentStep("form");
           setCurrentView("workflow");
           updateURL("form", "workflow", "", "triage"); // Form step doesn't have tabs, use default
@@ -290,11 +288,6 @@ const Index = () => {
       setCurrentStep("triage");
       updateURL("triage", currentView, newIncidentId, activeTab);
     } catch (err: any) {
-      console.error("Triage FAILED!");
-      console.error("Error object:", err);
-      console.error("Error message:", err.message);
-      console.error("Error response:", err.response);
-
       let errorMessage = "Failed to process triage. ";
 
       if (err.message.includes("fetch")) {
@@ -331,7 +324,6 @@ const Index = () => {
     );
 
       if (hasResolutionInState) {
-      console.log("Resolution already exists in state, navigating to resolution view");
       setStep("resolution");
       return;
     }
@@ -339,7 +331,6 @@ const Index = () => {
     try {
       const incident = await getIncident(incidentId);
       if (incident.resolution_output) {
-        console.log("Resolution exists in database, loading from DB instead of regenerating");
         const resolution = incident.resolution_output;
         const stepsArray = resolution.steps || [];
         const recommendations = resolution.recommendations || [];
@@ -362,7 +353,6 @@ const Index = () => {
         return;
       }
     } catch (dbCheckErr) {
-      console.warn("Could not check database for existing resolution, will generate new one:", dbCheckErr);
     }
 
     setIsLoading(true);
@@ -409,10 +399,6 @@ const Index = () => {
       setRatingStatus(prev => ({ ...prev, resolution: {} }));
       setStep("resolution");
     } catch (err: any) {
-      console.error("❌ Approval/Resolution FAILED!");
-      console.error("Error:", err);
-      console.error("Error response:", err.response);
-
       let errorMessage = "Failed to approve and generate resolution. ";
 
       if (err.response?.data?.detail) {
@@ -496,7 +482,6 @@ const Index = () => {
         triage: { ...prev.triage, [field]: "success" },
       }));
     } catch (err) {
-      console.warn(`API call failed for triage ${field} feedback, but UI updated:`, err);
       setTimeout(() => {
         setRatingStatus(prev => ({
           ...prev,
@@ -511,9 +496,7 @@ const Index = () => {
     rating: "thumbs_up" | "thumbs_down",
     stepTitle?: string
   ) => {
-    console.log("handleResolutionStepRating called:", { stepIndex, rating, stepTitle, incidentId, hasResolutionData: !!resolutionData });
     if (!incidentId || !resolutionData) {
-      console.warn("Missing incidentId or resolutionData:", { incidentId, hasResolutionData: !!resolutionData });
       return;
     }
 
@@ -537,9 +520,7 @@ const Index = () => {
         ...prev,
         resolution: { ...prev.resolution, [stepIndex]: "success" },
       }));
-      console.log("Rating submitted successfully for step", stepIndex);
     } catch (err) {
-      console.warn(`API call failed for resolution step ${stepIndex} feedback, but UI updated:`, err);
       setTimeout(() => {
         setRatingStatus(prev => ({
           ...prev,
@@ -554,9 +535,7 @@ const Index = () => {
     editedStep: any,
     originalStep: any
   ) => {
-    console.log("handleResolutionStepEdit called:", { stepIndex, editedStep, originalStep, incidentId, hasResolutionData: !!resolutionData });
     if (!incidentId || !resolutionData) {
-      console.warn("Missing incidentId or resolutionData:", { incidentId, hasResolutionData: !!resolutionData });
       throw new Error("Missing incidentId or resolutionData");
     }
 
@@ -595,9 +574,7 @@ const Index = () => {
         setStepEditStatus(prev => ({ ...prev, [stepIndex]: "idle" }));
       }, 2000);
 
-      console.log("Step edit submitted successfully for step", stepIndex);
     } catch (err) {
-      console.error(`Failed to save edited step ${stepIndex}:`, err);
       setStepEditStatus(prev => ({ ...prev, [stepIndex]: "error" }));
       
       setTimeout(() => {
@@ -736,10 +713,6 @@ const Index = () => {
           const generated = res.resolution || res;
           resolutionOutput = generated || null;
         } catch (resErr) {
-          console.error(
-            "Failed to auto-generate resolution for existing incident:",
-            resErr,
-          );
         }
       }
 
@@ -809,10 +782,6 @@ const Index = () => {
           setResolutionRatings(parsedResolutionRatings);
         }
       } catch (feedbackErr) {
-        console.warn(
-          "Failed to load feedback history for incident:",
-          feedbackErr,
-        );
         setFeedbackHistory([]);
       }
 

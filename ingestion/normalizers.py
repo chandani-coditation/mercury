@@ -760,10 +760,9 @@ def _extract_service_component(
 
 def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
     """
-    Convert incident to incident signature (pattern, not raw text).
+    Convert incident to incident signature.
 
-    Per architecture: Signatures represent patterns, not stories.
-    Uses rule-based, deterministic classification with CSV-driven rules.
+    Uses rule-based classification with CSV-driven rules.
 
     Returns:
         IncidentSignature object
@@ -859,8 +858,7 @@ def normalize_incident(
     """
     Convert historical incident to incident signature.
 
-    Per architecture: Incidents are converted to signatures (patterns, not raw text).
-    Returns a minimal document (for metadata) and the signature.
+    Returns a minimal document for metadata and the signature.
 
     Returns:
         Tuple of (Optional[IngestDocument] for metadata, IncidentSignature)
@@ -906,9 +904,6 @@ def normalize_runbook(
     """
     Convert runbook to IngestDocument format and extract atomic steps.
 
-    Per architecture: Runbook metadata goes in documents table,
-    and each step is stored as an atomic chunk.
-
     Returns:
         Tuple of (IngestDocument for metadata, List[RunbookStep] for atomic steps)
     """
@@ -918,7 +913,6 @@ def normalize_runbook(
         # Generate a runbook_id if not provided
         runbook_id = f"RB-{uuid.uuid4().hex[:8].upper()}"
 
-    # PHASE 2: Normalize service/component FIRST, then use normalized values for steps
     normalized_service, normalized_component = normalize_service_component(
         runbook.service, runbook.component
     )

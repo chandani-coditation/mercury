@@ -56,18 +56,12 @@ const StepRatingButtons = ({
   stepTitle?: string;
 }) => {
   if (!onRatingChange) {
-    console.warn("StepRatingButtons: onRatingChange is not provided for step", stepIndex);
     return null;
   }
 
   const handleClick = (ratingType: "thumbs_up" | "thumbs_down") => {
-    console.log(`🔥 Button clicked: ${ratingType} for step ${stepIndex}`, stepTitle);
     if (onRatingChange) {
-      // Call the handler - it will handle optimistic updates and API calls
       onRatingChange(stepIndex, ratingType, stepTitle);
-      console.log("✅ onRatingChange called successfully");
-    } else {
-      console.warn("❌ onRatingChange is not available");
     }
   };
 
@@ -87,7 +81,6 @@ const StepRatingButtons = ({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log("🔥 Button element clicked - thumbs_up");
           handleClick("thumbs_up");
         }}
         disabled={disabled || ratingStatus === "loading"}
@@ -112,7 +105,6 @@ const StepRatingButtons = ({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log("🔥 Button element clicked - thumbs_down");
           handleClick("thumbs_down");
         }}
         disabled={disabled || ratingStatus === "loading"}
@@ -179,16 +171,6 @@ export const ResolutionView = ({
     displayIndex, // Display index (0-based for filtered array)
   }));
 
-  // Debug logging - remove in production
-  if (process.env.NODE_ENV === "development") {
-    console.log("ResolutionView props:", {
-      incidentId,
-      hasOnRatingChange: !!onRatingChange,
-      resolutionRatings,
-      ratingStatus,
-      stepsCount: stepsArray.length,
-    });
-  }
 
   const overallConfidence =
     resolution.overall_confidence || resolution.confidence;
@@ -231,7 +213,6 @@ export const ResolutionView = ({
 
   const handleSaveEdit = async (stepIndex: number, originalStep: any) => {
     if (!onStepEdit) {
-      console.warn("onStepEdit handler not provided");
       return;
     }
 
@@ -242,12 +223,10 @@ export const ResolutionView = ({
 
     try {
       await onStepEdit(stepIndex, editedStep, originalStep);
-      // Only close edit mode if save was successful
       setEditingStepIndex(null);
       setEditedStepContent("");
     } catch (error) {
-      console.error("Failed to save edited step:", error);
-      // Keep edit mode open on error so user can retry
+      // Keep edit mode open on error
     }
   };
 

@@ -108,7 +108,7 @@ def hybrid_search(
         if fulltext_query_text is not None
         else query_text
     )
-    limit = _normalize_limit(limit, default=10)  # Increased default from 5 to 10
+    limit = _normalize_limit(limit, default=10)
     rrf_k = _normalize_limit(rrf_k, default=HybridSearchQueryBuilder.DEFAULT_RRF_K)
 
     if not query_text:
@@ -142,18 +142,8 @@ def hybrid_search(
             service_val = service if service and str(service).strip() else None
             component_val = component if component and str(component).strip() else None
 
-            # PHASE 1: Soft Filters - Remove hard WHERE filters, use as relevance boosters instead
-            # Service/component are now used as score boosters in ORDER BY, not WHERE filters
-            # This allows semantic search to find relevant content even with mismatches
-            # Match quality will be calculated in the final ORDER BY clause
-            filter_clause = (
-                ""  # No hard filters - all results included, ranked by relevance + match boosts
-            )
+            filter_clause = ""
 
-            # Hybrid search query using RRF
-            # Vector search: cosine similarity
-            # Full-text search: ts_rank
-            # RRF: 1/(k + rank) for each result set, then combine
 
             query = f"""
         WITH vector_results AS (
@@ -204,8 +194,6 @@ def hybrid_search(
                 COALESCE(v.doc_title, f.doc_title) as doc_title,
                 COALESCE(v.doc_type, f.doc_type) as doc_type,
                 COALESCE(v.vector_score, 0.0) as vector_score,
-                -- Calculate fulltext_score: use from fulltext_results if available,
-                -- otherwise calculate ts_rank for chunks that have tsv but didn't match the query
                 COALESCE(
                     f.fulltext_score,
                     CASE 
@@ -216,12 +204,8 @@ def hybrid_search(
                     END
                 ) as fulltext_score,
                 COALESCE(v.vector_rank, 999) as vector_rank,
-                -- Calculate fulltext_rank: use from fulltext_results if available,
-                -- otherwise assign a high rank (999) for non-matching chunks
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
-                -- RRF: 1/(k + rank) where k is configurable (default 60)
                 {HybridSearchQueryBuilder.build_rrf_score_formula(vector_weight, fulltext_weight, rrf_k)} as rrf_score,
-                -- PHASE 1: Soft filter boosts for service/component matching
                 {HybridSearchQueryBuilder.build_service_boost_case()} as service_match_boost,
                 {HybridSearchQueryBuilder.build_component_boost_case()} as component_match_boost
             FROM vector_results v
@@ -249,62 +233,30 @@ def hybrid_search(
         LIMIT %s
         """
 
-            # Build params list matching the query placeholders in order
-            # Query placeholders in order (PHASE 1: no hard filters, but soft filter boosts):
-            # 1: embedding (vector_score)
-            # 2: embedding (vector_rank)
-            # 3: embedding (ORDER BY)
-            # 4: limit (vector_results)
-            # 5: text (fulltext_score)
-            # 6: text (fulltext_rank)
-            # 7: text (WHERE - first plainto_tsquery)
-            # 8: text (WHERE - empty check)
-            # 9: text (ORDER BY)
-            # 10: limit (fulltext_results)
-            # 11-16: Service/component match boost params (service_val check, service_val exact, service_val partial, component_val check, component_val exact, component_val partial)
-            # 17-18: fulltext_query for combined_results (ts_rank calculation for non-matching chunks)
-            # 19: final limit
             exec_params = []
 
             # Calculate RRF candidate limit (higher multiplier for better fusion results)
             candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
 
-            # Vector results params
-            exec_params.append(query_embedding_str)  # 1: vector_score embedding
-            exec_params.append(query_embedding_str)  # 2: vector_rank embedding
-            exec_params.append(query_embedding_str)  # 3: ORDER BY embedding
-            exec_params.append(candidate_limit)  # 4: vector_results limit (improved multiplier)
+            exec_params.append(query_embedding_str)
+            exec_params.append(query_embedding_str)
+            exec_params.append(query_embedding_str)
+            exec_params.append(candidate_limit)
 
-            # Fulltext results params - use simpler query for full-text search
-            exec_params.append(fulltext_query)  # 5: fulltext_score text
-            exec_params.append(fulltext_query)  # 6: fulltext_rank text
-            exec_params.append(fulltext_query)  # 7: WHERE text (first plainto_tsquery)
-            exec_params.append(fulltext_query)  # 8: WHERE text (empty check)
-            exec_params.append(fulltext_query)  # 9: ORDER BY text
-            exec_params.append(candidate_limit)  # 10: fulltext_results limit (improved multiplier)
+            exec_params.append(fulltext_query)
+            exec_params.append(fulltext_query)
+            exec_params.append(fulltext_query)
+            exec_params.append(fulltext_query)
+            exec_params.append(fulltext_query)
+            exec_params.append(candidate_limit)
 
-            # Soft filter boost params (using centralized builder)
             exec_params.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
-            )  # 11-16: Service and component boost params
+            )
+            exec_params.append(fulltext_query)
+            exec_params.append(fulltext_query)
+            exec_params.append(limit)
 
-            # Combined results params - fulltext query for calculating ts_rank for non-matching chunks
-            exec_params.append(
-                fulltext_query
-            )  # 17: fulltext_query for length check in combined_results
-            exec_params.append(fulltext_query)  # 18: fulltext_query for ts_rank in combined_results
-
-            # Final limit
-            exec_params.append(limit)  # 19: final limit
-
-            # CRITICAL: Verify we have exactly the right number of parameters
-            # Base: 19 params (10 for search + 6 for soft filter boosts + 2 for combined_results fulltext + 1 for final limit)
-            # Vector: 3 (score, rank, order by) + 1 (limit) = 4
-            # Fulltext: 5 (score, rank, empty check, @@, order by) + 1 (limit) = 6
-            # Service boost: 3 params, Component boost: 3 params = 6
-            # Combined results fulltext: 2 params (length check, ts_rank)
-            # Final limit: 1
-            # Total: 4 + 6 + 6 + 2 + 1 = 19
             expected_params = 19
 
             if len(exec_params) != expected_params:
@@ -469,11 +421,9 @@ def triage_retrieval(
     fulltext_query_text: Optional[str] = None,
 ) -> Dict[str, List[Dict]]:
     """
-    Specialized retrieval for triage agent.
+    Retrieval for triage agent.
 
-    Per architecture: Triage agent may ONLY retrieve:
-    - Incident signatures (chunks with incident_signature_id in metadata)
-    - Runbook metadata (documents with doc_type='runbook', NOT runbook steps)
+    Returns incident signatures and runbook metadata only.
 
     Args:
         query_text: Search query
@@ -500,13 +450,9 @@ def triage_retrieval(
         """Clean query for runbook full-text search: remove URLs and IPs, keep words"""
         if not text:
             return ""
-        # Remove URLs
         cleaned = re.sub(r"https?://\S+|www\.\S+", "", text)
-        # Remove IP addresses
         cleaned = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "", cleaned)
-        # Remove special characters except spaces and hyphens
         cleaned = re.sub(r"[^a-zA-Z0-9\s-]", " ", cleaned)
-        # Replace multiple spaces with single space
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned
 
@@ -525,11 +471,9 @@ def triage_retrieval(
         cur = conn.cursor()
 
         try:
-            # Normalize service and component
             service_val = service if service and str(service).strip() else None
             component_val = component if component and str(component).strip() else None
 
-            # Generate query embedding for vector similarity search
             query_embedding = embed_text(query_text)
             if query_embedding is None:
                 logger.error(
@@ -546,7 +490,6 @@ def triage_retrieval(
                 s.id,
                 s.source_document_id as document_id,
                 0 as chunk_index,
-                -- Create content from signature fields for display
                 CONCAT(
                     'Failure Type: ', COALESCE(s.failure_type, ''),
                     E'\\nError Class: ', COALESCE(s.error_class, ''),
@@ -554,7 +497,6 @@ def triage_retrieval(
                     E'\\nService: ', COALESCE(s.service, ''),
                     E'\\nComponent: ', COALESCE(s.component, '')
                 ) as content,
-                -- Create metadata JSON from signature fields
                 jsonb_build_object(
                     'incident_signature_id', s.incident_signature_id,
                     'failure_type', s.failure_type,
@@ -627,8 +569,6 @@ def triage_retrieval(
                 COALESCE(v.doc_title, f.doc_title) as doc_title,
                 COALESCE(v.doc_type, f.doc_type) as doc_type,
                 COALESCE(v.vector_score, 0.0) as vector_score,
-                -- Calculate fulltext_score: use from fulltext_results if available,
-                -- otherwise calculate ts_rank for incident signatures that have tsv but didn't match the query
                 COALESCE(
                     f.fulltext_score,
                     CASE 
@@ -639,14 +579,9 @@ def triage_retrieval(
                     END
                 ) as fulltext_score,
                 COALESCE(v.vector_rank, 999) as vector_rank,
-                -- Calculate fulltext_rank: use from fulltext_results if available,
-                -- otherwise assign a high rank (999) for non-matching signatures
                 COALESCE(f.fulltext_rank, 999) as fulltext_rank,
                 {HybridSearchQueryBuilder.build_rrf_score_formula(vector_weight, fulltext_weight, rrf_k)} as rrf_score,
-                -- PHASE 1: Soft filter boosts for service/component matching
-                -- Service match boost: checks both service and affected_service fields
                 {HybridSearchQueryBuilder.build_service_boost_case_dual()} as service_match_boost,
-                -- Component match boost: allows NULL component boost for incident signatures
                 {HybridSearchQueryBuilder.build_component_boost_case(allow_null_boost=True)} as component_match_boost
             FROM vector_results v
             FULL OUTER JOIN fulltext_results f ON v.id = f.id
@@ -673,24 +608,19 @@ def triage_retrieval(
             LIMIT %s
             """
 
-            # Calculate RRF candidate limit (higher multiplier for better fusion results)
             candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
 
-            # Build params for incident signatures
             sig_params = []
-            # Vector CTE
-            sig_params.append(query_embedding_str)  # 1: vector_score
-            sig_params.append(query_embedding_str)  # 2: vector_rank
-            sig_params.append(query_embedding_str)  # 3: vector ORDER BY
-            sig_params.append(candidate_limit)  # 4: vector limit (improved multiplier)
-            # Fulltext CTE - use simpler query for full-text search
-            sig_params.append(str(fulltext_query))  # 5: fulltext_score
-            sig_params.append(str(fulltext_query))  # 6: fulltext_rank
-            sig_params.append(str(fulltext_query))  # 7: fulltext WHERE (first plainto_tsquery)
-            sig_params.append(str(fulltext_query))  # 8: fulltext WHERE (empty check)
-            sig_params.append(str(fulltext_query))  # 9: fulltext ORDER BY
-            sig_params.append(candidate_limit)  # 10: fulltext limit (improved multiplier)
-            # Soft filter boost params (using centralized builder for dual service matching)
+            sig_params.append(query_embedding_str)
+            sig_params.append(query_embedding_str)
+            sig_params.append(query_embedding_str)
+            sig_params.append(candidate_limit)
+            sig_params.append(str(fulltext_query))
+            sig_params.append(str(fulltext_query))
+            sig_params.append(str(fulltext_query))
+            sig_params.append(str(fulltext_query))
+            sig_params.append(str(fulltext_query))
+            sig_params.append(candidate_limit)
             sig_params.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params_dual_service(
                     service_val, component_val
@@ -727,11 +657,10 @@ def triage_retrieval(
                     metadata = row["metadata"] if isinstance(row["metadata"], dict) else {}
                     source_ids = metadata.get("source_incident_ids", [])
 
-                    # Enhance content with original incident descriptions
                     enhanced_content = row["content"]
                     if source_ids and incident_descriptions:
                         desc_parts = []
-                        for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
+                        for inc_id in source_ids[:2]:
                             if inc_id in incident_descriptions:
                                 desc = incident_descriptions[inc_id]
                                 if desc.get("title"):
@@ -772,11 +701,10 @@ def triage_retrieval(
                     metadata = row[4] if isinstance(row[4], dict) else {}
                     source_ids = metadata.get("source_incident_ids", [])
 
-                    # Enhance content with original incident descriptions
                     enhanced_content = row[3]
                     if source_ids and incident_descriptions:
                         desc_parts = []
-                        for inc_id in source_ids[:2]:  # Show up to 2 incident descriptions
+                        for inc_id in source_ids[:2]:
                             if inc_id in incident_descriptions:
                                 desc = incident_descriptions[inc_id]
                                 if desc.get("title"):
@@ -794,7 +722,6 @@ def triage_retrieval(
                         if desc_parts:
                             enhanced_content = row[3] + "\n\n" + "\n".join(desc_parts)
 
-                    # Handle tuple result - check if we have soft filter boost columns
                     row_len = len(row)
                     incident_signatures.append(
                         {
@@ -856,8 +783,7 @@ def triage_retrieval(
             runbook_params_extended.extend(
                 HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
             )
-            # Final limit
-            runbook_params_extended.append(limit)  # 10: limit
+            runbook_params_extended.append(limit)
             cur.execute(runbook_meta_query, runbook_params_extended)
             runbook_rows = cur.fetchall()
 
@@ -922,7 +848,6 @@ def triage_retrieval(
             if _track_metrics:
                 retrieval_time_ms = (time.time() - start_time) * 1000
                 try:
-                    # Combine all results for metrics
                     all_results = incident_signatures + runbook_metadata
                     record_retrieval(
                         results=all_results,

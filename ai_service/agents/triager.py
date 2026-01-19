@@ -37,19 +37,11 @@ def derive_severity_from_impact_urgency(impact: str, urgency: str) -> str:
         # Create key (e.g., "3-3", "1-1")
         key = f"{impact_val}-{urgency_val}"
 
-        # Look up in mapping
         severity = mapping.get(key, default)
-
-        # Log for debugging severity mapping issues
-        logger.info(
-            f"Severity mapping: impact='{impact}' -> '{impact_val}', "
-            f"urgency='{urgency}' -> '{urgency_val}', key='{key}' -> severity='{severity}'"
-        )
 
         if severity == default and key not in mapping:
             logger.warning(
-                f"Severity mapping key '{key}' not found in config. Available keys: {list(mapping.keys())[:10]}... "
-                f"Using default '{default}'"
+                f"Severity mapping key '{key}' not found in config. Using default '{default}'"
             )
 
         return severity
@@ -82,7 +74,6 @@ def predict_routing_from_evidence(
         Predicted assignment_group from signatures, or None if none found
     """
     if not incident_signatures:
-        logger.debug("No incident signatures provided for routing prediction")
         return None
 
     # Load prediction config
@@ -120,10 +111,6 @@ def predict_routing_from_evidence(
         )
         return None
 
-    # Use weighted prediction if enabled
-    logger.info(
-        f"Routing prediction: method={prediction_method}, data_count={len(assignment_group_data)}, min_signatures={weighted_config.get('min_signatures', 2)}"
-    )
     if prediction_method == "weighted":
         min_signatures = weighted_config.get("min_signatures", 2)
         if len(assignment_group_data) >= min_signatures:
@@ -214,12 +201,6 @@ def _predict_routing_weighted(
     # Calculate confidence
     confidence = best_score / total_weight if total_weight > 0 else 0.0
 
-    # Check minimum confidence threshold
-    # Log all scores for debugging
-    logger.debug(
-        f"Weighted prediction scores: {dict(sorted(assignment_group_scores.items(), key=lambda x: x[1], reverse=True))}, "
-        f"total_weight={total_weight:.3f}, best={best_ag} (score={best_score:.3f}, confidence={confidence:.3f})"
-    )
 
     if confidence >= min_confidence:
         logger.info(
@@ -380,12 +361,6 @@ def _predict_impact_urgency_weighted(
 
     impact, urgency = best_pair
     confidence = best_score / total_weight if total_weight > 0 else 0.0
-
-    # Log all scores for debugging
-    logger.debug(
-        f"Weighted impact/urgency scores: {dict(sorted(impact_urgency_scores.items(), key=lambda x: x[1], reverse=True))}, "
-        f"total_weight={total_weight:.3f}, best={best_pair} (score={best_score:.3f}, confidence={confidence:.3f})"
-    )
 
     logger.info(
         f"Predicted impact/urgency (weighted) from {len(impact_urgency_data)} signatures: "

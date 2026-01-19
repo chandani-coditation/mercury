@@ -1,13 +1,4 @@
-"""Resolution Agent - New Format (UI-Ready Steps).
-
-Per architecture: Resolution agent:
-- Takes structured triage output ONLY
-- Retrieves runbook steps and historical resolutions
-- Filters out documentation/context steps
-- Orders steps by logical flow (investigation → mitigation → resolution → verification)
-- Transforms steps with titles and clean actions
-- Outputs UI-ready format with steps array
-"""
+"""Resolution Agent - Generates UI-ready resolution steps."""
 
 from typing import Dict, Any, List
 import json
@@ -23,13 +14,6 @@ from retrieval.resolution_retrieval import (
     get_step_success_stats,
 )
 from ai_service.ranking import rank_steps
-
-# from ai_service.llm_client import _call_llm_with_retry
-# from ai_service.core import get_llm_handler
-# from ai_service.prompts import (
-#     RESOLUTION_RANKING_PROMPT_TEMPLATE,
-#     RESOLUTION_RANKING_SYSTEM_PROMPT_DEFAULT,
-# )
 from ai_service.step_transformation import (
     filter_steps,
     order_steps_by_type,

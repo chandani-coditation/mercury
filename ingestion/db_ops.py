@@ -14,7 +14,7 @@ from ingestion.chunker import add_chunk_header
 from ingestion.models import RunbookStep, IncidentSignature
 
 
-# Lazy import to avoid circular dependency
+
 def get_logger(name):
     from ai_service.core import get_logger as _get_logger
 
