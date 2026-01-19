@@ -81,6 +81,7 @@ def predict_routing_from_evidence(
     prediction_method = pred_config.get("prediction", {}).get("method", "weighted")
     weighted_config = pred_config.get("prediction", {}).get("weighted", {})
     fallback_config = pred_config.get("prediction", {}).get("fallback", {})
+    weights_config = pred_config.get("prediction", {}).get("weights", {})
 
     # Extract assignment groups with metadata
     assignment_group_data = []
@@ -114,7 +115,7 @@ def predict_routing_from_evidence(
     if prediction_method == "weighted":
         min_signatures = weighted_config.get("min_signatures", 2)
         if len(assignment_group_data) >= min_signatures:
-            predicted = _predict_routing_weighted(assignment_group_data, weighted_config)
+            predicted = _predict_routing_weighted(assignment_group_data, weighted_config, weights_config)
             if predicted:
                 return predicted
 
@@ -136,13 +137,12 @@ def predict_routing_from_evidence(
 
 
 def _predict_routing_weighted(
-    assignment_group_data: List[Dict[str, Any]], weighted_config: Dict[str, Any]
+    assignment_group_data: List[Dict[str, Any]], weighted_config: Dict[str, Any], weights_config: Dict[str, Any]
 ) -> Optional[str]:
     """Weighted prediction for routing using rank/score."""
     weight_by = weighted_config.get("weight_by", "rank")
     top_k = weighted_config.get("top_k", 5)
     min_confidence = weighted_config.get("min_confidence", 0.3)
-    weights_config = weighted_config.get("weights", {})
 
     # Limit to top_k
     assignment_group_data = assignment_group_data[:top_k]
@@ -240,6 +240,7 @@ def predict_impact_urgency_from_evidence(
     pred_config = get_triage_prediction_config()
     impact_urgency_config = pred_config.get("prediction", {}).get("impact_urgency", {})
     weighted_config = pred_config.get("prediction", {}).get("weighted", {})
+    weights_config = pred_config.get("prediction", {}).get("weights", {})
 
     # Extract impact/urgency pairs with metadata
     impact_urgency_data = []
@@ -276,7 +277,7 @@ def predict_impact_urgency_from_evidence(
     if impact_urgency_config.get("weight_by_rank", True):
         min_signatures = weighted_config.get("min_signatures", 2)
         if len(impact_urgency_data) >= min_signatures:
-            predicted = _predict_impact_urgency_weighted(impact_urgency_data, weighted_config)
+            predicted = _predict_impact_urgency_weighted(impact_urgency_data, weighted_config, weights_config)
             if predicted:
                 return predicted
 
@@ -299,12 +300,11 @@ def predict_impact_urgency_from_evidence(
 
 
 def _predict_impact_urgency_weighted(
-    impact_urgency_data: List[Dict[str, Any]], weighted_config: Dict[str, Any]
+    impact_urgency_data: List[Dict[str, Any]], weighted_config: Dict[str, Any], weights_config: Dict[str, Any]
 ) -> Optional[tuple[str, str]]:
     """Weighted prediction for impact/urgency using rank/score."""
     weight_by = weighted_config.get("weight_by", "rank")
     top_k = weighted_config.get("top_k", 5)
-    weights_config = weighted_config.get("weights", {})
 
     # Limit to top_k
     impact_urgency_data = impact_urgency_data[:top_k]
