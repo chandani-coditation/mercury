@@ -6,7 +6,8 @@ set -euo pipefail
 #################################
 OUTPUT_DIR="outputs"
 ARTIFACT_DIR="artifacts"
-TEST_DOWNLOAD_URL="https://speed.hetzner.de/10MB.bin"   # ~10MB test file
+TEST_DOWNLOAD_URL="https://raw.githubusercontent.com/torvalds/linux/master/README"
+
 
 TICKETS_JSON='[
   {"ticket_id":"INC6052856"},
