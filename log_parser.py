@@ -434,7 +434,7 @@ class LogParser:
         ticket_id: Optional[str] = None,
         hostname: Optional[str] = None
     ) -> str:
-        """Create output file with extracted important logs.
+        """Create output CSV file with extracted important logs.
         
         Args:
             logs: List of important log entries
@@ -459,10 +459,10 @@ class LogParser:
         def _level_from_severity(sev: str) -> str:
             sev_l = (sev or "").lower()
             if sev_l in ["critical", "alert", "emergency", "error", "err", "warning", "warn"]:
-                return "high"
-            return "normal"
+                return "HIGH"
+            return "NORMAL"
 
-        # --- Build a short, meaningful filename: TICKET-YYYYMMDD_HHMM-host-level.txt
+        # --- Build a short, meaningful filename: TICKET-YYYYMMDD_HHMM-host-level.csv
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         tid = (ticket_id or "UNKNOWN").upper()
 
@@ -480,75 +480,59 @@ class LogParser:
             return self.SEVERITY_LEVELS.get(sev.lower(), 999)
 
         top_sev = min(severity_counts.keys(), key=_sev_rank) if severity_counts else "unknown"
-        top_level = _level_from_severity(top_sev)
+        top_level = _level_from_severity(top_sev).lower()
 
-        filename = f"{tid}-{ts}-{host_short}-{top_level}.txt"
+        filename = f"{tid}-{ts}-{host_short}-{top_level}.csv"
         
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, filename)
         
-        # Write logs to file
+        # CSV column headers
+        csv_columns = [
+            'ticket_id', 'timestamp', 'severity', 'level', 'hostname', 'host', 
+            'appname', 'reason_included', 'log_message'
+        ]
+        
+        # Write logs to CSV file
         try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                # Write header
-                f.write("=" * 80 + "\n")
-                f.write(f"LOG PARSER OUTPUT\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Ticket ID: {ticket_id or 'UNKNOWN'}\n")
-                f.write(f"Total Important Logs Found: {len(logs)}\n")
-                f.write("=" * 80 + "\n\n")
+            with open(output_path, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=csv_columns)
+                writer.writeheader()
                 
-                # Group by severity
-                grouped_logs = self.group_logs_by_severity(logs)
-                
-                # Write logs grouped by severity (most critical first)
-                severity_order = ['critical', 'alert', 'error', 'err', 'warning', 'warn', 'notice', 'info', 'debug', 'unknown']
-                
-                for severity in severity_order:
-                    if severity in grouped_logs:
-                        f.write(f"\n{'=' * 80}\n")
-                        f.write(f"SEVERITY: {severity.upper()} ({len(grouped_logs[severity])} entries)\n")
-                        f.write(f"{'=' * 80}\n\n")
-                        
-                        for log in grouped_logs[severity]:
-                            # Format matched pattern for better readability
-                            pattern = log.get('matched_pattern', 'N/A')
-                            if pattern and pattern != 'N/A':
-                                # Clean up pattern display
-                                if pattern.startswith('severity:'):
-                                    pattern_display = f"Severity-based ({pattern.replace('severity:', '')})"
-                                elif pattern.startswith('\\b') or pattern.startswith('r\''):
-                                    # Extract readable pattern name
-                                    pattern_clean = pattern.replace('\\b', '').replace('r\'', '').replace('\'', '')
-                                    pattern_display = f"Error pattern: {pattern_clean}"
-                                elif pattern == 'keyword_match':
-                                    pattern_display = "Important keyword detected"
-                                elif pattern == 'normal_log':
-                                    pattern_display = "Normal log (included with --include-all)"
-                                else:
-                                    pattern_display = pattern
-                            else:
-                                pattern_display = 'N/A'
-                            
-                            f.write(f"Timestamp: {log.get('timestamp', 'N/A')}\n")
-                            f.write(f"Hostname: {log.get('hostname', 'N/A')}\n")
-                            f.write(f"Host: {log.get('host', 'N/A')}\n")
-                            f.write(f"App/Service: {log.get('appname', 'N/A')}\n")
-                            # Show a simple, easy-to-read level instead of syslog severity
-                            raw_sev = (log.get("severity") or "unknown")
-                            level = "HIGH" if _level_from_severity(raw_sev) == "high" else "NORMAL"
-                            f.write(f"Level: {level}\n")
-                            f.write(f"Reason Included: {pattern_display}\n")
-                            f.write(f"Log Message:\n{log.get('value', 'N/A')}\n")
-                            f.write("-" * 80 + "\n\n")
-                
-                # Write summary
-                f.write("\n" + "=" * 80 + "\n")
-                f.write("SUMMARY\n")
-                f.write("=" * 80 + "\n")
-                for severity, count in sorted(severity_counts.items()):
-                    f.write(f"{severity.upper()}: {count}\n")
+                for log in logs:
+                    # Format matched pattern for better readability
+                    pattern = log.get('matched_pattern', 'N/A')
+                    if pattern and pattern != 'N/A':
+                        if pattern.startswith('severity:'):
+                            pattern_display = f"Severity-based ({pattern.replace('severity:', '')})"
+                        elif pattern.startswith('\\b') or pattern.startswith('r\''):
+                            pattern_clean = pattern.replace('\\b', '').replace('r\'', '').replace('\'', '')
+                            pattern_display = f"Error pattern: {pattern_clean}"
+                        elif pattern == 'keyword_match':
+                            pattern_display = "Important keyword detected"
+                        elif pattern == 'normal_log' or pattern == 'all_logs':
+                            pattern_display = "Included with --include-all"
+                        else:
+                            pattern_display = pattern
+                    else:
+                        pattern_display = 'N/A'
+                    
+                    raw_sev = (log.get("severity") or "unknown")
+                    level = _level_from_severity(raw_sev)
+                    
+                    row = {
+                        'ticket_id': log.get('ticket_id', ticket_id or 'UNKNOWN'),
+                        'timestamp': log.get('timestamp', 'N/A'),
+                        'severity': raw_sev,
+                        'level': level,
+                        'hostname': log.get('hostname', 'N/A'),
+                        'host': log.get('host', 'N/A'),
+                        'appname': log.get('appname', 'N/A'),
+                        'reason_included': pattern_display,
+                        'log_message': log.get('value', 'N/A')
+                    }
+                    writer.writerow(row)
         
         except Exception as e:
             print(f"Error writing output file: {str(e)}", file=sys.stderr)
