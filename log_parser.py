@@ -75,12 +75,13 @@ class LogParser:
             re.compile(pattern, self.flags) for pattern in self.ERROR_PATTERNS
         ]
     
-    def is_important_log(self, log_message: str, severity: Optional[str] = None) -> Tuple[bool, Optional[str]]:
-        """Check if a log entry is important (error/exception/warning).
+    def is_important_log(self, log_message: str, severity: Optional[str] = None, include_warnings: bool = False) -> Tuple[bool, Optional[str]]:
+        """Check if a log entry is important (error/exception only by default).
         
         Args:
             log_message: The log message to check
             severity: Severity level of the log
+            include_warnings: Whether to include warnings as important
             
         Returns:
             Tuple of (is_important, matched_pattern)
@@ -88,12 +89,14 @@ class LogParser:
         if not log_message:
             return False, None
         
-        # Check severity level first
+        # Check severity level first - only critical/alert/error by default
         if severity:
             severity_lower = severity.lower()
-            if severity_lower in ['critical', 'alert', 'error', 'err']:
+            # Always include critical, alert, error
+            if severity_lower in ['critical', 'alert', 'error', 'err', 'emergency']:
                 return True, f"severity:{severity_lower}"
-            if severity_lower in ['warning', 'warn']:
+            # Only include warnings if explicitly requested
+            if include_warnings and severity_lower in ['warning', 'warn']:
                 return True, f"severity:{severity_lower}"
         
         # Check for error patterns in message
@@ -102,38 +105,6 @@ class LogParser:
                 return True, pattern.pattern
         
         return False, None
-    
-    def should_include_log(self, log_message: str, severity: Optional[str] = None) -> bool:
-        """Determine if a log should be included in output.
-        This is more lenient than is_important_log - includes warnings and notices
-        that might contain useful information.
-        
-        Args:
-            log_message: The log message to check
-            severity: Severity level of the log
-            
-        Returns:
-            True if log should be included
-        """
-        # Always include errors, exceptions, warnings
-        is_important, _ = self.is_important_log(log_message, severity)
-        if is_important:
-            return True
-        
-        # Include notices and info if they contain important keywords
-        if severity and severity.lower() in ['notice', 'info']:
-            # Check for important keywords even in notices
-            important_keywords = [
-                'failed', 'failure', 'timeout', 'denied', 'refused',
-                'unable', 'cannot', 'unavailable', 'down', 'offline',
-                'restart', 'reload', 'config', 'change', 'update'
-            ]
-            log_lower = log_message.lower()
-            for keyword in important_keywords:
-                if keyword in log_lower:
-                    return True
-        
-        return False
     
     def extract_ticket_id(self, file_path: str) -> Optional[str]:
         """Extract ticket ID from file path.
@@ -178,61 +149,49 @@ class LogParser:
                     if not any(row.values()):
                         continue
                     
-                    # Only process message field entries
-                    field = row.get('_field', '').strip()
+                    # Only process message field entries (null-safe)
+                    field = (row.get('_field') or '').strip()
                     if field != 'message':
                         continue
                     
-                    # Extract log data
+                    # Extract log data (null-safe: row.get() may return None)
                     log_entry = {
                         'ticket_id': ticket_id,
-                        'timestamp': row.get('_time', '').strip(),
-                        'value': row.get('_value', '').strip(),
-                        'severity': row.get('severity', '').strip(),
-                        'hostname': row.get('hostname', '').strip(),
-                        'host': row.get('host', '').strip(),
-                        'appname': row.get('appname', '').strip(),
-                        'facility': row.get('facility', '').strip(),
-                        'measurement': row.get('_measurement', '').strip(),
-                        'start_time': row.get('_start', '').strip(),
-                        'stop_time': row.get('_stop', '').strip(),
+                        'timestamp': (row.get('_time') or '').strip(),
+                        'value': (row.get('_value') or '').strip(),
+                        'severity': (row.get('severity') or '').strip(),
+                        'hostname': (row.get('hostname') or '').strip(),
+                        'host': (row.get('host') or '').strip(),
+                        'appname': (row.get('appname') or '').strip(),
+                        'facility': (row.get('facility') or '').strip(),
+                        'measurement': (row.get('_measurement') or '').strip(),
+                        'start_time': (row.get('_start') or '').strip(),
+                        'stop_time': (row.get('_stop') or '').strip(),
                     }
                     
                     # Extract actual log message from _value
                     log_message = log_entry['value']
                     
-                    # Always check for error patterns first (even with --include-all)
-                    is_important, matched_pattern = self.is_important_log(
-                        log_message, log_entry['severity']
-                    )
-                    
-                    # Also check if we should include it (more lenient check)
-                    should_include = self.should_include_log(
-                        log_message, log_entry['severity']
-                    )
-                    
-                    # Include all logs if --include-all flag is set
+                    # Get flags
                     include_all = getattr(self, 'include_all', False)
+                    include_warnings = getattr(self, 'include_warnings', False)
                     
-                    if is_important or should_include or include_all:
+                    # Check if this is an actual error/exception
+                    is_important, matched_pattern = self.is_important_log(
+                        log_message, log_entry['severity'], include_warnings=include_warnings
+                    )
+                    
+                    # Only include if it's truly important OR include_all is set
+                    if is_important or include_all:
                         log_entry['is_important'] = True
                         
-                        # Determine matched pattern - prioritize actual error patterns
+                        # Determine matched pattern
                         if matched_pattern:
-                            # Found an actual error pattern
                             log_entry['matched_pattern'] = matched_pattern
-                        elif should_include and not is_important:
-                            # Matched keywords but not error patterns
-                            log_entry['matched_pattern'] = 'keyword_match'
                         elif include_all:
-                            # Included because of --include-all, but check severity
-                            severity = log_entry.get('severity', '').lower()
-                            if severity in ['critical', 'alert', 'error', 'err', 'warning', 'warn']:
-                                log_entry['matched_pattern'] = f'severity:{severity}'
-                            else:
-                                log_entry['matched_pattern'] = 'normal_log'
+                            log_entry['matched_pattern'] = 'all_logs'
                         else:
-                            log_entry['matched_pattern'] = 'keyword_match'
+                            log_entry['matched_pattern'] = 'error_pattern'
                         
                         logs.append(log_entry)
         
@@ -299,25 +258,18 @@ class LogParser:
                         service = ''
                         severity = None
                     
-                    # Always check for error patterns first (even with --include-all)
-                    is_important, matched_pattern = self.is_important_log(message, severity)
-                    should_include = self.should_include_log(message, severity)
+                    # Get flags
                     include_all = getattr(self, 'include_all', False)
+                    include_warnings = getattr(self, 'include_warnings', False)
                     
-                    if is_important or should_include or include_all:
-                        # Determine matched pattern - prioritize actual error patterns
-                        if matched_pattern:
-                            pattern_display = matched_pattern
-                        elif should_include and not is_important:
-                            pattern_display = 'keyword_match'
-                        elif include_all:
-                            severity_lower = (severity or 'unknown').lower()
-                            if severity_lower in ['critical', 'alert', 'error', 'err', 'warning', 'warn']:
-                                pattern_display = f'severity:{severity_lower}'
-                            else:
-                                pattern_display = 'normal_log'
-                        else:
-                            pattern_display = 'keyword_match'
+                    # Check if this is an actual error/exception
+                    is_important, matched_pattern = self.is_important_log(
+                        message, severity, include_warnings=include_warnings
+                    )
+                    
+                    # Only include if it's truly important OR include_all is set
+                    if is_important or include_all:
+                        pattern_display = matched_pattern if matched_pattern else ('all_logs' if include_all else 'error_pattern')
                         
                         log_entry = {
                             'ticket_id': ticket_id,
@@ -392,10 +344,12 @@ class LogParser:
                 service = source or ""
                 severity = None
 
-            is_important, matched_pattern = self.is_important_log(message, severity)
-            should_include = self.should_include_log(message, severity)
+            include_warnings = getattr(self, 'include_warnings', False)
+            is_important, matched_pattern = self.is_important_log(
+                message, severity, include_warnings=include_warnings
+            )
 
-            if is_important or should_include or include_all:
+            if is_important or include_all:
                 log_entry = {
                     "ticket_id": ticket_id,
                     "timestamp": timestamp,
@@ -408,7 +362,7 @@ class LogParser:
                     "measurement": "syslog",
                     "is_important": True,
                     "matched_pattern": matched_pattern
-                    or ("all_logs" if include_all else "keyword_match"),
+                    or ("all_logs" if include_all else "error_pattern"),
                     "line_number": line_num,
                     "source": source,
                 }
@@ -513,7 +467,7 @@ class LogParser:
         tid = (ticket_id or "UNKNOWN").upper()
 
         # prefer a hostname from data; fall back to provided hostname arg
-        hostnames = [log.get("hostname", "").strip() for log in logs if log.get("hostname", "").strip()]
+        hostnames = [(log.get("hostname") or "").strip() for log in logs if (log.get("hostname") or "").strip()]
         host_raw = hostnames[0] if hostnames else (hostname or "")
         host_short = _safe_token(host_raw.split(".")[0] if host_raw else "", max_len=25) or "host"
 
@@ -687,6 +641,12 @@ Examples:
     )
     
     parser.add_argument(
+        '--include-warnings',
+        action='store_true',
+        help='Include warning-level logs in addition to errors (default: only errors)'
+    )
+    
+    parser.add_argument(
         '--verbose',
         action='store_true',
         help='Enable verbose output'
@@ -701,6 +661,7 @@ Examples:
     # Initialize parser
     log_parser = LogParser(case_sensitive=args.case_sensitive)
     log_parser.include_all = args.include_all
+    log_parser.include_warnings = getattr(args, 'include_warnings', False)
     
     all_logs = []
     processed_files = []
