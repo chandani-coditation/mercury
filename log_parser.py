@@ -75,12 +75,18 @@ class LogParser:
             re.compile(pattern, self.flags) for pattern in self.ERROR_PATTERNS
         ]
     
-    def is_important_log(self, log_message: str, severity: Optional[str] = None, include_warnings: bool = False) -> Tuple[bool, Optional[str]]:
-        """Check if a log entry is important (error/exception only by default).
+    def is_important_log(self, log_message: str, severity: Optional[str] = None, 
+                         level: Optional[str] = None, include_warnings: bool = False) -> Tuple[bool, Optional[str]]:
+        """Check if a log entry is important based on parsing rules.
+        
+        Rules:
+        1. Severity in [err, warning, exception] OR level in [HIGH, CRITICAL]
+        2. OR message contains keywords: error, exception, failed, failure, timeout, fatal, crash, refused
         
         Args:
             log_message: The log message to check
-            severity: Severity level of the log
+            severity: Severity level of the log (err, warning, exception, etc.)
+            level: Level of the log (HIGH, CRITICAL, etc.)
             include_warnings: Whether to include warnings as important
             
         Returns:
@@ -89,22 +95,58 @@ class LogParser:
         if not log_message:
             return False, None
         
-        # Check severity level first - only critical/alert/error by default
+        # Rule 1a: Check severity - include err, warning, exception
         if severity:
             severity_lower = severity.lower()
-            # Always include critical, alert, error
-            if severity_lower in ['critical', 'alert', 'error', 'err', 'emergency']:
-                return True, f"severity:{severity_lower}"
-            # Only include warnings if explicitly requested
-            if include_warnings and severity_lower in ['warning', 'warn']:
+            if severity_lower in ['err', 'error', 'warning', 'warn', 'exception', 'critical', 'alert', 'emergency']:
                 return True, f"severity:{severity_lower}"
         
-        # Check for error patterns in message
+        # Rule 1b: Check level - include HIGH, CRITICAL
+        if level:
+            level_upper = level.upper()
+            if level_upper in ['HIGH', 'CRITICAL']:
+                return True, f"level:{level_upper}"
+        
+        # Rule 2: Keyword-based filtering in message
+        # Keywords: error, exception, failed, failure, timeout, fatal, crash, refused
         for pattern in self.compiled_patterns:
             if pattern.search(log_message):
-                return True, pattern.pattern
+                return True, f"keyword:{pattern.pattern}"
         
         return False, None
+    
+    def _remove_duplicates(self, logs: List[Dict]) -> List[Dict]:
+        """Remove duplicate log entries by comparing all columns except timestamp.
+        
+        Args:
+            logs: List of log entries
+            
+        Returns:
+            List of unique log entries
+        """
+        seen = set()
+        unique_logs = []
+        
+        for log in logs:
+            # Create a tuple of all values except timestamp for comparison
+            key_fields = (
+                log.get('value', ''),
+                log.get('severity', ''),
+                log.get('level', ''),
+                log.get('hostname', ''),
+                log.get('host', ''),
+                log.get('appname', ''),
+                log.get('facility', ''),
+            )
+            
+            if key_fields not in seen:
+                seen.add(key_fields)
+                unique_logs.append(log)
+        
+        if len(logs) != len(unique_logs):
+            print(f"  Removed {len(logs) - len(unique_logs)} duplicate entries")
+        
+        return unique_logs
     
     def extract_ticket_id(self, file_path: str) -> Optional[str]:
         """Extract ticket ID from file path.
@@ -160,6 +202,7 @@ class LogParser:
                         'timestamp': (row.get('_time') or '').strip(),
                         'value': (row.get('_value') or '').strip(),
                         'severity': (row.get('severity') or '').strip(),
+                        'level': (row.get('level') or '').strip(),  # Extract level field
                         'hostname': (row.get('hostname') or '').strip(),
                         'host': (row.get('host') or '').strip(),
                         'appname': (row.get('appname') or '').strip(),
@@ -176,9 +219,10 @@ class LogParser:
                     include_all = getattr(self, 'include_all', False)
                     include_warnings = getattr(self, 'include_warnings', False)
                     
-                    # Check if this is an actual error/exception
+                    # Check if this is an actual error/exception (pass level parameter)
                     is_important, matched_pattern = self.is_important_log(
-                        log_message, log_entry['severity'], include_warnings=include_warnings
+                        log_message, log_entry['severity'], 
+                        level=log_entry['level'], include_warnings=include_warnings
                     )
                     
                     # Only include if it's truly important OR include_all is set
@@ -198,6 +242,9 @@ class LogParser:
         except Exception as e:
             print(f"Error parsing CSV file {csv_path}: {str(e)}", file=sys.stderr)
             return []
+        
+        # Remove duplicate logs (compare all columns except timestamp)
+        logs = self._remove_duplicates(logs)
         
         return logs
     
@@ -488,7 +535,7 @@ class LogParser:
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, filename)
         
-        # CSV column headers
+        # CSV column 
         csv_columns = [
             'ticket_id', 'timestamp', 'severity', 'level', 'hostname', 'host', 
             'appname', 'reason_included', 'log_message'
