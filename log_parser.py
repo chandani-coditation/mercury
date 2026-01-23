@@ -509,6 +509,29 @@ class LogParser:
                 return "HIGH"
             return "NORMAL"
 
+        # Filter logs to only keep rows with "HIGH" level (case-insensitive)
+        def _get_level(log: Dict) -> str:
+            """Get level from log entry, checking 'level' field first, then computing from severity."""
+            # Check if log has a direct 'level' field
+            level = log.get('level', '').strip()
+            if level:
+                return level.upper()
+            # Otherwise compute from severity
+            severity = log.get('severity', 'unknown')
+            return _level_from_severity(severity)
+
+        filtered_logs = [
+            log for log in logs 
+            if _get_level(log).upper() == "HIGH"
+        ]
+        
+        if not filtered_logs:
+            print("No logs with HIGH level found to write.", file=sys.stderr)
+            return ""
+        
+        # Use filtered logs for the rest of the processing
+        logs = filtered_logs
+
         # --- Build a short, meaningful filename: TICKET-YYYYMMDD_HHMM-host-level.csv
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         tid = (ticket_id or "UNKNOWN").upper()
@@ -566,7 +589,7 @@ class LogParser:
                         pattern_display = 'N/A'
                     
                     raw_sev = (log.get("severity") or "unknown")
-                    level = _level_from_severity(raw_sev)
+                    level = _get_level(log)
                     
                     row = {
                         'ticket_id': log.get('ticket_id', ticket_id or 'UNKNOWN'),
