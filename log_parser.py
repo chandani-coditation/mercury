@@ -80,14 +80,14 @@ class LogParser:
         """Check if a log entry is important based on parsing rules.
         
         Rules:
-        1. Severity in [err, warning, exception] OR level in [HIGH, CRITICAL]
+        1. Severity in [err, exception] OR level in [HIGH, CRITICAL] (warnings excluded)
         2. OR message contains keywords: error, exception, failed, failure, timeout, fatal, crash, refused
         
         Args:
             log_message: The log message to check
-            severity: Severity level of the log (err, warning, exception, etc.)
+            severity: Severity level of the log (err, exception, etc.)
             level: Level of the log (HIGH, CRITICAL, etc.)
-            include_warnings: Whether to include warnings as important
+            include_warnings: Whether to include warnings as important (deprecated, warnings always excluded)
             
         Returns:
             Tuple of (is_important, matched_pattern)
@@ -95,10 +95,13 @@ class LogParser:
         if not log_message:
             return False, None
         
-        # Rule 1a: Check severity - include err, warning, exception
+        # Rule 1a: Check severity - include err, exception (exclude warnings)
         if severity:
             severity_lower = severity.lower()
-            if severity_lower in ['err', 'error', 'warning', 'warn', 'exception', 'critical', 'alert', 'emergency']:
+            # Explicitly exclude warnings
+            if severity_lower in ['warning', 'warn']:
+                return False, None
+            if severity_lower in ['err', 'error', 'exception', 'critical', 'alert', 'emergency']:
                 return True, f"severity:{severity_lower}"
         
         # Rule 1b: Check level - include HIGH, CRITICAL
@@ -505,11 +508,13 @@ class LogParser:
 
         def _level_from_severity(sev: str) -> str:
             sev_l = (sev or "").lower()
-            if sev_l in ["critical", "alert", "emergency", "error", "err", "warning", "warn"]:
+            # Exclude warnings - only errors and above are HIGH
+            if sev_l in ["critical", "alert", "emergency", "error", "err"]:
                 return "HIGH"
             return "NORMAL"
 
         # Filter logs to only keep rows with "HIGH" level (case-insensitive)
+        # Exclude warnings, notice, info, debug, etc. (only errors and above)
         def _get_level(log: Dict) -> str:
             """Get level from log entry, checking 'level' field first, then computing from severity."""
             # Check if log has a direct 'level' field
@@ -522,7 +527,8 @@ class LogParser:
 
         filtered_logs = [
             log for log in logs 
-            if _get_level(log).upper() == "HIGH"
+            if _get_level(log).upper() == "HIGH" 
+            and (log.get('severity', '') or '').lower() not in ['warning', 'warn']
         ]
         
         if not filtered_logs:
