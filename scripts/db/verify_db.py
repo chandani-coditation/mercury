@@ -180,13 +180,15 @@ def verify_db():
         logger.info(f"  Total chunks: {total_chunks}")
 
         # Chunks with embeddings
-        chunk_stats_line = execute_sql_single("""
+        chunk_stats_line = execute_sql_single(
+            """
             SELECT 
                 COUNT(*)::text || '|' || 
                 COUNT(embedding)::text || '|' || 
                 (COUNT(*) - COUNT(embedding))::text
             FROM chunks;
-        """)
+        """
+        )
         parts = chunk_stats_line.split("|")
         total = int(parts[0]) if parts[0] else 0
         with_embedding = int(parts[1]) if len(parts) > 1 and parts[1] else 0
@@ -199,13 +201,15 @@ def verify_db():
             )
 
         # Chunks with tsvector
-        tsv_stats_line = execute_sql_single("""
+        tsv_stats_line = execute_sql_single(
+            """
             SELECT 
                 COUNT(*)::text || '|' || 
                 COUNT(tsv)::text || '|' || 
                 (COUNT(*) - COUNT(tsv))::text
             FROM chunks;
-        """)
+        """
+        )
         parts = tsv_stats_line.split("|")
         with_tsv = int(parts[1]) if len(parts) > 1 and parts[1] else 0
         missing_tsv = int(parts[2]) if len(parts) > 2 and parts[2] else 0
@@ -228,7 +232,8 @@ def verify_db():
 
         # 4. Check chunks per document
         logger.info("\nChunks per Document:")
-        chunk_per_doc = execute_sql("""
+        chunk_per_doc = execute_sql(
+            """
             SELECT 
                 d.doc_type,
                 COALESCE(AVG(chunk_count), 0)::text as avg_chunks,
@@ -242,7 +247,8 @@ def verify_db():
             ) c ON d.id = c.document_id
             GROUP BY d.doc_type
             ORDER BY d.doc_type;
-        """)
+        """
+        )
         logger.info("  Average chunks per document by type:")
         for line in chunk_per_doc:
             parts = line.split("|")
@@ -253,12 +259,16 @@ def verify_db():
 
         # 5. Check for documents without chunks
         logger.info("\nDocument-Chunk Relationships:")
-        orphaned = int(execute_sql_single("""
+        orphaned = int(
+            execute_sql_single(
+                """
             SELECT COUNT(*) 
             FROM documents d
             LEFT JOIN chunks c ON d.id = c.document_id
             WHERE c.id IS NULL;
-        """))
+        """
+            )
+        )
         if orphaned > 0:
             logger.warning(f"    WARNING: {orphaned} documents have no chunks!")
         else:
@@ -268,12 +278,14 @@ def verify_db():
         logger.info("\nIngestion Quality Checks:")
 
         # Service normalization check (check incident_signatures table, not documents)
-        services = execute_sql("""
+        services = execute_sql(
+            """
             SELECT service, COUNT(*)::text as count 
             FROM incident_signatures 
             GROUP BY service 
             ORDER BY count DESC;
-        """)
+        """
+        )
         server_incidents = 0
         total_incidents = 0
         logger.info("  Service distribution (from incident_signatures):")
@@ -300,14 +312,16 @@ def verify_db():
             logger.info(f"  Total incident signatures: {total_incidents}")
 
         # Runbook deduplication check
-        duplicates = execute_sql("""
+        duplicates = execute_sql(
+            """
             SELECT title, COUNT(*)::text as count 
             FROM documents 
             WHERE doc_type = 'runbook' 
             GROUP BY title 
             HAVING COUNT(*) > 1
             ORDER BY count DESC;
-        """)
+        """
+        )
         if duplicates:
             logger.warning(f"  Found duplicate runbooks:")
             for line in duplicates:
@@ -325,7 +339,8 @@ def verify_db():
             logger.warning(f"  No runbook steps found in database")
         else:
             logger.info(f"  Found {total_steps} runbook steps")
-            runbooks_without_steps = execute_sql("""
+            runbooks_without_steps = execute_sql(
+                """
                 SELECT d.title, COUNT(rs.id)::text as step_count 
                 FROM documents d 
                 LEFT JOIN runbook_steps rs ON d.id = rs.runbook_document_id 
@@ -333,7 +348,8 @@ def verify_db():
                 GROUP BY d.id, d.title 
                 HAVING COUNT(rs.id) = 0
                 LIMIT 5;
-            """)
+            """
+            )
             if runbooks_without_steps:
                 logger.warning(
                     f"     {len(runbooks_without_steps)} runbooks have no steps"
