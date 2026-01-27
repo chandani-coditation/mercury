@@ -3,8 +3,12 @@ name: influx-query
 on:
   workflow_dispatch:
     inputs:
-      tickets:
-        description: "Tickets JSON array"
+      ticket_id:
+        description: "Ticket ID"
+        required: true
+        type: string
+      ticket_created_date:
+        description: "Ticket creation date (ISO 8601 format)"
         required: true
         type: string
       window_minutes:
@@ -19,11 +23,6 @@ jobs:
   influx-query:
     runs-on: self-hosted
     timeout-minutes: 10
-
-    strategy:
-      fail-fast: false
-      matrix:
-        ticket: ${{ fromJson(inputs.tickets) }}
 
     environment: np
 
@@ -43,16 +42,19 @@ jobs:
           set -e
           chmod +x scripts/influx-query.sh
           scripts/influx-query.sh \
-            '${{ toJson(matrix.ticket) }}' \
+            '${{ inputs.ticket_id }}' \
+            '${{ inputs.ticket_created_date }}' \
             '${{ inputs.window_minutes }}'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: influx-${{ matrix.ticket.ticket_id }}
-          path: outputs/influx-${{ matrix.ticket.ticket_id }}.csv
+          name: influx-${{ inputs.ticket_id }}
+          path: outputs/influx-${{ inputs.ticket_id }}.csv
           retention-days: 1
 
-      - name: Cleanup local files
+      - name: Cleanup outputs directory
         if: always()
-        run: rm -rf outputs
+        shell: bash
+        run: |
+          rm -rf outputs
