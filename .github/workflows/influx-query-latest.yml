@@ -1,0 +1,86 @@
+---
+name: influx-query
+
+on:
+  workflow_dispatch:
+    inputs:
+      ticket_id:
+        description: "Ticket ID"
+        required: true
+        type: string
+      ticket_created_date:
+        description: "Ticket creation date (ISO 8601 format, Ex. 2025-12-16T23:30:00Z)"
+        required: true
+        type: string
+      window_minutes:
+        description: "Time window in minutes before ticket creation"
+        required: false
+        default: "15"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  influx-query:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env_name: np
+          - env_name: pr
+
+    runs-on: self-hosted
+    environment: ${{ matrix.env_name }}
+    timeout-minutes: 10
+
+    env:
+      INFLUX_URL: ${{ vars.INFLUX_URL }}
+      ORG: ${{ vars.ORG }}
+      BUCKET: ${{ vars.BUCKET }}
+      INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run InfluxDB queries for tickets
+        shell: bash
+        run: |
+          set -e
+          chmod +x scripts/influx-query.sh
+          # Sanitize inputs to prevent injection
+          TICKET_ID="${{ inputs.ticket_id }}"
+          TICKET_DATE="${{ inputs.ticket_created_date }}"
+          WINDOW="${{ inputs.window_minutes }}"
+          # Validate inputs
+          if [[ ! "$TICKET_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "Error: Invalid ticket_id format"
+            exit 1
+          fi
+          if [[ ! "$TICKET_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ]]; then
+            echo "Error: Invalid date format (expected ISO 8601)"
+            exit 1
+          fi
+          if [[ ! "$WINDOW" =~ ^[0-9]+$ ]]; then
+            echo "Error: Invalid window_minutes (must be numeric)"
+            exit 1
+          fi
+          scripts/influx-query.sh "$TICKET_ID" "$TICKET_DATE" "$WINDOW"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: influx-query-${{ matrix.env_name }}
+          path: outputs/*.csv
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cleanup generated files
+        if: always()
+        run: |
+          echo "Cleaning up the generated files..."
+          rm -rf outputs

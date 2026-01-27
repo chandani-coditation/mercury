@@ -43,7 +43,7 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so follow-up steps can access it
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Get changed files
         id: changed-files
@@ -60,5 +60,4 @@ jobs:
           output_format: cli,sarif
           output_file_path: console,results.sarif
           quiet: true
-          skip_check:
             

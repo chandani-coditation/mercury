@@ -11,8 +11,18 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Create non-root user
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
 # Expose Vite dev server port
 EXPOSE 5173
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:5173 || exit 1
 
 # Start Vite dev server
 # Host 0.0.0.0 allows connections from outside the container
