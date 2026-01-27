@@ -1,0 +1,62 @@
+---
+name: Checkov Code Analysis
+# https://github.com/bridgecrewio/checkov-action
+# https://github.com/marketplace/actions/checkov-github-action
+
+# Rationale:
+# This GitHub Action runs Checkov against infrastructure-as-code, open source packages,
+# container images, and CI/CD configurations to identify misconfigurations,
+# vulnerabilities, and license compliance issues.
+# Configuration and code WILL NOT be accepted into this repo without scans.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - review_requested
+      - ready_for_review
+      - reopened
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  merge_group:
+    types:
+      - checks_requested
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  checkov:
+    name: Checkov Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so follow-up steps can access it
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@ed68ef82c095e0d48ec87eccea555d944a631a4c # v46
+        with:
+          files_ignore: |
+            **/*.md
+            .github/CODEOWNERS
+
+      - name: Checkov GitHub Action
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          output_format: cli,sarif
+          output_file_path: console,results.sarif
+          quiet: true
