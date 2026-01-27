@@ -3,19 +3,8 @@ name: influx-query
 
 on:
   workflow_dispatch:
-    inputs:
-      ticket_id:
-        description: "Ticket ID"
-        required: true
-        type: string
-      ticket_created_date:
-        description: "Ticket creation date (ISO 8601 format, Ex. 2025-12-16T23:30:00Z)"
-        required: true
-        type: string
-      window_minutes:
-        description: "Time window in minutes before ticket creation"
-        required: false
-        default: "15"
+  repository_dispatch:
+    types: [influx-query]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -52,11 +41,19 @@ jobs:
         run: |
           set -e
           chmod +x scripts/influx-query.sh
-          # Sanitize inputs to prevent injection
-          TICKET_ID="${{ inputs.ticket_id }}"
-          TICKET_DATE="${{ inputs.ticket_created_date }}"
-          WINDOW="${{ inputs.window_minutes }}"
+          # Get parameters from repository_dispatch payload or environment variables
+          TICKET_ID="${{ github.event.client_payload.ticket_id || env.TICKET_ID }}"
+          TICKET_DATE="${{ github.event.client_payload.ticket_created_date || env.TICKET_CREATED_DATE }}"
+          WINDOW="${{ github.event.client_payload.window_minutes || env.WINDOW_MINUTES || '15' }}"
           # Validate inputs
+          if [[ -z "$TICKET_ID" ]]; then
+            echo "Error: ticket_id is required (set via repository_dispatch or TICKET_ID env var)"
+            exit 1
+          fi
+          if [[ -z "$TICKET_DATE" ]]; then
+            echo "Error: ticket_created_date is required (set via repository_dispatch or TICKET_CREATED_DATE env var)"
+            exit 1
+          fi
           if [[ ! "$TICKET_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
             echo "Error: Invalid ticket_id format"
             exit 1

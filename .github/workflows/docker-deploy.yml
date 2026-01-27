@@ -2,14 +2,6 @@ name: Docker Compose Deployment
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        type: choice
-        options:
-          - np
-          - pr
   push:
     branches:
       - main
@@ -29,7 +21,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ github.event.inputs.environment == 'np' && 'np' || (github.event.inputs.environment == 'pr' && 'pr' || (github.ref == 'refs/heads/main' && 'pr' || 'np')) }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'pr' || 'np' }}
     
     steps:
       - name: Checkout code
@@ -41,7 +33,7 @@ jobs:
       - name: Generate .env file from GitHub Secrets
         run: |
           chmod +x scripts/utils/generate-env-from-secrets.sh
-          ENV_INPUT="${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'pr' || 'np') }}"
+          ENV_INPUT="${{ github.ref == 'refs/heads/main' && 'pr' || 'np' }}"
           # Validate input to prevent injection
           if [[ ! "$ENV_INPUT" =~ ^(np|pr)$ ]]; then
             echo "Error: Invalid environment input"
