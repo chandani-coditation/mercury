@@ -17,6 +17,7 @@ Usage:
   # Ingest with pattern
   python scripts/data/ingest_data.py --dir data/faker_output --pattern "alert_*.jsonl" --type alert
 """
+
 import sys
 import os
 import json
@@ -24,7 +25,10 @@ import argparse
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+)
 
 try:
     from ai_service.core import get_logger, setup_logging
@@ -44,7 +48,9 @@ logger = get_logger(__name__)
 
 import requests
 
-INGESTION_SERVICE_URL = os.getenv("INGESTION_SERVICE_URL", "http://localhost:8002")
+INGESTION_SERVICE_URL = os.getenv(
+    "INGESTION_SERVICE_URL", "http://localhost:8002"
+)
 
 
 def ingest_file(file_path: Path, doc_type: str):
@@ -72,7 +78,9 @@ def ingest_file(file_path: Path, doc_type: str):
     with open(file_path, "r", encoding="utf-8") as f:
         # Try to read as JSONL first (one JSON object per line)
         lines = f.readlines()
-        if len(lines) > 1 or (len(lines) == 1 and not lines[0].strip().startswith("[")):
+        if len(lines) > 1 or (
+            len(lines) == 1 and not lines[0].strip().startswith("[")
+        ):
             # Likely JSONL format - parse each line as JSON
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
@@ -82,7 +90,9 @@ def ingest_file(file_path: Path, doc_type: str):
                     item = json.loads(line)
                     items.append(item)
                 except json.JSONDecodeError as e:
-                    logger.warning(f"   Warning: Skipping invalid JSON on line {line_num}: {e}")
+                    logger.warning(
+                        f"   Warning: Skipping invalid JSON on line {line_num}: {e}"
+                    )
                     continue
 
             if items:
@@ -100,7 +110,9 @@ def ingest_file(file_path: Path, doc_type: str):
                     logger.info(f" Ingested {len(items)} items from JSONL file")
                     return True
                 else:
-                    logger.error(f" Error: {response.status_code} - {response.text}")
+                    logger.error(
+                        f" Error: {response.status_code} - {response.text}"
+                    )
                     return False
             else:
                 logger.warning(f" No valid JSON objects found in file")
@@ -128,12 +140,19 @@ def ingest_file(file_path: Path, doc_type: str):
                 return False
         else:
             # Single item - use specific endpoint
-            from ingestion.models import IngestAlert, IngestIncident, IngestRunbook, IngestLog
+            from ingestion.models import (
+                IngestAlert,
+                IngestIncident,
+                IngestRunbook,
+                IngestLog,
+            )
 
             if doc_type == "alert":
                 item = IngestAlert(**data)
                 response = requests.post(
-                    f"{INGESTION_SERVICE_URL}/ingest/alert", json=item.model_dump(), timeout=timeout
+                    f"{INGESTION_SERVICE_URL}/ingest/alert",
+                    json=item.model_dump(),
+                    timeout=timeout,
                 )
             elif doc_type == "incident":
                 item = IngestIncident(**data)
@@ -152,7 +171,9 @@ def ingest_file(file_path: Path, doc_type: str):
             elif doc_type == "log":
                 item = IngestLog(content=content, **data)
                 response = requests.post(
-                    f"{INGESTION_SERVICE_URL}/ingest/log", json=item.model_dump(), timeout=timeout
+                    f"{INGESTION_SERVICE_URL}/ingest/log",
+                    json=item.model_dump(),
+                    timeout=timeout,
                 )
             else:
                 # Generic document
@@ -247,25 +268,37 @@ Examples:
         help="Type of data to ingest (auto-detected from filename if not provided)",
     )
     parser.add_argument("--file", type=Path, help="Single file to ingest")
-    parser.add_argument("--dir", type=Path, help="Directory containing files to ingest")
-    parser.add_argument("--pattern", default="*", help="File pattern (default: *)")
-    parser.add_argument("--url", default=INGESTION_SERVICE_URL, help="Ingestion service URL")
+    parser.add_argument(
+        "--dir", type=Path, help="Directory containing files to ingest"
+    )
+    parser.add_argument(
+        "--pattern", default="*", help="File pattern (default: *)"
+    )
+    parser.add_argument(
+        "--url", default=INGESTION_SERVICE_URL, help="Ingestion service URL"
+    )
 
     args = parser.parse_args()
 
     if args.url:
         INGESTION_SERVICE_URL = args.url
     else:
-        INGESTION_SERVICE_URL = os.getenv("INGESTION_SERVICE_URL", "http://localhost:8002")
+        INGESTION_SERVICE_URL = os.getenv(
+            "INGESTION_SERVICE_URL", "http://localhost:8002"
+        )
 
     # Check service is up
     try:
         response = requests.get(f"{INGESTION_SERVICE_URL}/health", timeout=5)
         if response.status_code != 200:
-            logger.error(f" Ingestion service not healthy: {response.status_code}")
+            logger.error(
+                f" Ingestion service not healthy: {response.status_code}"
+            )
             sys.exit(1)
     except Exception as e:
-        logger.error(f" Cannot connect to ingestion service at {INGESTION_SERVICE_URL}: {e}")
+        logger.error(
+            f" Cannot connect to ingestion service at {INGESTION_SERVICE_URL}: {e}"
+        )
         sys.exit(1)
 
     logger.info(f" Connected to ingestion service at {INGESTION_SERVICE_URL}\n")

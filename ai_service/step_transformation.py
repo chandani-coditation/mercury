@@ -30,7 +30,9 @@ def _load_step_classification_config():
             if config_path.exists():
                 with open(config_path, "r") as f:
                     _STEP_CLASSIFICATION_CONFIG = json.load(f)
-                logger.debug(f"Loaded step_classification.json from {config_path}")
+                logger.debug(
+                    f"Loaded step_classification.json from {config_path}"
+                )
             else:
                 _STEP_CLASSIFICATION_CONFIG = {}
                 logger.warning(
@@ -46,7 +48,14 @@ def _get_step_type_priority_order():
     """Get step type priority order from config."""
     config = _load_step_classification_config()
     return config.get("step_types", {}).get(
-        "priority_order", ["investigation", "mitigation", "resolution", "verification", "rollback"]
+        "priority_order",
+        [
+            "investigation",
+            "mitigation",
+            "resolution",
+            "verification",
+            "rollback",
+        ],
     )
 
 
@@ -83,7 +92,9 @@ def _get_risk_level_keywords():
     config = _load_step_classification_config()
     risk_levels = config.get("risk_levels", {})
     return {
-        "valid_levels": risk_levels.get("valid_levels", ["low", "medium", "high", "critical"]),
+        "valid_levels": risk_levels.get(
+            "valid_levels", ["low", "medium", "high", "critical"]
+        ),
         "default_level": risk_levels.get("default_level", "medium"),
         "high_risk": risk_levels.get("high_risk_keywords", {}).get(
             "keywords", ["kill", "delete", "drop", "remove", "stop", "restart"]
@@ -122,7 +133,9 @@ def classify_step_type(step: Dict) -> str:
         # Check if step also contains actionable content - if yes, don't filter as documentation
         actionable_indicators = _get_actionable_indicators()
         # If it contains actionable content, don't filter as documentation
-        if not any(indicator in action_lower for indicator in actionable_indicators):
+        if not any(
+            indicator in action_lower for indicator in actionable_indicators
+        ):
             return "documentation"
 
     # Check if action starts with document/record/log/note and is ONLY about that
@@ -139,7 +152,10 @@ def classify_step_type(step: Dict) -> str:
             return "documentation"
 
     # Also check if action contains "record all actions" or "document all actions" - these are always documentation
-    if "record all actions" in action_lower or "document all actions" in action_lower:
+    if (
+        "record all actions" in action_lower
+        or "document all actions" in action_lower
+    ):
         return "documentation"
 
     # Check if action is about recording/documenting actions taken (past tense indicates documentation)
@@ -149,7 +165,9 @@ def classify_step_type(step: Dict) -> str:
         # Check if step also contains actionable content - if yes, don't filter as documentation
         actionable_indicators = _get_actionable_indicators()
         # If it contains actionable content, don't filter as documentation
-        if not any(indicator in action_lower for indicator in actionable_indicators):
+        if not any(
+            indicator in action_lower for indicator in actionable_indicators
+        ):
             return "documentation"
 
     # Check for "assess impact" or "impact assessment" patterns
@@ -162,7 +180,9 @@ def classify_step_type(step: Dict) -> str:
         # Check if step also contains actionable content - if yes, don't filter as documentation
         actionable_indicators = _get_actionable_indicators()
         # If it contains actionable content, don't filter as documentation
-        if not any(indicator in action_lower for indicator in actionable_indicators):
+        if not any(
+            indicator in action_lower for indicator in actionable_indicators
+        ):
             return "documentation"
 
     # Check for "follow-up" patterns that are just administrative
@@ -172,7 +192,9 @@ def classify_step_type(step: Dict) -> str:
             # Check if step also contains actionable content - if yes, don't filter as documentation
             actionable_indicators = _get_actionable_indicators()
             # If it contains actionable content, don't filter as documentation
-            if not any(indicator in action_lower for indicator in actionable_indicators):
+            if not any(
+                indicator in action_lower for indicator in actionable_indicators
+            ):
                 return "documentation"
 
     # Investigation steps
@@ -218,7 +240,9 @@ def filter_steps(steps: List[Dict]) -> List[Dict]:
     filtered_types = _get_filtered_step_types()
     for step in steps:
         step_type = classify_step_type(step)
-        action_preview = (step.get("action") or "")[:100]  # First 100 chars for logging
+        action_preview = (step.get("action") or "")[
+            :100
+        ]  # First 100 chars for logging
         if step_type not in filtered_types:
             step["_inferred_step_type"] = step_type
             filtered.append(step)
@@ -228,10 +252,14 @@ def filter_steps(steps: List[Dict]) -> List[Dict]:
                 f"{action_preview}..."
             )
 
-    logger.info(f"Filtered {len(steps)} steps to {len(filtered)} actionable steps")
+    logger.info(
+        f"Filtered {len(steps)} steps to {len(filtered)} actionable steps"
+    )
     if len(filtered) == 0 and len(steps) > 0:
         # Log details about why all steps were filtered
-        logger.warning(f"All {len(steps)} steps were filtered. Sample step actions:")
+        logger.warning(
+            f"All {len(steps)} steps were filtered. Sample step actions:"
+        )
         for i, step in enumerate(steps[:3], 1):  # Show first 3 steps
             action = step.get("action", "")[:200]
             step_type = classify_step_type(step)
@@ -317,7 +345,12 @@ def generate_step_title(action: str, step_type: str) -> str:
             if action_part:
                 # Truncate to first sentence or 80 chars for title
                 # Extract first sentence (up to period, comma, or newline)
-                first_sentence = action_part.split(".")[0].split(",")[0].split("\n")[0].strip()
+                first_sentence = (
+                    action_part.split(".")[0]
+                    .split(",")[0]
+                    .split("\n")[0]
+                    .strip()
+                )
                 if len(first_sentence) <= 80:
                     title = first_sentence
                 else:
@@ -365,7 +398,9 @@ def generate_step_title(action: str, step_type: str) -> str:
             # Clean up title
             title = title.strip()
             # Extract first sentence or truncate to 80 chars
-            first_sentence = title.split(".")[0].split(",")[0].split("\n")[0].strip()
+            first_sentence = (
+                title.split(".")[0].split(",")[0].split("\n")[0].strip()
+            )
             if len(first_sentence) <= 80:
                 title = first_sentence
             else:
@@ -420,7 +455,9 @@ def clean_action_for_ui(action: str) -> str:
             continue
         # Skip command-line commands
         if re.match(
-            r"^\s*[$#]|^\s*(sudo|systemctl|kubectl|docker|psql|mysql)", line_stripped, re.IGNORECASE
+            r"^\s*[$#]|^\s*(sudo|systemctl|kubectl|docker|psql|mysql)",
+            line_stripped,
+            re.IGNORECASE,
         ):
             continue
         # Skip code blocks
@@ -442,7 +479,10 @@ def clean_action_for_ui(action: str) -> str:
 
     # Remove generic prefixes
     cleaned = re.sub(
-        r"^(step\s+\d+\s*:?\s*|action:\s*|condition:\s*)", "", cleaned, flags=re.IGNORECASE
+        r"^(step\s+\d+\s*:?\s*|action:\s*|condition:\s*)",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
     )
 
     return cleaned.strip()
@@ -472,11 +512,20 @@ def transform_step_for_ui(step: Dict, step_number: int) -> Dict:
     expected_outcome = step.get("expected_outcome")
     if not expected_outcome:
         # Generate from action
-        if "check" in cleaned_action.lower() or "verify" in cleaned_action.lower():
+        if (
+            "check" in cleaned_action.lower()
+            or "verify" in cleaned_action.lower()
+        ):
             expected_outcome = "Issue identified and understood"
-        elif "fix" in cleaned_action.lower() or "resolve" in cleaned_action.lower():
+        elif (
+            "fix" in cleaned_action.lower()
+            or "resolve" in cleaned_action.lower()
+        ):
             expected_outcome = "Issue resolved"
-        elif "reduce" in cleaned_action.lower() or "decrease" in cleaned_action.lower():
+        elif (
+            "reduce" in cleaned_action.lower()
+            or "decrease" in cleaned_action.lower()
+        ):
             expected_outcome = "Issue severity reduced"
         elif "monitor" in cleaned_action.lower():
             expected_outcome = "System stability confirmed"

@@ -153,7 +153,9 @@ class LLMHandler:
                 for field in required_fields:
                     if not self._gateway_config.get(field):
                         status["valid"] = False
-                        status["errors"].append(f"Missing gateway config: {field}")
+                        status["errors"].append(
+                            f"Missing gateway config: {field}"
+                        )
         else:
             if not self._openai_client:
                 status["valid"] = False
@@ -185,12 +187,16 @@ class LLMHandler:
 
         # Combine messages into single prompt
         messages = request_params.get("messages", [])
-        prompt_text = "\n\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in messages])
+        prompt_text = "\n\n".join(
+            [f"{msg['role'].upper()}: {msg['content']}" for msg in messages]
+        )
 
         # Build request
         headers = {"Content-Type": "application/json", "accept": "*/*"}
         if self._gateway_config["auth_key"]:
-            headers["Authorization"] = f"Basic {self._gateway_config['auth_key']}"
+            headers["Authorization"] = (
+                f"Basic {self._gateway_config['auth_key']}"
+            )
 
         payload = {
             "chatId": str(uuid.uuid4()),
@@ -203,7 +209,11 @@ class LLMHandler:
             self._gateway_config["url"],
             headers=headers,
             json=payload,
-            verify=self._gateway_config["cert_path"] if self._gateway_config["cert_path"] else True,
+            verify=(
+                self._gateway_config["cert_path"]
+                if self._gateway_config["cert_path"]
+                else True
+            ),
             timeout=request_params.get("timeout", 60.0),
         )
         response.raise_for_status()
@@ -267,7 +277,11 @@ class LLMHandler:
             self._gateway_config["embeddings_url"],
             headers=headers,
             json=payload,
-            verify=self._gateway_config["cert_path"] if self._gateway_config["cert_path"] else True,
+            verify=(
+                self._gateway_config["cert_path"]
+                if self._gateway_config["cert_path"]
+                else True
+            ),
             timeout=60.0,
         )
         response.raise_for_status()
@@ -286,7 +300,9 @@ class LLMHandler:
             True if the error is retryable, False otherwise
         """
         # Retry on OpenAI rate limits, connection errors, and timeouts
-        if isinstance(error, (RateLimitError, APIConnectionError, APITimeoutError)):
+        if isinstance(
+            error, (RateLimitError, APIConnectionError, APITimeoutError)
+        ):
             return True
 
         # Retry on OpenAI 5xx server errors
@@ -337,7 +353,9 @@ class LLMHandler:
                 request_params_with_timeout = {**request_params, "timeout": 60.0}
 
                 if self._use_gateway:
-                    response = self._call_gateway_chat(request_params_with_timeout)
+                    response = self._call_gateway_chat(
+                        request_params_with_timeout
+                    )
                 else:
                     response = self._openai_client.chat.completions.create(
                         **request_params_with_timeout
@@ -357,11 +375,16 @@ class LLMHandler:
 
                 # Calculate exponential backoff with jitter
                 if isinstance(e, (RateLimitError, RequestException)):
-                    base_delay = INITIAL_RETRY_DELAY * 2  # Start with 2s for rate limits
+                    base_delay = (
+                        INITIAL_RETRY_DELAY * 2
+                    )  # Start with 2s for rate limits
                 else:
                     base_delay = INITIAL_RETRY_DELAY
 
-                delay = min(base_delay * (RETRY_EXPONENTIAL_BASE**attempt), MAX_RETRY_DELAY)
+                delay = min(
+                    base_delay * (RETRY_EXPONENTIAL_BASE**attempt),
+                    MAX_RETRY_DELAY,
+                )
                 jitter = random.uniform(0, delay * 0.1)  # Add up to 10% jitter
                 total_delay = delay + jitter
 
@@ -377,7 +400,10 @@ class LLMHandler:
             raise last_error
 
     def embeddings_create(
-        self, text_or_texts: Union[str, List[str]], model: str, timeout: float = 60.0
+        self,
+        text_or_texts: Union[str, List[str]],
+        model: str,
+        timeout: float = 60.0,
     ) -> Any:
         """
         Create embeddings with retry logic.
@@ -400,7 +426,9 @@ class LLMHandler:
         for attempt in range(MAX_RETRIES):
             try:
                 if self._use_gateway:
-                    response = self._call_gateway_embeddings(text_or_texts, model)
+                    response = self._call_gateway_embeddings(
+                        text_or_texts, model
+                    )
 
                     # Gateway returns dict, transform to OpenAI-like object
                     class EmbeddingResponse:
@@ -412,10 +440,13 @@ class LLMHandler:
                             # Handle both list of dicts and list of lists
                             if data and isinstance(data[0], dict):
                                 self.data = [
-                                    self.DataItem(item.get("embedding", item)) for item in data
+                                    self.DataItem(item.get("embedding", item))
+                                    for item in data
                                 ]
                             else:
-                                self.data = [self.DataItem(item) for item in data]
+                                self.data = [
+                                    self.DataItem(item) for item in data
+                                ]
 
                     return EmbeddingResponse(response.get("data", []))
                 else:
@@ -441,7 +472,10 @@ class LLMHandler:
                 else:
                     base_delay = INITIAL_RETRY_DELAY
 
-                delay = min(base_delay * (RETRY_EXPONENTIAL_BASE**attempt), MAX_RETRY_DELAY)
+                delay = min(
+                    base_delay * (RETRY_EXPONENTIAL_BASE**attempt),
+                    MAX_RETRY_DELAY,
+                )
                 jitter = random.uniform(0, delay * 0.1)
                 total_delay = delay + jitter
 

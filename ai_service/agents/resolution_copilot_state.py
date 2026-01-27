@@ -3,8 +3,15 @@
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from ai_service.agents.triager import format_evidence_chunks, apply_retrieval_preferences
-from ai_service.core import get_logger, get_retrieval_config, IncidentNotFoundError
+from ai_service.agents.triager import (
+    format_evidence_chunks,
+    apply_retrieval_preferences,
+)
+from ai_service.core import (
+    get_logger,
+    get_retrieval_config,
+    IncidentNotFoundError,
+)
 from ai_service.guardrails import validate_resolution_output
 from ai_service.llm_client import call_llm_for_resolution
 from ai_service.policy import get_policy_from_config, get_resolution_policy
@@ -30,7 +37,9 @@ async def resolution_agent_state(
     """
     if not incident_id:
         raise ValueError("State-based resolution requires an incident_id")
-    return await _resolution_agent_state_internal(incident_id, alert, use_state_bus)
+    return await _resolution_agent_state_internal(
+        incident_id, alert, use_state_bus
+    )
 
 
 async def _resolution_agent_state_internal(
@@ -48,7 +57,9 @@ async def _resolution_agent_state_internal(
     alert_dict = incident.get("raw_alert") or alert or {}
     triage_output = incident.get("triage_output")
     if not triage_output:
-        raise ValueError("Incident is missing triage output; cannot generate resolution")
+        raise ValueError(
+            "Incident is missing triage output; cannot generate resolution"
+        )
 
     state = AgentState(
         agent_type="resolution",
@@ -71,7 +82,9 @@ async def _resolution_agent_state_internal(
         state.policy_decision = policy_decision
         state.policy_band = policy_decision.get("policy_band", "REVIEW")
         try:
-            repository.update_policy(incident_id, state.policy_band, policy_decision)
+            repository.update_policy(
+                incident_id, state.policy_band, policy_decision
+            )
         except Exception as exc:  # pragma: no cover - best-effort update
             logger.warning("Failed to persist policy decision: %s", exc)
             policy_decision = state.policy_decision
@@ -79,7 +92,9 @@ async def _resolution_agent_state_internal(
         policy_decision = state.policy_decision
 
     state.can_auto_apply = bool(policy_decision.get("can_auto_apply", False))
-    state.requires_approval = bool(policy_decision.get("requires_approval", True))
+    state.requires_approval = bool(
+        policy_decision.get("requires_approval", True)
+    )
 
     # Retrieve runbook context
     state.current_step = AgentStep.RETRIEVING_CONTEXT
@@ -143,14 +158,18 @@ async def _resolution_agent_state_internal(
 
     resolution_warning = None
     if len(context_chunks) == 0:
-        from db.connection import get_db_connection_context  # lazy import to avoid cycles
+        from db.connection import (
+            get_db_connection_context,
+        )  # lazy import to avoid cycles
 
         try:
             with get_db_connection_context() as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) as count FROM documents")
                 result = cur.fetchone()
-                doc_count = result["count"] if isinstance(result, dict) else result[0]
+                doc_count = (
+                    result["count"] if isinstance(result, dict) else result[0]
+                )
                 cur.close()
 
             if doc_count == 0:
@@ -176,7 +195,9 @@ async def _resolution_agent_state_internal(
     if use_state_bus:
         await state_bus.emit_state(state)
 
-    resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
+    resolution_output = call_llm_for_resolution(
+        alert_dict, triage_output, context_chunks
+    )
 
     state.current_step = AgentStep.LLM_COMPLETED
     state.resolution_output = resolution_output
@@ -193,7 +214,9 @@ async def _resolution_agent_state_internal(
     )
     if not is_valid:
         state.current_step = AgentStep.ERROR
-        state.error = f"Resolution validation failed: {', '.join(validation_errors)}"
+        state.error = (
+            f"Resolution validation failed: {', '.join(validation_errors)}"
+        )
         if use_state_bus:
             await state_bus.emit_state(state)
             status = ("validation_error",)
@@ -215,10 +238,16 @@ async def _resolution_agent_state_internal(
             resolution_output.get("risk_level", "medium"),
         )
         state.policy_decision = policy_decision
-        state.policy_band = policy_decision.get("policy_band", state.policy_band or "REVIEW")
+        state.policy_band = policy_decision.get(
+            "policy_band", state.policy_band or "REVIEW"
+        )
 
-    state.can_auto_apply = bool(state.policy_decision.get("can_auto_apply", False))
-    state.requires_approval = bool(state.policy_decision.get("requires_approval", True))
+    state.can_auto_apply = bool(
+        state.policy_decision.get("can_auto_apply", False)
+    )
+    state.requires_approval = bool(
+        state.policy_decision.get("requires_approval", True)
+    )
 
     state.current_step = AgentStep.POLICY_EVALUATED
     if use_state_bus:
@@ -230,8 +259,12 @@ async def _resolution_agent_state_internal(
         retrieval_method="hybrid_search",
         retrieval_params={
             "query_text": query_text,
-            "service": labels.get("service") if isinstance(labels, dict) else None,
-            "component": labels.get("component") if isinstance(labels, dict) else None,
+            "service": (
+                labels.get("service") if isinstance(labels, dict) else None
+            ),
+            "component": (
+                labels.get("component") if isinstance(labels, dict) else None
+            ),
             "limit": retrieval_limit,
         },
     )
@@ -274,7 +307,9 @@ async def _resolution_agent_state_internal(
             "context_chunks_used": len(context_chunks),
             "evidence_chunks": resolution_evidence,
             "pending_action": (
-                state.pending_action.model_dump(mode="json") if state.pending_action else None
+                state.pending_action.model_dump(mode="json")
+                if state.pending_action
+                else None
             ),
         }
         if resolution_warning:

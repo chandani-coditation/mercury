@@ -81,4 +81,7 @@ class TestErrorUtils:
         """Test formatting an empty error."""
         error = ""
         result = format_user_friendly_error(error)
-        assert "unexpected error" in result.lower() or "error occurred" in result.lower()
+        assert (
+            "unexpected error" in result.lower()
+            or "error occurred" in result.lower()
+        )

@@ -51,14 +51,26 @@ def _get_corrective_action_keywords():
     """Get corrective action keywords from config."""
     config = _load_problem_keywords_config()
     return config.get("corrective_action_keywords", {}).get(
-        "keywords", ["reduce", "clean", "fix", "resolve", "remove", "clear", "free", "backup"]
+        "keywords",
+        [
+            "reduce",
+            "clean",
+            "fix",
+            "resolve",
+            "remove",
+            "clear",
+            "free",
+            "backup",
+        ],
     )
 
 
 def _get_preferred_step_types():
     """Get preferred step types for filtering from config."""
     config = _load_problem_keywords_config()
-    return config.get("step_type_filters", {}).get("preferred_types", ["mitigation", "resolution"])
+    return config.get("step_type_filters", {}).get(
+        "preferred_types", ["mitigation", "resolution"]
+    )
 
 
 def _get_problem_keyword_groups():
@@ -99,16 +111,22 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
     # 1. Retrieve runbook steps
     if not runbook_ids:
-        logger.warning("No runbook_ids in triage output matched_evidence.runbook_refs")
+        logger.warning(
+            "No runbook_ids in triage output matched_evidence.runbook_refs"
+        )
         # Try to get runbook_ids from evidence if available
         if isinstance(triage_output, dict):
             evidence = triage_output.get("evidence") or {}
             runbook_metadata = evidence.get("runbook_metadata", [])
             if runbook_metadata:
                 runbook_ids = [
-                    rb.get("runbook_id") for rb in runbook_metadata if rb.get("runbook_id")
+                    rb.get("runbook_id")
+                    for rb in runbook_metadata
+                    if rb.get("runbook_id")
                 ]
-                logger.info(f"Extracted runbook_ids from evidence: {runbook_ids}")
+                logger.info(
+                    f"Extracted runbook_ids from evidence: {runbook_ids}"
+                )
             else:
                 logger.warning("No runbook_metadata found in evidence")
 
@@ -125,7 +143,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
             relevance_score = float(rb.get("relevance_score", 0.0))
             service_boost = float(rb.get("service_match_boost", 0.0))
             component_boost = float(rb.get("component_match_boost", 0.0))
-            rb["combined_score"] = relevance_score + service_boost + component_boost
+            rb["combined_score"] = (
+                relevance_score + service_boost + component_boost
+            )
             logger.debug(
                 f"Runbook '{rb.get('title', 'Unknown')}': "
                 f"relevance={relevance_score:.3f}, service_boost={service_boost:.3f}, "
@@ -134,7 +154,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
         # Sort by combined score (descending) to get the highest scoring runbook first
         runbook_metadata = sorted(
-            runbook_metadata, key=lambda x: x.get("combined_score", 0.0), reverse=True
+            runbook_metadata,
+            key=lambda x: x.get("combined_score", 0.0),
+            reverse=True,
         )
         logger.info(
             f"Sorted {len(runbook_metadata)} runbooks by score. Top runbook: "
@@ -194,7 +216,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     filtered_steps = filter_steps(runbook_steps)
 
     if not filtered_steps:
-        logger.warning("No actionable steps after filtering documentation/context steps")
+        logger.warning(
+            "No actionable steps after filtering documentation/context steps"
+        )
         return {
             "steps": [],
             "estimated_time_minutes": 0,
@@ -210,9 +234,13 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
     # 2.6. Match remediation steps to root problem (generic matching)
     # Filter steps where condition matches the root problem
-    matched_remediation_steps = _match_remediation_to_problem(filtered_steps, root_problem)
+    matched_remediation_steps = _match_remediation_to_problem(
+        filtered_steps, root_problem
+    )
     if matched_remediation_steps:
-        logger.info(f"Matched {len(matched_remediation_steps)} remediation steps to root problem")
+        logger.info(
+            f"Matched {len(matched_remediation_steps)} remediation steps to root problem"
+        )
         # Prioritize matched remediation steps
         filtered_steps = matched_remediation_steps + [
             s for s in filtered_steps if s not in matched_remediation_steps
@@ -224,21 +252,31 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
     # 2.6. Match remediation steps to root problem (generic matching)
     # Filter steps where condition matches the root problem
-    matched_remediation_steps = _match_remediation_to_problem(filtered_steps, root_problem)
+    matched_remediation_steps = _match_remediation_to_problem(
+        filtered_steps, root_problem
+    )
     if matched_remediation_steps:
-        logger.info(f"Matched {len(matched_remediation_steps)} remediation steps to root problem")
+        logger.info(
+            f"Matched {len(matched_remediation_steps)} remediation steps to root problem"
+        )
         # Prioritize matched remediation steps
         filtered_steps = matched_remediation_steps + [
             s for s in filtered_steps if s not in matched_remediation_steps
         ]
 
     # 3. Retrieve historical resolutions and close notes for context
-    historical_resolutions = retrieve_historical_resolutions(incident_signature_ids, limit=10)
+    historical_resolutions = retrieve_historical_resolutions(
+        incident_signature_ids, limit=10
+    )
 
-    close_notes_list = retrieve_close_notes_from_signatures(incident_signature_ids, limit=10)
+    close_notes_list = retrieve_close_notes_from_signatures(
+        incident_signature_ids, limit=10
+    )
 
     # 4. Get step success statistics
-    step_ids = [step.get("step_id") for step in filtered_steps if step.get("step_id")]
+    step_ids = [
+        step.get("step_id") for step in filtered_steps if step.get("step_id")
+    ]
     step_success_stats = get_step_success_stats(step_ids)
 
     # 5. Rank steps by relevance, historical success, and risk
@@ -259,7 +297,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
     # 6.5. Ensure we have mitigation and/or resolution steps (CRITICAL)
     # If we only have investigation/verification, boost relevance for disk/IO/log/tempdb steps
-    step_types_present = {step.get("_inferred_step_type") for step in ordered_steps}
+    step_types_present = {
+        step.get("_inferred_step_type") for step in ordered_steps
+    }
     has_mitigation_or_resolution = (
         "mitigation" in step_types_present or "resolution" in step_types_present
     )
@@ -302,7 +342,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
         # Re-order after boosting
         ordered_steps = sorted(
-            ordered_steps, key=lambda s: s.get("combined_score", 0.0), reverse=True
+            ordered_steps,
+            key=lambda s: s.get("combined_score", 0.0),
+            reverse=True,
         )
 
     # 7. Limit to top 4-6 steps for UI (prefer fewer, more focused steps)
@@ -335,7 +377,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     # 9. LLM enhancement disabled - Pure RAG mode
     # All steps come directly from runbook chunks (RAG retrieval only)
     # No LLM generation or enhancement is used
-    logger.debug("RAG-only mode: Using runbook steps directly without LLM enhancement")
+    logger.debug(
+        "RAG-only mode: Using runbook steps directly without LLM enhancement"
+    )
 
     final_steps = ui_steps
 
@@ -345,14 +389,22 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
 
     # Calculate step-level confidence average
     step_confidences = [
-        s.get("confidence", 0.0) for s in final_steps if s.get("confidence", 0.0) > 0
+        s.get("confidence", 0.0)
+        for s in final_steps
+        if s.get("confidence", 0.0) > 0
     ]
-    avg_step_confidence = sum(step_confidences) / len(step_confidences) if step_confidences else 0.0
+    avg_step_confidence = (
+        sum(step_confidences) / len(step_confidences)
+        if step_confidences
+        else 0.0
+    )
 
     # Combine triage confidence (40%) with step confidence (60%)
     # This ensures resolution confidence reflects both triage quality and step relevance
     if triage_confidence > 0 and avg_step_confidence > 0:
-        overall_confidence = (triage_confidence * 0.4) + (avg_step_confidence * 0.6)
+        overall_confidence = (triage_confidence * 0.4) + (
+            avg_step_confidence * 0.6
+        )
     elif triage_confidence > 0:
         # If no step confidence, use triage confidence but reduce it
         overall_confidence = triage_confidence * 0.7
@@ -362,7 +414,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     else:
         # Fallback: base confidence on runbook match quality
         if runbook_steps and len(runbook_steps) > 0:
-            overall_confidence = 0.6  # Moderate confidence if we have runbook steps
+            overall_confidence = (
+                0.6  # Moderate confidence if we have runbook steps
+            )
         else:
             overall_confidence = 0.0
 
@@ -375,7 +429,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
         # Additional boost if triage confidence is high (indicates good evidence match)
         if triage_confidence >= 0.8:
             # High triage confidence means good evidence match, so resolution should reflect that
-            overall_confidence = max(overall_confidence, triage_confidence * 0.75)
+            overall_confidence = max(
+                overall_confidence, triage_confidence * 0.75
+            )
 
         # Boost confidence if multiple steps were generated (indicates good match)
         if len(final_steps) >= 3:
@@ -476,7 +532,9 @@ def resolution_agent(triage_output: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def _identify_root_problem(triage_output: Dict[str, Any], incident_signature: Any) -> str:
+def _identify_root_problem(
+    triage_output: Dict[str, Any], incident_signature: Any
+) -> str:
     """
     Identify root problem from triage output (generic, not hard-coded).
 
@@ -530,7 +588,9 @@ def _identify_root_problem(triage_output: Dict[str, Any], incident_signature: An
     return root_problem
 
 
-def _match_remediation_to_problem(steps: List[Dict], root_problem: str) -> List[Dict]:
+def _match_remediation_to_problem(
+    steps: List[Dict], root_problem: str
+) -> List[Dict]:
     """
     Match remediation steps to root problem (generic matching).
 
@@ -566,7 +626,11 @@ def _match_remediation_to_problem(steps: List[Dict], root_problem: str) -> List[
         "was",
         "were",
     }
-    problem_terms = {term for term in problem_terms if term not in stop_words and len(term) > 2}
+    problem_terms = {
+        term
+        for term in problem_terms
+        if term not in stop_words and len(term) > 2
+    }
 
     for step in steps:
         condition = (step.get("condition") or "").lower()
@@ -577,13 +641,17 @@ def _match_remediation_to_problem(steps: List[Dict], root_problem: str) -> List[
         action_matches = sum(1 for term in problem_terms if term in action)
 
         # Score based on matches
-        match_score = condition_matches * 2 + action_matches  # Condition matches are more important
+        match_score = (
+            condition_matches * 2 + action_matches
+        )  # Condition matches are more important
 
         if match_score > 0:
             step["_remediation_match_score"] = match_score
             matched_steps.append(step)
 
     # Sort by match score (highest first)
-    matched_steps.sort(key=lambda s: s.get("_remediation_match_score", 0), reverse=True)
+    matched_steps.sort(
+        key=lambda s: s.get("_remediation_match_score", 0), reverse=True
+    )
 
     return matched_steps

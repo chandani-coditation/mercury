@@ -17,7 +17,9 @@ def _load_classification_fallbacks():
     if _classification_fallbacks is None:
         try:
             project_root = Path(__file__).parent.parent.parent
-            config_path = project_root / "config" / "classification_fallbacks.json"
+            config_path = (
+                project_root / "config" / "classification_fallbacks.json"
+            )
             if config_path.exists():
                 with open(config_path, "r") as f:
                     _classification_fallbacks = json.load(f)
@@ -27,7 +29,10 @@ def _load_classification_fallbacks():
                     "error_class_fallbacks": {},
                 }
         except Exception:
-            _classification_fallbacks = {"failure_type_fallbacks": {}, "error_class_fallbacks": {}}
+            _classification_fallbacks = {
+                "failure_type_fallbacks": {},
+                "error_class_fallbacks": {},
+            }
     return _classification_fallbacks
 
 
@@ -41,7 +46,9 @@ def _generate_fallback_section():
     for failure_type, keywords in failure_type_fallbacks.items():
         if keywords:
             keywords_str = ", ".join([f'"{k}"' for k in keywords])
-            failure_type_lines.append(f'     * {keywords_str} → "{failure_type}"')
+            failure_type_lines.append(
+                f'     * {keywords_str} → "{failure_type}"'
+            )
         else:
             failure_type_lines.append(f'     * Default: "{failure_type}"')
 
@@ -54,10 +61,14 @@ def _generate_fallback_section():
             error_class_lines.append(f'     * Default: "{error_class}"')
 
     failure_type_section = (
-        "\n".join(failure_type_lines) if failure_type_lines else '     * Default: "UNKNOWN_FAILURE"'
+        "\n".join(failure_type_lines)
+        if failure_type_lines
+        else '     * Default: "UNKNOWN_FAILURE"'
     )
     error_class_section = (
-        "\n".join(error_class_lines) if error_class_lines else '     * Default: "UNKNOWN_ERROR"'
+        "\n".join(error_class_lines)
+        if error_class_lines
+        else '     * Default: "UNKNOWN_ERROR"'
     )
 
     return failure_type_section, error_class_section
@@ -158,7 +169,9 @@ Remember: You are ONLY classifying. The Resolution Agent will handle recommendat
 TRIAGE_USER_PROMPT_TEMPLATE = get_triage_user_prompt_template()
 
 # Default system prompt for triage (can be overridden via config/llm.json)
-TRIAGE_SYSTEM_PROMPT_DEFAULT = "You are an expert NOC analyst. Always respond with valid JSON only."
+TRIAGE_SYSTEM_PROMPT_DEFAULT = (
+    "You are an expert NOC analyst. Always respond with valid JSON only."
+)
 
 # Resolution Agent Prompts
 RESOLUTION_USER_PROMPT_TEMPLATE = """You are an expert NOC engineer. Based on the alert triage, provide a detailed resolution plan.

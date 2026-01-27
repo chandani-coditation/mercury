@@ -26,13 +26,19 @@ def derive_severity_from_impact_urgency(impact: str, urgency: str) -> str:
     """Derive severity from impact and urgency using config mapping."""
     try:
         config = load_config()
-        severity_mapping = config.get("field_mappings", {}).get("severity_mapping", {})
+        severity_mapping = config.get("field_mappings", {}).get(
+            "severity_mapping", {}
+        )
         mapping = severity_mapping.get("impact_urgency_to_severity", {})
         default = severity_mapping.get("default_severity", "medium")
 
         # Extract numeric values (e.g., "3 - Low" -> "3", "1 - High" -> "1")
-        impact_val = impact.split()[0] if impact and isinstance(impact, str) else "3"
-        urgency_val = urgency.split()[0] if urgency and isinstance(urgency, str) else "3"
+        impact_val = (
+            impact.split()[0] if impact and isinstance(impact, str) else "3"
+        )
+        urgency_val = (
+            urgency.split()[0] if urgency and isinstance(urgency, str) else "3"
+        )
 
         # Create key (e.g., "3-3", "1-1")
         key = f"{impact_val}-{urgency_val}"
@@ -46,7 +52,9 @@ def derive_severity_from_impact_urgency(impact: str, urgency: str) -> str:
 
         return severity
     except Exception as e:
-        logger.warning(f"Error deriving severity from impact/urgency: {e}. Using default 'medium'")
+        logger.warning(
+            f"Error deriving severity from impact/urgency: {e}. Using default 'medium'"
+        )
         return "medium"
 
 
@@ -58,7 +66,8 @@ def extract_routing_from_alert(alert: Dict[str, Any]) -> Optional[str]:
 
 
 def predict_routing_from_evidence(
-    incident_signatures: List[Dict[str, Any]], alert: Optional[Dict[str, Any]] = None
+    incident_signatures: List[Dict[str, Any]],
+    alert: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """
     Predict routing (assignment_group) from matched incident signatures.
@@ -78,7 +87,9 @@ def predict_routing_from_evidence(
 
     # Load prediction config
     pred_config = get_triage_prediction_config()
-    prediction_method = pred_config.get("prediction", {}).get("method", "weighted")
+    prediction_method = pred_config.get("prediction", {}).get(
+        "method", "weighted"
+    )
     weighted_config = pred_config.get("prediction", {}).get("weighted", {})
     fallback_config = pred_config.get("prediction", {}).get("fallback", {})
     weights_config = pred_config.get("prediction", {}).get("weights", {})
@@ -115,7 +126,9 @@ def predict_routing_from_evidence(
     if prediction_method == "weighted":
         min_signatures = weighted_config.get("min_signatures", 2)
         if len(assignment_group_data) >= min_signatures:
-            predicted = _predict_routing_weighted(assignment_group_data, weighted_config, weights_config)
+            predicted = _predict_routing_weighted(
+                assignment_group_data, weighted_config, weights_config
+            )
             if predicted:
                 return predicted
 
@@ -123,7 +136,9 @@ def predict_routing_from_evidence(
     if fallback_config.get("use_simple_frequency", True):
         from collections import Counter
 
-        assignment_groups = [d["assignment_group"] for d in assignment_group_data]
+        assignment_groups = [
+            d["assignment_group"] for d in assignment_group_data
+        ]
         counter = Counter(assignment_groups)
         most_common = counter.most_common(1)
         if most_common:
@@ -137,7 +152,9 @@ def predict_routing_from_evidence(
 
 
 def _predict_routing_weighted(
-    assignment_group_data: List[Dict[str, Any]], weighted_config: Dict[str, Any], weights_config: Dict[str, Any]
+    assignment_group_data: List[Dict[str, Any]],
+    weighted_config: Dict[str, Any],
+    weights_config: Dict[str, Any],
 ) -> Optional[str]:
     """Weighted prediction for routing using rank/score."""
     weight_by = weighted_config.get("weight_by", "rank")
@@ -201,7 +218,6 @@ def _predict_routing_weighted(
     # Calculate confidence
     confidence = best_score / total_weight if total_weight > 0 else 0.0
 
-
     if confidence >= min_confidence:
         logger.info(
             f"Predicted routing (weighted) from {len(assignment_group_data)} signatures: {best_ag} "
@@ -217,7 +233,8 @@ def _predict_routing_weighted(
 
 
 def predict_impact_urgency_from_evidence(
-    incident_signatures: List[Dict[str, Any]], alert: Optional[Dict[str, Any]] = None
+    incident_signatures: List[Dict[str, Any]],
+    alert: Optional[Dict[str, Any]] = None,
 ) -> Optional[tuple[str, str]]:
     """
     Predict impact and urgency from matched incident signatures.
@@ -238,7 +255,9 @@ def predict_impact_urgency_from_evidence(
 
     # Load prediction config
     pred_config = get_triage_prediction_config()
-    impact_urgency_config = pred_config.get("prediction", {}).get("impact_urgency", {})
+    impact_urgency_config = pred_config.get("prediction", {}).get(
+        "impact_urgency", {}
+    )
     weighted_config = pred_config.get("prediction", {}).get("weighted", {})
     weights_config = pred_config.get("prediction", {}).get("weights", {})
 
@@ -277,14 +296,18 @@ def predict_impact_urgency_from_evidence(
     if impact_urgency_config.get("weight_by_rank", True):
         min_signatures = weighted_config.get("min_signatures", 2)
         if len(impact_urgency_data) >= min_signatures:
-            predicted = _predict_impact_urgency_weighted(impact_urgency_data, weighted_config, weights_config)
+            predicted = _predict_impact_urgency_weighted(
+                impact_urgency_data, weighted_config, weights_config
+            )
             if predicted:
                 return predicted
 
     # Fallback to simple frequency
     from collections import Counter
 
-    impact_urgency_pairs = [(d["impact"], d["urgency"]) for d in impact_urgency_data]
+    impact_urgency_pairs = [
+        (d["impact"], d["urgency"]) for d in impact_urgency_data
+    ]
     counter = Counter(impact_urgency_pairs)
     most_common = counter.most_common(1)
     if most_common:
@@ -300,7 +323,9 @@ def predict_impact_urgency_from_evidence(
 
 
 def _predict_impact_urgency_weighted(
-    impact_urgency_data: List[Dict[str, Any]], weighted_config: Dict[str, Any], weights_config: Dict[str, Any]
+    impact_urgency_data: List[Dict[str, Any]],
+    weighted_config: Dict[str, Any],
+    weights_config: Dict[str, Any],
 ) -> Optional[tuple[str, str]]:
     """Weighted prediction for impact/urgency using rank/score."""
     weight_by = weighted_config.get("weight_by", "rank")
@@ -372,7 +397,8 @@ def _predict_impact_urgency_weighted(
 
 
 def predict_severity_from_evidence(
-    incident_signatures: List[Dict[str, Any]], alert: Optional[Dict[str, Any]] = None
+    incident_signatures: List[Dict[str, Any]],
+    alert: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """
     Predict severity from matched incident signatures based on impact/urgency.
@@ -387,7 +413,9 @@ def predict_severity_from_evidence(
     Returns:
         Predicted severity (critical, high, medium, low) or None if none found
     """
-    impact_urgency = predict_impact_urgency_from_evidence(incident_signatures, alert)
+    impact_urgency = predict_impact_urgency_from_evidence(
+        incident_signatures, alert
+    )
     if impact_urgency:
         impact, urgency = impact_urgency
         severity = derive_severity_from_impact_urgency(impact, urgency)
@@ -421,7 +449,9 @@ def extract_affected_services_from_evidence(
     for sig in incident_signatures:
         metadata = sig.get("metadata", {})
         # Check both 'affected_service' (singular) and 'affected_services' (plural) in metadata
-        affected_service = metadata.get("affected_service") or metadata.get("affected_services")
+        affected_service = metadata.get("affected_service") or metadata.get(
+            "affected_services"
+        )
         if affected_service:
             if isinstance(affected_service, str) and affected_service.strip():
                 affected_services_list.append(affected_service.strip())
@@ -450,7 +480,9 @@ def extract_affected_services_from_evidence(
     return None
 
 
-def extract_affected_services_from_alert(alert: Dict[str, Any]) -> Optional[List[str]]:
+def extract_affected_services_from_alert(
+    alert: Dict[str, Any],
+) -> Optional[List[str]]:
     """
     Extract affected services from alert labels and input (FALLBACK method).
 
@@ -490,7 +522,9 @@ def extract_affected_services_from_alert(alert: Dict[str, Any]) -> Optional[List
             cmdb_ci = labels.get("cmdb_ci")
             if cmdb_ci and isinstance(cmdb_ci, str) and cmdb_ci.strip():
                 affected_services = [cmdb_ci.strip()]
-                logger.info(f"Extracted affected_services from cmdb_ci label: {affected_services}")
+                logger.info(
+                    f"Extracted affected_services from cmdb_ci label: {affected_services}"
+                )
                 return affected_services
 
     # Fallback to alert input directly
@@ -503,21 +537,31 @@ def extract_affected_services_from_alert(alert: Dict[str, Any]) -> Optional[List
         elif aff_svc_input:
             affected_services = [str(aff_svc_input)]
         if affected_services and len(affected_services) > 0:
-            logger.info(f"Extracted affected_services from alert input: {affected_services}")
+            logger.info(
+                f"Extracted affected_services from alert input: {affected_services}"
+            )
             return affected_services
 
     return None
 
 
 def format_evidence_chunks(
-    context_chunks: list, retrieval_method: str = "hybrid_search", retrieval_params: dict = None
+    context_chunks: list,
+    retrieval_method: str = "hybrid_search",
+    retrieval_params: dict = None,
 ) -> dict:
     """Format evidence chunks for storage with provenance fields."""
     formatted = {
         "chunks_used": len(context_chunks),
-        "chunk_ids": [chunk.get("chunk_id") for chunk in context_chunks if chunk.get("chunk_id")],
+        "chunk_ids": [
+            chunk.get("chunk_id")
+            for chunk in context_chunks
+            if chunk.get("chunk_id")
+        ],
         "chunk_sources": [
-            chunk.get("doc_title") for chunk in context_chunks if chunk.get("doc_title")
+            chunk.get("doc_title")
+            for chunk in context_chunks
+            if chunk.get("doc_title")
         ],
         "chunks": [],
         "retrieval_method": retrieval_method,
@@ -530,7 +574,9 @@ def format_evidence_chunks(
 
         metadata = chunk.get("metadata") or {}
         source_type = (
-            chunk.get("doc_type") or metadata.get("doc_type") or metadata.get("source_type")
+            chunk.get("doc_type")
+            or metadata.get("doc_type")
+            or metadata.get("source_type")
         )
         if source_type:
             type_counts[source_type] = type_counts.get(source_type, 0) + 1
@@ -563,12 +609,17 @@ def format_evidence_chunks(
             }
         )
     if type_counts:
-        parts = [f"{count} {t}" for t, count in sorted(type_counts.items(), key=lambda x: -x[1])]
+        parts = [
+            f"{count} {t}"
+            for t, count in sorted(type_counts.items(), key=lambda x: -x[1])
+        ]
         formatted["provenance_summary"] = ", ".join(parts)
     return formatted
 
 
-def apply_retrieval_preferences(context_chunks: list, retrieval_cfg: dict) -> list:
+def apply_retrieval_preferences(
+    context_chunks: list, retrieval_cfg: dict
+) -> list:
     """Apply retrieval preferences (prefer_types, max_per_type) to context chunks."""
     prefer_types = retrieval_cfg.get("prefer_types", [])
     max_per_type = retrieval_cfg.get("max_per_type", {})
@@ -633,7 +684,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
     cleaned_desc = clean_description_text(description)
 
     # Truncate to match ingestion limit (1000 chars for description)
-    query_text = f"{title} {cleaned_desc}".strip() if cleaned_desc else title.strip()
+    query_text = (
+        f"{title} {cleaned_desc}".strip() if cleaned_desc else title.strip()
+    )
     if len(query_text) > 1000 + len(title):
         query_text = f"{title} {cleaned_desc[:1000]}".strip()
 
@@ -682,9 +735,13 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         )
 
         # Validate retrieval boundaries (guardrail: wrong retrieval)
-        is_valid_retrieval, retrieval_errors = validate_triage_retrieval_boundaries(triage_evidence)
+        is_valid_retrieval, retrieval_errors = (
+            validate_triage_retrieval_boundaries(triage_evidence)
+        )
         if not is_valid_retrieval:
-            logger.error(f"Triage retrieval boundary violation: {retrieval_errors}")
+            logger.error(
+                f"Triage retrieval boundary violation: {retrieval_errors}"
+            )
             raise ValueError(
                 f"Triage retrieval violated architecture boundaries: {', '.join(retrieval_errors)}"
             )
@@ -708,7 +765,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                 cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) as count FROM documents")
                 result = cur.fetchone()
-                doc_count = result["count"] if isinstance(result, dict) else result[0]
+                doc_count = (
+                    result["count"] if isinstance(result, dict) else result[0]
+                )
                 cur.close()
         except Exception as e:
             logger.warning(f"Could not check document count: {e}")
@@ -743,19 +802,26 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         is_valid, validation_errors = validate_triage_output(triage_output)
         if not is_valid:
             logger.error(f"Triage validation failed: {validation_errors}")
-            raise ValueError(f"Triage output validation failed: {', '.join(validation_errors)}")
+            raise ValueError(
+                f"Triage output validation failed: {', '.join(validation_errors)}"
+            )
 
-        is_valid_no_hallucination, hallucination_errors = validate_triage_no_hallucination(
-            triage_output, triage_evidence
+        is_valid_no_hallucination, hallucination_errors = (
+            validate_triage_no_hallucination(triage_output, triage_evidence)
         )
         if not is_valid_no_hallucination:
-            logger.error(f"Triage hallucination detected: {hallucination_errors}")
+            logger.error(
+                f"Triage hallucination detected: {hallucination_errors}"
+            )
             raise ValueError(
                 f"Triage output contains hallucinated content: {', '.join(hallucination_errors)}"
             )
 
         matched_evidence = triage_output.get("matched_evidence", {})
-        if not matched_evidence.get("incident_signatures") and incident_signatures:
+        if (
+            not matched_evidence.get("incident_signatures")
+            and incident_signatures
+        ):
             sig_ids = []
             for sig in incident_signatures:
                 metadata = sig.get("metadata", {})
@@ -865,14 +931,24 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
             for sig in incident_signatures[:5]:
                 metadata = sig.get("metadata", {})
-                description = metadata.get("description") or metadata.get("short_description")
-                if description and isinstance(description, str) and len(description.strip()) > 20:
+                description = metadata.get("description") or metadata.get(
+                    "short_description"
+                )
+                if (
+                    description
+                    and isinstance(description, str)
+                    and len(description.strip()) > 20
+                ):
                     descriptions.append(description.strip()[:200])
 
                 symptoms = metadata.get("symptoms", [])
                 if symptoms and isinstance(symptoms, list):
                     symptoms_list.extend(
-                        [s for s in symptoms if isinstance(s, str) and len(s.strip()) > 3]
+                        [
+                            s
+                            for s in symptoms
+                            if isinstance(s, str) and len(s.strip()) > 3
+                        ]
                     )
 
             if descriptions:
@@ -880,21 +956,29 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             elif symptoms_list:
                 unique_symptoms = list(dict.fromkeys(symptoms_list))[:3]
                 symptom_text = ", ".join(unique_symptoms).replace("_", " ")
-                likely_cause = f"Based on historical incident patterns: {symptom_text}."
+                likely_cause = (
+                    f"Based on historical incident patterns: {symptom_text}."
+                )
                 likely_cause = likely_cause[:300]
 
         if likely_cause:
             triage_output["likely_cause"] = likely_cause
         else:
-            triage_output["likely_cause"] = "Unknown (no matching historical evidence available)."
+            triage_output["likely_cause"] = (
+                "Unknown (no matching historical evidence available)."
+            )
 
         # Extract impact/urgency - PRIMARY: from incident signatures (historical learning), FALLBACK: from alert labels
-        predicted_impact_urgency = predict_impact_urgency_from_evidence(incident_signatures, alert)
+        predicted_impact_urgency = predict_impact_urgency_from_evidence(
+            incident_signatures, alert
+        )
         if predicted_impact_urgency:
             impact, urgency = predicted_impact_urgency
             triage_output["impact"] = impact
             triage_output["urgency"] = urgency
-            predicted_severity = derive_severity_from_impact_urgency(impact, urgency)
+            predicted_severity = derive_severity_from_impact_urgency(
+                impact, urgency
+            )
             triage_output["severity"] = predicted_severity
             logger.info(
                 f"Impact/urgency/severity predicted from evidence: impact={impact}, urgency={urgency}, severity={predicted_severity}"
@@ -907,14 +991,18 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             if impact and urgency:
                 triage_output["impact"] = impact
                 triage_output["urgency"] = urgency
-                mapped_severity = derive_severity_from_impact_urgency(impact, urgency)
+                mapped_severity = derive_severity_from_impact_urgency(
+                    impact, urgency
+                )
                 triage_output["severity"] = mapped_severity
                 logger.info(
                     f"Impact/urgency/severity from alert labels (fallback): impact={impact}, urgency={urgency}, severity={mapped_severity}"
                 )
 
         # Extract routing - PRIMARY: from incident signatures (historical learning), FALLBACK: from alert labels
-        predicted_routing = predict_routing_from_evidence(incident_signatures, alert)
+        predicted_routing = predict_routing_from_evidence(
+            incident_signatures, alert
+        )
         if predicted_routing:
             triage_output["routing"] = predicted_routing
             logger.info(f"Routing predicted from evidence: {predicted_routing}")
@@ -940,7 +1028,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         if category:
             triage_output["category"] = category
         workflow_cfg = get_workflow_config() or {}
-        feedback_before_policy = bool(workflow_cfg.get("feedback_before_policy", False))
+        feedback_before_policy = bool(
+            workflow_cfg.get("feedback_before_policy", False)
+        )
         if feedback_before_policy:
             policy_decision = None
             policy_band = "PENDING"
@@ -951,7 +1041,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         triage_output["policy"] = policy_band
 
         # Extract affected_services - PRIMARY: from incident signatures, FALLBACK: from alert
-        affected_services = extract_affected_services_from_evidence(incident_signatures)
+        affected_services = extract_affected_services_from_evidence(
+            incident_signatures
+        )
         if not affected_services:
             affected_services = extract_affected_services_from_alert(alert)
 
@@ -972,7 +1064,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "chunk_id": sig.get("chunk_id"),
                 "document_id": sig.get("document_id"),
-                "incident_signature_id": sig.get("metadata", {}).get("incident_signature_id"),
+                "incident_signature_id": sig.get("metadata", {}).get(
+                    "incident_signature_id"
+                ),
                 "failure_type": sig.get("metadata", {}).get("failure_type"),
                 "error_class": sig.get("metadata", {}).get("error_class"),
                 "metadata": sig.get("metadata", {}),
@@ -984,7 +1078,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         ]
         retrieval_config = get_retrieval_config()
         triage_config = retrieval_config.get("triage", {})
-        runbook_threshold = float(triage_config.get("runbook_score_threshold", 0.1))
+        runbook_threshold = float(
+            triage_config.get("runbook_score_threshold", 0.1)
+        )
 
         filtered_runbook_metadata = []
         for rb in runbook_metadata:
@@ -992,8 +1088,12 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             service_boost = rb.get("service_match_boost", 0.0)
             component_boost = rb.get("component_match_boost", 0.0)
 
-            base_fulltext_score = float(relevance_score) if relevance_score else 0.0
-            fulltext_score = min(1.0, base_fulltext_score + service_boost + component_boost)
+            base_fulltext_score = (
+                float(relevance_score) if relevance_score else 0.0
+            )
+            fulltext_score = min(
+                1.0, base_fulltext_score + service_boost + component_boost
+            )
 
             if fulltext_score >= runbook_threshold:
                 filtered_runbook_metadata.append(rb)
@@ -1019,8 +1119,12 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
             service_boost = rb.get("service_match_boost", 0.0)
             component_boost = rb.get("component_match_boost", 0.0)
 
-            base_fulltext_score = float(relevance_score) if relevance_score else 0.0
-            fulltext_score = min(1.0, base_fulltext_score + service_boost + component_boost)
+            base_fulltext_score = (
+                float(relevance_score) if relevance_score else 0.0
+            )
+            fulltext_score = min(
+                1.0, base_fulltext_score + service_boost + component_boost
+            )
 
             if fulltext_score < runbook_threshold:
                 continue
@@ -1055,18 +1159,31 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
         if filtered_runbook_metadata:
             try:
-                from retrieval.resolution_retrieval import retrieve_runbook_chunks_by_document_id
+                from retrieval.resolution_retrieval import (
+                    retrieve_runbook_chunks_by_document_id,
+                )
 
                 document_ids_for_steps = []
-                service_val = alert.get("labels", {}).get("service") or alert.get("service")
+                service_val = alert.get("labels", {}).get(
+                    "service"
+                ) or alert.get("service")
                 if service_val:
                     for rb in filtered_runbook_metadata:
-                        if rb.get("service") == service_val and rb.get("document_id"):
+                        if rb.get("service") == service_val and rb.get(
+                            "document_id"
+                        ):
                             document_ids_for_steps.append(rb.get("document_id"))
                     for rb in filtered_runbook_metadata:
-                        if rb.get("service") != service_val and rb.get("document_id"):
-                            if rb.get("document_id") not in document_ids_for_steps:
-                                document_ids_for_steps.append(rb.get("document_id"))
+                        if rb.get("service") != service_val and rb.get(
+                            "document_id"
+                        ):
+                            if (
+                                rb.get("document_id")
+                                not in document_ids_for_steps
+                            ):
+                                document_ids_for_steps.append(
+                                    rb.get("document_id")
+                                )
                 else:
                     for rb in filtered_runbook_metadata:
                         if rb.get("document_id"):
@@ -1079,13 +1196,17 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                     for step in runbook_steps:
                         similarity_score = step.get("similarity_score")
                         vector_score = (
-                            float(similarity_score) if similarity_score is not None else None
+                            float(similarity_score)
+                            if similarity_score is not None
+                            else None
                         )
 
                         step_chunk = {
                             "chunk_id": step.get("chunk_id"),
                             "document_id": step.get("document_id"),
-                            "doc_title": step.get("runbook_title", "Runbook Step"),
+                            "doc_title": step.get(
+                                "runbook_title", "Runbook Step"
+                            ),
                             "content": f"Condition: {step.get('condition', '')}\nAction: {step.get('action', '')}\nExpected Outcome: {step.get('expected_outcome', 'N/A')}",
                             "provenance": {
                                 "source_type": "runbook_step",
@@ -1110,10 +1231,16 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
                         }
                         formatted_evidence["chunks"].append(step_chunk)
                         if step.get("chunk_id"):
-                            formatted_evidence["chunk_ids"].append(step.get("chunk_id"))
+                            formatted_evidence["chunk_ids"].append(
+                                step.get("chunk_id")
+                            )
                         if step.get("runbook_title"):
-                            formatted_evidence["chunk_sources"].append(step.get("runbook_title"))
-                    formatted_evidence["chunks_used"] = len(formatted_evidence["chunks"])
+                            formatted_evidence["chunk_sources"].append(
+                                step.get("runbook_title")
+                            )
+                    formatted_evidence["chunks_used"] = len(
+                        formatted_evidence["chunks"]
+                    )
             except Exception as e:
                 logger.warning(f"Failed to add runbook steps to evidence: {e}")
 
@@ -1129,7 +1256,11 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
         formatted_evidence["chunks"].sort(key=get_unified_score, reverse=True)
     else:
-        title = alert.get("title", "Unknown alert") if isinstance(alert, dict) else "Unknown alert"
+        title = (
+            alert.get("title", "Unknown alert")
+            if isinstance(alert, dict)
+            else "Unknown alert"
+        )
 
         # Extract routing, impact, urgency from alert labels (no evidence available)
         routing = extract_routing_from_alert(alert)
@@ -1209,7 +1340,9 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
         "policy_decision": policy_decision,
         "evidence_warning": evidence_warning,
         "evidence_status": evidence_status,  # "success", "failed_no_evidence", "failed_no_matching_evidence"
-        "status": "success" if has_evidence else "failed_no_evidence",  # Overall status
+        "status": (
+            "success" if has_evidence else "failed_no_evidence"
+        ),  # Overall status
         "evidence_count": {
             "incident_signatures": len(incident_signatures),
             "runbook_metadata": len(runbook_metadata),

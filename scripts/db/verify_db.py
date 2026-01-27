@@ -7,6 +7,7 @@ It connects to the Docker container 'noc-ai-postgres' via docker exec.
 Usage:
     python scripts/db/verify_db.py
 """
+
 import sys
 import os
 import subprocess
@@ -49,7 +50,14 @@ def check_docker_container():
     """Verify Docker container is running."""
     try:
         result = subprocess.run(
-            ["docker", "ps", "--filter", f"name={DOCKER_CONTAINER}", "--format", "{{.Names}}"],
+            [
+                "docker",
+                "ps",
+                "--filter",
+                f"name={DOCKER_CONTAINER}",
+                "--format",
+                "{{.Names}}",
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -59,7 +67,9 @@ def check_docker_container():
                 f"Docker container '{DOCKER_CONTAINER}' is not running. Please start it with 'docker compose up -d'"
             )
     except FileNotFoundError:
-        raise RuntimeError("Docker not found. Please ensure Docker is installed and running.")
+        raise RuntimeError(
+            "Docker not found. Please ensure Docker is installed and running."
+        )
     except subprocess.CalledProcessError:
         raise RuntimeError(
             f"Failed to check Docker container status. Ensure '{DOCKER_CONTAINER}' is running."
@@ -86,9 +96,15 @@ def execute_sql(query: str) -> list:
     ]
 
     try:
-        result = subprocess.run(docker_cmd, input=query, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            docker_cmd, input=query, capture_output=True, text=True, check=True
+        )
         # Parse tab-separated output
-        lines = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+        lines = [
+            line.strip()
+            for line in result.stdout.strip().split("\n")
+            if line.strip()
+        ]
         return lines
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Database query failed: {e.stderr}")
@@ -118,7 +134,9 @@ def execute_sql_single(query: str) -> str:
     ]
 
     try:
-        result = subprocess.run(docker_cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            docker_cmd, capture_output=True, text=True, check=True
+        )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Database query failed: {e.stderr}")
@@ -127,7 +145,10 @@ def execute_sql_single(query: str) -> str:
 def parse_result_line(line: str, fields: list) -> dict:
     """Parse a pipe-separated result line into a dict."""
     values = line.split("|")
-    return {fields[i]: values[i].strip() if i < len(values) else None for i in range(len(fields))}
+    return {
+        fields[i]: values[i].strip() if i < len(values) else None
+        for i in range(len(fields))
+    }
 
 
 def verify_db():
@@ -159,15 +180,13 @@ def verify_db():
         logger.info(f"  Total chunks: {total_chunks}")
 
         # Chunks with embeddings
-        chunk_stats_line = execute_sql_single(
-            """
+        chunk_stats_line = execute_sql_single("""
             SELECT 
                 COUNT(*)::text || '|' || 
                 COUNT(embedding)::text || '|' || 
                 (COUNT(*) - COUNT(embedding))::text
             FROM chunks;
-        """
-        )
+        """)
         parts = chunk_stats_line.split("|")
         total = int(parts[0]) if parts[0] else 0
         with_embedding = int(parts[1]) if len(parts) > 1 and parts[1] else 0
@@ -175,38 +194,41 @@ def verify_db():
 
         logger.info(f"  Chunks with embeddings: {with_embedding}/{total}")
         if missing_embedding > 0:
-            logger.warning(f"    WARNING: {missing_embedding} chunks missing embeddings!")
+            logger.warning(
+                f"    WARNING: {missing_embedding} chunks missing embeddings!"
+            )
 
         # Chunks with tsvector
-        tsv_stats_line = execute_sql_single(
-            """
+        tsv_stats_line = execute_sql_single("""
             SELECT 
                 COUNT(*)::text || '|' || 
                 COUNT(tsv)::text || '|' || 
                 (COUNT(*) - COUNT(tsv))::text
             FROM chunks;
-        """
-        )
+        """)
         parts = tsv_stats_line.split("|")
         with_tsv = int(parts[1]) if len(parts) > 1 and parts[1] else 0
         missing_tsv = int(parts[2]) if len(parts) > 2 and parts[2] else 0
 
         logger.info(f"  Chunks with tsvector: {with_tsv}/{total}")
         if missing_tsv > 0:
-            logger.warning(f"    WARNING: {missing_tsv} chunks missing tsvector!")
+            logger.warning(
+                f"    WARNING: {missing_tsv} chunks missing tsvector!"
+            )
 
         # 3. Check embedding dimensions
         logger.info("\nEmbedding Details:")
         total_with_emb = int(
-            execute_sql_single("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL;")
+            execute_sql_single(
+                "SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL;"
+            )
         )
         logger.info(f"  Total chunks with embeddings: {total_with_emb}")
         logger.info("  Expected dimension: 1536 (text-embedding-3-small)")
 
         # 4. Check chunks per document
         logger.info("\nChunks per Document:")
-        chunk_per_doc = execute_sql(
-            """
+        chunk_per_doc = execute_sql("""
             SELECT 
                 d.doc_type,
                 COALESCE(AVG(chunk_count), 0)::text as avg_chunks,
@@ -220,8 +242,7 @@ def verify_db():
             ) c ON d.id = c.document_id
             GROUP BY d.doc_type
             ORDER BY d.doc_type;
-        """
-        )
+        """)
         logger.info("  Average chunks per document by type:")
         for line in chunk_per_doc:
             parts = line.split("|")
@@ -232,16 +253,12 @@ def verify_db():
 
         # 5. Check for documents without chunks
         logger.info("\nDocument-Chunk Relationships:")
-        orphaned = int(
-            execute_sql_single(
-                """
+        orphaned = int(execute_sql_single("""
             SELECT COUNT(*) 
             FROM documents d
             LEFT JOIN chunks c ON d.id = c.document_id
             WHERE c.id IS NULL;
-        """
-            )
-        )
+        """))
         if orphaned > 0:
             logger.warning(f"    WARNING: {orphaned} documents have no chunks!")
         else:
@@ -251,14 +268,12 @@ def verify_db():
         logger.info("\nIngestion Quality Checks:")
 
         # Service normalization check (check incident_signatures table, not documents)
-        services = execute_sql(
-            """
+        services = execute_sql("""
             SELECT service, COUNT(*)::text as count 
             FROM incident_signatures 
             GROUP BY service 
             ORDER BY count DESC;
-        """
-        )
+        """)
         server_incidents = 0
         total_incidents = 0
         logger.info("  Service distribution (from incident_signatures):")
@@ -277,22 +292,22 @@ def verify_db():
                 f"  Found {server_incidents} incidents with 'Server' service (should be normalized)"
             )
         else:
-            logger.info("  Service normalization working (no 'Server' incidents)")
+            logger.info(
+                "  Service normalization working (no 'Server' incidents)"
+            )
 
         if total_incidents > 0:
             logger.info(f"  Total incident signatures: {total_incidents}")
 
         # Runbook deduplication check
-        duplicates = execute_sql(
-            """
+        duplicates = execute_sql("""
             SELECT title, COUNT(*)::text as count 
             FROM documents 
             WHERE doc_type = 'runbook' 
             GROUP BY title 
             HAVING COUNT(*) > 1
             ORDER BY count DESC;
-        """
-        )
+        """)
         if duplicates:
             logger.warning(f"  Found duplicate runbooks:")
             for line in duplicates:
@@ -303,13 +318,14 @@ def verify_db():
             logger.info("  Runbook deduplication working (no duplicates)")
 
         # Runbook steps check
-        total_steps = int(execute_sql_single("SELECT COUNT(*) FROM runbook_steps;"))
+        total_steps = int(
+            execute_sql_single("SELECT COUNT(*) FROM runbook_steps;")
+        )
         if total_steps == 0:
             logger.warning(f"  No runbook steps found in database")
         else:
             logger.info(f"  Found {total_steps} runbook steps")
-            runbooks_without_steps = execute_sql(
-                """
+            runbooks_without_steps = execute_sql("""
                 SELECT d.title, COUNT(rs.id)::text as step_count 
                 FROM documents d 
                 LEFT JOIN runbook_steps rs ON d.id = rs.runbook_document_id 
@@ -317,10 +333,11 @@ def verify_db():
                 GROUP BY d.id, d.title 
                 HAVING COUNT(rs.id) = 0
                 LIMIT 5;
-            """
-            )
+            """)
             if runbooks_without_steps:
-                logger.warning(f"     {len(runbooks_without_steps)} runbooks have no steps")
+                logger.warning(
+                    f"     {len(runbooks_without_steps)} runbooks have no steps"
+                )
 
         # 7. Summary
         logger.info("\n" + "=" * 70)
@@ -360,7 +377,9 @@ def verify_db():
             all_good = False
 
         if all_good:
-            logger.info("\n   Database is correctly set up and all embeddings generated!")
+            logger.info(
+                "\n   Database is correctly set up and all embeddings generated!"
+            )
         else:
             logger.warning("\n    Some issues detected. Please review above.")
 

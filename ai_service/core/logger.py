@@ -9,7 +9,10 @@ from logging.handlers import TimedRotatingFileHandler
 
 # Import log sanitizer for sensitive data protection
 try:
-    from ai_service.core.log_sanitizer import sanitize_log_message, sanitize_exception_args
+    from ai_service.core.log_sanitizer import (
+        sanitize_log_message,
+        sanitize_exception_args,
+    )
 except ImportError:
     # Fallback if log_sanitizer is not available
     def sanitize_log_message(message: str) -> str:
@@ -41,9 +44,7 @@ def setup_logging(
     """
     # Default format: timestamp, level, module, message
     if log_format is None:
-        log_format = (
-            "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | %(message)s"
-        )
+        log_format = "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | %(message)s"
 
     # Create formatter
     formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")

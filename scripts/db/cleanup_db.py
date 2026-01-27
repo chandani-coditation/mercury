@@ -16,6 +16,7 @@ Usage examples:
   python scripts/db/cleanup_db.py --yes --documents --chunks --runbook-steps
   python scripts/db/cleanup_db.py --yes --incident-signatures --agent-state
 """
+
 import sys
 import os
 import argparse
@@ -77,7 +78,9 @@ def build_statements(targets: List[str]) -> List[str]:
     if "runbook_steps" in targets:
         ordered.append("TRUNCATE TABLE runbook_steps RESTART IDENTITY CASCADE;")
     if "incident_signatures" in targets:
-        ordered.append("TRUNCATE TABLE incident_signatures RESTART IDENTITY CASCADE;")
+        ordered.append(
+            "TRUNCATE TABLE incident_signatures RESTART IDENTITY CASCADE;"
+        )
     if "documents" in targets:
         ordered.append("TRUNCATE TABLE documents RESTART IDENTITY CASCADE;")
     if "feedback" in targets:
@@ -94,7 +97,14 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
     # Verify Docker container is running
     try:
         result = subprocess.run(
-            ["docker", "ps", "--filter", f"name={DOCKER_CONTAINER}", "--format", "{{.Names}}"],
+            [
+                "docker",
+                "ps",
+                "--filter",
+                f"name={DOCKER_CONTAINER}",
+                "--format",
+                "{{.Names}}",
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -104,7 +114,9 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
                 f"Docker container '{DOCKER_CONTAINER}' is not running. Please start it with 'docker compose up -d'"
             )
     except FileNotFoundError:
-        raise RuntimeError("Docker not found. Please ensure Docker is installed and running.")
+        raise RuntimeError(
+            "Docker not found. Please ensure Docker is installed and running."
+        )
     except subprocess.CalledProcessError:
         raise RuntimeError(
             f"Failed to check Docker container status. Ensure '{DOCKER_CONTAINER}' is running."
@@ -122,13 +134,25 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
 
     # Use Docker exec to connect to Docker PostgreSQL container
     # This ensures we ONLY use Docker PostgreSQL, never local instance
-    docker_cmd = ["docker", "exec", DOCKER_CONTAINER, "psql", "-U", DB_USER, "-d", DB_NAME, "-c"]
+    docker_cmd = [
+        "docker",
+        "exec",
+        DOCKER_CONTAINER,
+        "psql",
+        "-U",
+        DB_USER,
+        "-d",
+        DB_NAME,
+        "-c",
+    ]
 
     try:
         for s in stmts:
             logger.info(f"Executing in Docker ({DOCKER_CONTAINER}): {s.strip()}")
             # Execute SQL via docker exec
-            result = subprocess.run(docker_cmd + [s], capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                docker_cmd + [s], capture_output=True, text=True, check=True
+            )
             if result.stdout:
                 logger.info(result.stdout.strip())
         logger.info("\nCleanup complete.")
@@ -156,12 +180,26 @@ Examples:
   python scripts/db/cleanup_db.py --yes --documents --chunks
         """,
     )
-    parser.add_argument("--yes", action="store_true", help="Confirm destructive action")
-    parser.add_argument("--dry-run", action="store_true", help="Show statements without executing")
-    parser.add_argument("--documents", action="store_true", help="Wipe documents table")
-    parser.add_argument("--chunks", action="store_true", help="Wipe chunks table")
-    parser.add_argument("--incidents", action="store_true", help="Wipe incidents table")
-    parser.add_argument("--feedback", action="store_true", help="Wipe feedback table")
+    parser.add_argument(
+        "--yes", action="store_true", help="Confirm destructive action"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show statements without executing",
+    )
+    parser.add_argument(
+        "--documents", action="store_true", help="Wipe documents table"
+    )
+    parser.add_argument(
+        "--chunks", action="store_true", help="Wipe chunks table"
+    )
+    parser.add_argument(
+        "--incidents", action="store_true", help="Wipe incidents table"
+    )
+    parser.add_argument(
+        "--feedback", action="store_true", help="Wipe feedback table"
+    )
     parser.add_argument(
         "--runbook-steps",
         dest="runbook_steps",

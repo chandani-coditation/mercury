@@ -4,7 +4,13 @@ import os
 from typing import Dict, List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from ingestion.models import IngestDocument, IngestAlert, IngestIncident, IngestRunbook, IngestLog
+from ingestion.models import (
+    IngestDocument,
+    IngestAlert,
+    IngestIncident,
+    IngestRunbook,
+    IngestLog,
+)
 from ingestion.normalizers import (
     normalize_alert,
     normalize_incident,
@@ -25,7 +31,9 @@ except ImportError:
     # Fallback if ai_service modules not available
     import logging
 
-    def setup_logging(log_level="INFO", log_file=None, log_dir=None, service_name="ingestion"):
+    def setup_logging(
+        log_level="INFO", log_file=None, log_dir=None, service_name="ingestion"
+    ):
         logging.basicConfig(level=getattr(logging, log_level))
 
     def get_logger(name):
@@ -37,7 +45,12 @@ load_dotenv()
 log_level = os.getenv("LOG_LEVEL", "INFO")
 log_file = os.getenv("LOG_FILE", None)
 log_dir = os.getenv("LOG_DIR", None)
-setup_logging(log_level=log_level, log_file=log_file, log_dir=log_dir, service_name="ingestion")
+setup_logging(
+    log_level=log_level,
+    log_file=log_file,
+    log_dir=log_dir,
+    service_name="ingestion",
+)
 logger = get_logger(__name__)
 
 app = FastAPI(
@@ -52,7 +65,9 @@ app = FastAPI(
 allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
 if allowed_origins_env:
     allowed_origins = [
-        origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()
+        origin.strip()
+        for origin in allowed_origins_env.split(",")
+        if origin.strip()
     ]
 else:
     allowed_origins = ["http://localhost:5173"]
@@ -92,7 +107,9 @@ def ingest(doc: IngestDocument):
     3. Generates embeddings for each chunk
     4. Stores chunks with embeddings and tsvector
     """
-    logger.info(f"Ingesting document: type={doc.doc_type}, title={doc.title[:50]}...")
+    logger.info(
+        f"Ingesting document: type={doc.doc_type}, title={doc.title[:50]}..."
+    )
 
     try:
         doc_id = insert_document_and_chunks(
@@ -107,7 +124,11 @@ def ingest(doc: IngestDocument):
 
         logger.info(f"Document ingested successfully: document_id={doc_id}")
 
-        return {"status": "ok", "document_id": doc_id, "message": "Document ingested successfully"}
+        return {
+            "status": "ok",
+            "document_id": doc_id,
+            "message": "Document ingested successfully",
+        }
     except Exception as e:
         logger.error(f"Document ingestion error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -116,7 +137,9 @@ def ingest(doc: IngestDocument):
 @app.post("/ingest/alert")
 def ingest_alert(alert: IngestAlert):
     """Ingest a historical alert."""
-    logger.info(f"Ingesting alert: alert_id={alert.alert_id}, title={alert.title[:50]}...")
+    logger.info(
+        f"Ingesting alert: alert_id={alert.alert_id}, title={alert.title[:50]}..."
+    )
 
     try:
         doc = normalize_alert(alert)
@@ -132,7 +155,11 @@ def ingest_alert(alert: IngestAlert):
 
         logger.info(f"Alert ingested successfully: document_id={doc_id}")
 
-        return {"status": "ok", "document_id": doc_id, "message": "Alert ingested successfully"}
+        return {
+            "status": "ok",
+            "document_id": doc_id,
+            "message": "Alert ingested successfully",
+        }
     except Exception as e:
         logger.error(f"Alert ingestion error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -178,7 +205,9 @@ def ingest_runbook(runbook: IngestRunbook):
         from ingestion.db_ops import insert_runbook_with_steps
 
         doc, steps = normalize_runbook(runbook)
-        logger.info(f"Extracted {len(steps)} steps from runbook: {runbook.title}")
+        logger.info(
+            f"Extracted {len(steps)} steps from runbook: {runbook.title}"
+        )
 
         if len(steps) == 0:
             logger.warning(
@@ -196,7 +225,9 @@ def ingest_runbook(runbook: IngestRunbook):
             steps=steps,
             prerequisites=runbook.prerequisites,  # Pass prerequisites from historical data
         )
-        logger.info(f"Runbook ingested successfully: document_id={doc_id}, steps={len(steps)}")
+        logger.info(
+            f"Runbook ingested successfully: document_id={doc_id}, steps={len(steps)}"
+        )
 
         return {
             "status": "ok",
@@ -212,7 +243,9 @@ def ingest_runbook(runbook: IngestRunbook):
 @app.post("/ingest/log")
 def ingest_log(log: IngestLog):
     """Ingest a log snippet (supports plain text, JSON, syslog formats)."""
-    logger.info(f"Ingesting log: service={log.service}, component={log.component}")
+    logger.info(
+        f"Ingesting log: service={log.service}, component={log.component}"
+    )
 
     try:
         doc = normalize_log(log)
@@ -227,7 +260,11 @@ def ingest_log(log: IngestLog):
         )
         logger.info(f"Log ingested successfully: document_id={doc_id}")
 
-        return {"status": "ok", "document_id": doc_id, "message": "Log ingested successfully"}
+        return {
+            "status": "ok",
+            "document_id": doc_id,
+            "message": "Log ingested successfully",
+        }
     except Exception as e:
         logger.error(f"Log ingestion error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -250,7 +287,9 @@ def ingest_batch(items: List[Dict], doc_type: str = "document"):
             if isinstance(item, str):
                 # Unstructured text
                 doc = IngestDocument(
-                    doc_type=doc_type, title=f"{doc_type.title()} Document", content=item
+                    doc_type=doc_type,
+                    title=f"{doc_type.title()} Document",
+                    content=item,
                 )
             elif isinstance(item, dict):
                 # Structured JSON
@@ -269,7 +308,9 @@ def ingest_batch(items: List[Dict], doc_type: str = "document"):
             )
             results.append({"document_id": doc_id, "title": doc.title})
 
-        logger.info(f"Batch ingestion completed: {len(results)} items ingested successfully")
+        logger.info(
+            f"Batch ingestion completed: {len(results)} items ingested successfully"
+        )
 
         return {"status": "ok", "ingested": len(results), "results": results}
     except Exception as e:

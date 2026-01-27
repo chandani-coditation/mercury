@@ -35,14 +35,24 @@ try:
         with open(tech_terms_path, "r") as f:
             TECHNICAL_TERMS_CONFIG = json.load(f)
     else:
-        TECHNICAL_TERMS_CONFIG = {"abbreviations": {}, "synonyms": {}, "normalization_rules": {}}
+        TECHNICAL_TERMS_CONFIG = {
+            "abbreviations": {},
+            "synonyms": {},
+            "normalization_rules": {},
+        }
 except Exception:
-    TECHNICAL_TERMS_CONFIG = {"abbreviations": {}, "synonyms": {}, "normalization_rules": {}}
+    TECHNICAL_TERMS_CONFIG = {
+        "abbreviations": {},
+        "synonyms": {},
+        "normalization_rules": {},
+    }
 
 # Try to load extraction patterns config
 try:
     project_root = Path(__file__).parent.parent
-    extraction_patterns_path = project_root / "config" / "extraction_patterns.json"
+    extraction_patterns_path = (
+        project_root / "config" / "extraction_patterns.json"
+    )
     if extraction_patterns_path.exists():
         with open(extraction_patterns_path, "r") as f:
             EXTRACTION_PATTERNS_CONFIG = json.load(f)
@@ -86,7 +96,12 @@ def _load_json_schema(schema_name: str) -> dict:
     """Load JSON schema from config/json_schemas/ directory."""
     try:
         project_root = Path(__file__).parent.parent
-        schema_path = project_root / "config" / "json_schemas" / f"{schema_name}_schema.json"
+        schema_path = (
+            project_root
+            / "config"
+            / "json_schemas"
+            / f"{schema_name}_schema.json"
+        )
         if schema_path.exists():
             with open(schema_path, "r") as f:
                 return json.load(f)
@@ -175,7 +190,9 @@ def normalize_technical_terms(text: str) -> str:
             try:
                 # Create regex pattern for word boundary
                 pattern = r"\b" + re.escape(abbrev) + r"\b"
-                normalized_text = re.sub(pattern, expansion, normalized_text, flags=re.IGNORECASE)
+                normalized_text = re.sub(
+                    pattern, expansion, normalized_text, flags=re.IGNORECASE
+                )
             except Exception:
                 # Skip this abbreviation if regex fails (graceful degradation)
                 continue
@@ -213,19 +230,25 @@ def extract_structured_data(text: str) -> Dict[str, List[str]]:
 
     try:
         # Load patterns from config (centralized)
-        error_code_patterns = EXTRACTION_PATTERNS_CONFIG.get("error_code_patterns", [])
+        error_code_patterns = EXTRACTION_PATTERNS_CONFIG.get(
+            "error_code_patterns", []
+        )
         job_patterns = EXTRACTION_PATTERNS_CONFIG.get("job_patterns", [])
         id_patterns = EXTRACTION_PATTERNS_CONFIG.get("id_patterns", [])
 
         # Get error code prefix from config
-        error_code_prefix = INGESTION_CONFIG.get("formatting", {}).get("error_code_prefix", "error")
+        error_code_prefix = INGESTION_CONFIG.get("formatting", {}).get(
+            "error_code_prefix", "error"
+        )
 
         # Extract error codes (e.g., "Error 500", "SQLSTATE 23505", "HTTP 404")
         for pattern_str in error_code_patterns:
             try:
                 pattern = re.compile(pattern_str, re.IGNORECASE)
                 matches = pattern.findall(text)
-                extracted["error_codes"].extend([f"{error_code_prefix} {m}" for m in matches])
+                extracted["error_codes"].extend(
+                    [f"{error_code_prefix} {m}" for m in matches]
+                )
             except Exception:
                 # Skip invalid pattern (graceful degradation)
                 continue
@@ -297,13 +320,19 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
         content_parts.append(f"Resolution Notes: {normalized_notes}")
 
     if alert.labels:
-        content_parts.append(f"Labels: {', '.join(f'{k}={v}' for k, v in alert.labels.items())}")
+        content_parts.append(
+            f"Labels: {', '.join(f'{k}={v}' for k, v in alert.labels.items())}"
+        )
 
     content = "\n\n".join(content_parts)
 
     # Extract structured data for metadata (error codes, IDs, job names)
     structured_data = extract_structured_data(content)
-    if structured_data["error_codes"] or structured_data["job_names"] or structured_data["ids"]:
+    if (
+        structured_data["error_codes"]
+        or structured_data["job_names"]
+        or structured_data["ids"]
+    ):
         # Add to metadata for better matching
         if "metadata" not in (alert.metadata or {}):
             alert.metadata = alert.metadata or {}
@@ -335,7 +364,11 @@ def normalize_alert(alert: IngestAlert) -> IngestDocument:
 
     # Extract structured data for metadata (error codes, IDs, job names)
     structured_data = extract_structured_data(content)
-    if structured_data["error_codes"] or structured_data["job_names"] or structured_data["ids"]:
+    if (
+        structured_data["error_codes"]
+        or structured_data["job_names"]
+        or structured_data["ids"]
+    ):
         # Add to tags for better matching
         tags["structured_data"] = structured_data
 
@@ -360,11 +393,17 @@ def extract_runbook_steps(
 
     if not runbook_id:
         runbook_id = (
-            runbook.tags.get("runbook_id") if runbook.tags else f"RB-{uuid.uuid4().hex[:8].upper()}"
+            runbook.tags.get("runbook_id")
+            if runbook.tags
+            else f"RB-{uuid.uuid4().hex[:8].upper()}"
         )
 
     # ---- Structured steps ----
-    if runbook.steps and isinstance(runbook.steps, list) and len(runbook.steps) > 0:
+    if (
+        runbook.steps
+        and isinstance(runbook.steps, list)
+        and len(runbook.steps) > 0
+    ):
         for idx, step_text in enumerate(runbook.steps, 1):
             step_id = f"{runbook_id}-S{idx}"
             action = normalize_technical_terms(step_text)
@@ -407,9 +446,7 @@ def extract_runbook_steps(
 
     # Strategy 3.5: Colon-terminated headers (CPU fix)
     if not found_steps:
-        header_pattern = (
-            r"(?m)^\s*([A-Z][^\n]{3,100}:)\s*\n+(.+?)(?=\n[A-Z][^\n]{3,100}:|\n\n[A-Z]|\Z)"
-        )
+        header_pattern = r"(?m)^\s*([A-Z][^\n]{3,100}:)\s*\n+(.+?)(?=\n[A-Z][^\n]{3,100}:|\n\n[A-Z]|\Z)"
         for m in re.finditer(header_pattern, content, re.DOTALL):
             found_steps.append(f"{m.group(1)} {m.group(2)}".strip())
 
@@ -490,7 +527,9 @@ def derive_step_title(step_text: str, idx: int) -> str:
     return f"Step {idx}"
 
 
-def validate_service_component_value(value: Optional[str], field_name: str) -> Optional[str]:
+def validate_service_component_value(
+    value: Optional[str], field_name: str
+) -> Optional[str]:
     """
     Validate and normalize a service/component value.
 
@@ -540,7 +579,9 @@ def validate_service_component_value(value: Optional[str], field_name: str) -> O
             from ai_service.core import get_logger
 
             logger = get_logger(__name__)
-            logger.warning(f"{field_name} contains special characters (may cause issues): {value}")
+            logger.warning(
+                f"{field_name} contains special characters (may cause issues): {value}"
+            )
         except:
             pass
 
@@ -548,7 +589,9 @@ def validate_service_component_value(value: Optional[str], field_name: str) -> O
 
 
 def normalize_service_component(
-    service: Optional[str], component: Optional[str], context: Optional[str] = None
+    service: Optional[str],
+    component: Optional[str],
+    context: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Normalize and validate service/component values using mapping configuration.
@@ -579,7 +622,9 @@ def normalize_service_component(
         - If component maps to null, returns None for component
     """
     validated_service = validate_service_component_value(service, "service")
-    validated_component = validate_service_component_value(component, "component")
+    validated_component = validate_service_component_value(
+        component, "component"
+    )
 
     if not SERVICE_COMPONENT_MAPPING:
         # No mapping config available, return validated values
@@ -596,7 +641,10 @@ def normalize_service_component(
     special_values = SERVICE_COMPONENT_MAPPING.get("special_values", {})
     ambiguous_service_name = special_values.get("ambiguous_service", "Server")
 
-    if validated_service and validated_service.lower() == ambiguous_service_name.lower():
+    if (
+        validated_service
+        and validated_service.lower() == ambiguous_service_name.lower()
+    ):
         detected_component = None
 
         # First, try to infer from existing component
@@ -611,7 +659,9 @@ def normalize_service_component(
 
         # Map detected component to appropriate service using config-driven mapping
         if detected_component:
-            component_to_service = SERVICE_COMPONENT_MAPPING.get("component_to_service_mapping", {})
+            component_to_service = SERVICE_COMPONENT_MAPPING.get(
+                "component_to_service_mapping", {}
+            )
             # Normalize component name for lookup (case-insensitive)
             component_key = (
                 detected_component.capitalize()
@@ -671,7 +721,9 @@ def _detect_component_from_text(text: str) -> Optional[str]:
         return None
 
     text_lower = text.lower()
-    detection_patterns = SERVICE_COMPONENT_MAPPING.get("component_detection_patterns", {})
+    detection_patterns = SERVICE_COMPONENT_MAPPING.get(
+        "component_detection_patterns", {}
+    )
 
     # Try each component's patterns in order (config defines priority)
     for component_name, patterns in detection_patterns.items():
@@ -717,7 +769,9 @@ def _extract_service_component(
     # Extract service from affected_services using config-driven extraction rules
     if incident.affected_services and len(incident.affected_services) > 0:
         raw_service = incident.affected_services[0]
-        service_extraction_config = SERVICE_COMPONENT_MAPPING.get("service_extraction", {})
+        service_extraction_config = SERVICE_COMPONENT_MAPPING.get(
+            "service_extraction", {}
+        )
         delimiter = service_extraction_config.get("delimiter", "-")
         take_first_part = service_extraction_config.get("take_first_part", True)
 
@@ -740,10 +794,14 @@ def _extract_service_component(
 
         # Special case: DETECT_FROM_TEXT means we need to detect component from title/description
         special_values = SERVICE_COMPONENT_MAPPING.get("special_values", {})
-        detect_from_text_value = special_values.get("detect_from_text", "DETECT_FROM_TEXT")
+        detect_from_text_value = special_values.get(
+            "detect_from_text", "DETECT_FROM_TEXT"
+        )
 
         if mapped_component == detect_from_text_value:
-            title_desc = f"{incident.title or ''} {incident.description or ''}".strip()
+            title_desc = (
+                f"{incident.title or ''} {incident.description or ''}".strip()
+            )
             component = _detect_component_from_text(title_desc)
         # None means this failure type doesn't have a component
         elif mapped_component is None:
@@ -752,7 +810,9 @@ def _extract_service_component(
             component = mapped_component
     else:
         # If failure_type not in mapping, try to detect from text as fallback
-        title_desc = f"{incident.title or ''} {incident.description or ''}".strip()
+        title_desc = (
+            f"{incident.title or ''} {incident.description or ''}".strip()
+        )
         component = _detect_component_from_text(title_desc)
 
     return service, component
@@ -779,7 +839,9 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
     error_class = classifier.classify_error_class(incident, failure_type)
 
     # Step 3: Generate deterministic signature ID (hash-based)
-    sig_id = classifier.generate_signature_id(incident, failure_type, error_class)
+    sig_id = classifier.generate_signature_id(
+        incident, failure_type, error_class
+    )
 
     # Step 4: Normalize symptoms using controlled vocabulary (deterministic)
     symptoms = classifier.normalize_symptoms(incident)
@@ -807,7 +869,11 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
     if incident.metadata and isinstance(incident.metadata, dict):
         assignment_group = incident.metadata.get("assignment_group")
     # Also check tags if not in metadata (for backward compatibility)
-    if not assignment_group and hasattr(incident, "tags") and isinstance(incident.tags, dict):
+    if (
+        not assignment_group
+        and hasattr(incident, "tags")
+        and isinstance(incident.tags, dict)
+    ):
         assignment_group = incident.tags.get("assignment_group")
     # Also check if it's in the incident directly (for IngestIncident from CSV)
     if not assignment_group and hasattr(incident, "assignment_group"):
@@ -822,11 +888,23 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
         urgency = incident.metadata.get("urgency")
         close_notes = incident.metadata.get("close_notes")
     # Also check tags if not in metadata (for backward compatibility)
-    if not impact and hasattr(incident, "tags") and isinstance(incident.tags, dict):
+    if (
+        not impact
+        and hasattr(incident, "tags")
+        and isinstance(incident.tags, dict)
+    ):
         impact = incident.tags.get("impact")
-    if not urgency and hasattr(incident, "tags") and isinstance(incident.tags, dict):
+    if (
+        not urgency
+        and hasattr(incident, "tags")
+        and isinstance(incident.tags, dict)
+    ):
         urgency = incident.tags.get("urgency")
-    if not close_notes and hasattr(incident, "tags") and isinstance(incident.tags, dict):
+    if (
+        not close_notes
+        and hasattr(incident, "tags")
+        and isinstance(incident.tags, dict)
+    ):
         close_notes = incident.tags.get("close_notes")
     # Also check if they're in the incident directly (for IngestIncident from CSV)
     if not impact and hasattr(incident, "impact"):
@@ -840,7 +918,9 @@ def create_incident_signature(incident: IngestIncident) -> IncidentSignature:
         incident_signature_id=sig_id,
         failure_type=failure_type,
         error_class=error_class,
-        symptoms=symptoms[:5] if symptoms else ["unknown symptoms"],  # Limit to 5 symptoms
+        symptoms=(
+            symptoms[:5] if symptoms else ["unknown symptoms"]
+        ),  # Limit to 5 symptoms
         affected_service=affected_service,
         resolution_refs=resolution_refs,
         service=service,
@@ -918,7 +998,9 @@ def normalize_runbook(
     )
 
     # Extract atomic steps (will use normalized service/component)
-    steps = extract_runbook_steps(runbook, runbook_id, normalized_service, normalized_component)
+    steps = extract_runbook_steps(
+        runbook, runbook_id, normalized_service, normalized_component
+    )
 
     # Build metadata content (for document table - not for embedding)
     # This is just metadata, not the actual steps
@@ -940,7 +1022,9 @@ def normalize_runbook(
         "env": None,  # Environment (can be extracted from metadata if available)
         "risk": None,  # Risk level (can be extracted from content if available)
         "last_reviewed_at": None,  # Can be extracted from metadata if available
-        "failure_types": runbook.tags.get("failure_types") if runbook.tags else None,
+        "failure_types": (
+            runbook.tags.get("failure_types") if runbook.tags else None
+        ),
         **(runbook.tags or {}),
         **(runbook.metadata or {}),
     }
@@ -1020,22 +1104,37 @@ def normalize_log(log: IngestLog) -> IngestDocument:
 def normalize_json_data(data: Dict, doc_type: str) -> IngestDocument:
     """Normalize arbitrary JSON data to IngestDocument format."""
     # Extract common fields
-    title = data.get("title") or data.get("name") or f"{doc_type.title()} Document"
+    title = (
+        data.get("title") or data.get("name") or f"{doc_type.title()} Document"
+    )
     content = data.get("content") or data.get("description") or str(data)
 
     # Try to extract service/component
     service = data.get("service") or (
-        data.get("labels", {}).get("service") if isinstance(data.get("labels"), dict) else None
+        data.get("labels", {}).get("service")
+        if isinstance(data.get("labels"), dict)
+        else None
     )
     component = data.get("component") or (
-        data.get("labels", {}).get("component") if isinstance(data.get("labels"), dict) else None
+        data.get("labels", {}).get("component")
+        if isinstance(data.get("labels"), dict)
+        else None
     )
 
     # Build tags from all other fields
     tags = {
         k: v
         for k, v in data.items()
-        if k not in ["title", "name", "content", "description", "service", "component", "labels"]
+        if k
+        not in [
+            "title",
+            "name",
+            "content",
+            "description",
+            "service",
+            "component",
+            "labels",
+        ]
     }
     tags["type"] = doc_type
 

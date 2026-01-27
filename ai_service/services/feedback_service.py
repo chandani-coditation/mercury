@@ -61,7 +61,9 @@ class FeedbackService:
                 if updated:
                     return existing_feedback["id"]
                 else:
-                    logger.warning("Failed to update existing feedback, will create new one")
+                    logger.warning(
+                        "Failed to update existing feedback, will create new one"
+                    )
 
         # Create new feedback record
         return self.repository.create(
@@ -74,7 +76,9 @@ class FeedbackService:
         )
 
     def list_feedback_between(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> List[Dict]:
         """
         List feedback records between two dates.

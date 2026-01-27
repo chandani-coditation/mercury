@@ -46,7 +46,9 @@ def list_documents(
                 conditions.append("service = %s")
                 params.append(service)
 
-            where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+            where_clause = (
+                f"WHERE {' AND '.join(conditions)}" if conditions else ""
+            )
 
             # Get total count
             count_query = f"SELECT COUNT(*) FROM documents {where_clause}"
@@ -68,10 +70,17 @@ def list_documents(
 
             documents = [dict(row) for row in rows]
 
-            return {"documents": documents, "total": total, "limit": limit, "offset": offset}
+            return {
+                "documents": documents,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
     except Exception as e:
         logger.error(f"Failed to list documents: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to list documents: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list documents: {str(e)}"
+        )
 
 
 @router.get("/documents/{document_id}")
@@ -99,8 +108,12 @@ def get_document(document_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get document {document_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get document: {str(e)}")
+        logger.error(
+            f"Failed to get document {document_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get document: {str(e)}"
+        )
 
 
 @router.put("/documents/{document_id}")
@@ -158,7 +171,9 @@ def update_document(
                 params.append(json.dumps(tags))
 
             if not updates:
-                raise HTTPException(status_code=400, detail="No fields to update")
+                raise HTTPException(
+                    status_code=400, detail="No fields to update"
+                )
 
             updates.append("last_reviewed_at = now()")
             params.append(document_id)
@@ -178,8 +193,12 @@ def update_document(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update document {document_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update document: {str(e)}")
+        logger.error(
+            f"Failed to update document {document_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update document: {str(e)}"
+        )
 
 
 @router.delete("/documents/{document_id}")
@@ -207,5 +226,9 @@ def delete_document(document_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete document {document_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
+        logger.error(
+            f"Failed to delete document {document_id}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete document: {str(e)}"
+        )

@@ -31,7 +31,12 @@ def readiness_check():
     """
     logger.debug("Readiness check requested")
     start_time = time.time()
-    checks = {"service": "ai", "version": "1.0.0", "status": "ready", "checks": {}}
+    checks = {
+        "service": "ai",
+        "version": "1.0.0",
+        "status": "ready",
+        "checks": {},
+    }
 
     # Check database with timeout protection
     db_start = time.time()

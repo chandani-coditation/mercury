@@ -5,7 +5,10 @@ from ai_service.state import AgentState, ActionResponse, get_state_bus
 from ai_service.core import get_logger, ValidationError
 from ai_service.services import IncidentService
 from ai_service.policy import get_policy_from_config
-from ai_service.guardrails import validate_triage_output, validate_resolution_output
+from ai_service.guardrails import (
+    validate_triage_output,
+    validate_resolution_output,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -64,7 +67,9 @@ def get_agent_state(incident_id: str):
 
 
 @router.post("/agents/{incident_id}/actions/{action_name}/respond")
-async def respond_to_action(incident_id: str, action_name: str, response: ActionResponse):
+async def respond_to_action(
+    incident_id: str, action_name: str, response: ActionResponse
+):
     """
     Respond to a pending HITL action.
 
@@ -95,13 +100,17 @@ async def respond_to_action(incident_id: str, action_name: str, response: Action
     # Get pending action
     pending_action = state_bus.get_pending_action(incident_id)
     if not pending_action or pending_action.action_name != action_name:
-        raise HTTPException(status_code=400, detail=f"No pending action found: {action_name}")
+        raise HTTPException(
+            status_code=400, detail=f"No pending action found: {action_name}"
+        )
 
     # Validate user_edited if provided
     if response.user_edited:
         if pending_action.action_type == "review_triage":
             # Validate triage output
-            is_valid, validation_errors = validate_triage_output(response.user_edited)
+            is_valid, validation_errors = validate_triage_output(
+                response.user_edited
+            )
             if not is_valid:
                 raise ValidationError(
                     f"Triage output validation failed: {', '.join(validation_errors)}"
@@ -109,15 +118,22 @@ async def respond_to_action(incident_id: str, action_name: str, response: Action
 
             # Update incident with user-edited triage
             try:
-                incident_service.update_triage_output(incident_id, response.user_edited)
+                incident_service.update_triage_output(
+                    incident_id, response.user_edited
+                )
             except Exception as e:
-                logger.error(f"Failed to update triage output: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to update triage output: {e}", exc_info=True
+                )
                 raise HTTPException(
-                    status_code=500, detail=f"Failed to update triage output: {str(e)}"
+                    status_code=500,
+                    detail=f"Failed to update triage output: {str(e)}",
                 )
 
         elif pending_action.action_type == "review_resolution":
-            is_valid, validation_errors = validate_resolution_output(response.user_edited)
+            is_valid, validation_errors = validate_resolution_output(
+                response.user_edited
+            )
             if not is_valid:
                 raise ValidationError(
                     f"Resolution output validation failed: {', '.join(validation_errors)}"
@@ -132,7 +148,9 @@ async def respond_to_action(incident_id: str, action_name: str, response: Action
                     policy_decision=incident.get("policy_decision"),
                 )
             except Exception as e:
-                logger.error(f"Failed to update resolution output: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to update resolution output: {e}", exc_info=True
+                )
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to update resolution output: {str(e)}",
@@ -147,7 +165,9 @@ async def respond_to_action(incident_id: str, action_name: str, response: Action
 
         # Get triage output (use user_edited if provided, otherwise from incident)
         triage_output = (
-            response.user_edited if response.user_edited else incident.get("triage_output")
+            response.user_edited
+            if response.user_edited
+            else incident.get("triage_output")
         )
         if not triage_output:
             raise ValidationError("Cannot update policy without triage output")
@@ -164,10 +184,14 @@ async def respond_to_action(incident_id: str, action_name: str, response: Action
 
         # Update incident policy
         try:
-            incident_service.update_policy(incident_id, response.policy_band, policy_decision)
+            incident_service.update_policy(
+                incident_id, response.policy_band, policy_decision
+            )
         except Exception as e:
             logger.error(f"Failed to update policy: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to update policy: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to update policy: {str(e)}"
+            )
 
     # Resume agent from action
     updated_state = await state_bus.resume_from_action(
@@ -180,7 +204,9 @@ async def respond_to_action(incident_id: str, action_name: str, response: Action
     )
 
     if not updated_state:
-        raise HTTPException(status_code=500, detail="Failed to resume agent from action")
+        raise HTTPException(
+            status_code=500, detail="Failed to resume agent from action"
+        )
 
     logger.info(
         f"Action response processed: incident_id={incident_id}, "

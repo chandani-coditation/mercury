@@ -160,7 +160,10 @@ def _get_db_connection():
                     return _db_pool.getconn()
                 except Exception as pool_exc:
                     # If pool timeout or other pool error, log and retry
-                    if "timeout" in str(pool_exc).lower() or "pool" in str(pool_exc).lower():
+                    if (
+                        "timeout" in str(pool_exc).lower()
+                        or "pool" in str(pool_exc).lower()
+                    ):
                         logger.warning(
                             f"Connection pool timeout/error (attempt {attempt + 1}/{DB_CONN_RETRIES}): {pool_exc}. "
                             f"Pool may be exhausted. Retrying..."

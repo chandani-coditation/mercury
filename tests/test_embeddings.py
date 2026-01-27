@@ -76,7 +76,10 @@ class TestEmbeddingsGateway:
         call_args = mock_post.call_args
 
         # Verify URL
-        assert call_args[0][0] == "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        assert (
+            call_args[0][0]
+            == "https://test-gateway.com/api/v1/ai/openai/embeddings"
+        )
 
         # Verify headers
         headers = call_args[1]["headers"]
@@ -162,7 +165,9 @@ class TestEmbeddingsGateway:
 
         with patch("ingestion.embeddings.requests.post") as mock_post:
             mock_response = MagicMock()
-            mock_response.json.return_value = {"data": [{"embedding": [0.1] * 1536}]}
+            mock_response.json.return_value = {
+                "data": [{"embedding": [0.1] * 1536}]
+            }
             mock_response.raise_for_status = MagicMock()
             mock_post.return_value = mock_response
 
@@ -172,7 +177,10 @@ class TestEmbeddingsGateway:
 
             # Verify exact URL is used
             call_url = mock_post.call_args[0][0]
-            assert call_url == "https://custom-gateway.example.com/custom/path/embeddings"
+            assert (
+                call_url
+                == "https://custom-gateway.example.com/custom/path/embeddings"
+            )
 
 
 class TestEmbeddingsIntegration:

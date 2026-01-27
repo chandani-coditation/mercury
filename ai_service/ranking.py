@@ -30,7 +30,9 @@ def _load_step_classification_config():
                     _STEP_CLASSIFICATION_CONFIG = json.load(f)
             else:
                 _STEP_CLASSIFICATION_CONFIG = {}
-                logger.warning("step_classification.json not found, using defaults")
+                logger.warning(
+                    "step_classification.json not found, using defaults"
+                )
         except Exception as e:
             logger.warning(f"Failed to load step_classification.json: {e}")
             _STEP_CLASSIFICATION_CONFIG = {}
@@ -87,7 +89,9 @@ def _clean_action_for_plain_english(action: str) -> str:
             continue
         # Skip command-line commands (lines starting with $, #, or common command patterns)
         if re.match(
-            r"^\s*[$#]|^\s*(sudo|systemctl|kubectl|docker|psql|mysql)", line_stripped, re.IGNORECASE
+            r"^\s*[$#]|^\s*(sudo|systemctl|kubectl|docker|psql|mysql)",
+            line_stripped,
+            re.IGNORECASE,
         ):
             continue
         # Skip code blocks
@@ -105,7 +109,9 @@ def _clean_action_for_plain_english(action: str) -> str:
         flags=re.IGNORECASE,
     )
     cleaned = re.sub(r"```[\s\S]*?```", "", cleaned)  # Remove code blocks
-    cleaned = re.sub(r"\$[^\s]+", "", cleaned)  # Remove command-line patterns like $command
+    cleaned = re.sub(
+        r"\$[^\s]+", "", cleaned
+    )  # Remove command-line patterns like $command
 
     return cleaned.strip()
 
@@ -166,11 +172,19 @@ def rank_steps(
     for step in steps:
         step_id = step.get("step_id", "")
         action = (step.get("action") or "").lower() if step.get("action") else ""
-        condition = (step.get("condition") or "").lower() if step.get("condition") else ""
-        risk_level = (
-            (step.get("risk_level") or "medium").lower() if step.get("risk_level") else "medium"
+        condition = (
+            (step.get("condition") or "").lower()
+            if step.get("condition")
+            else ""
         )
-        content = (step.get("content") or "").lower() if step.get("content") else ""
+        risk_level = (
+            (step.get("risk_level") or "medium").lower()
+            if step.get("risk_level")
+            else "medium"
+        )
+        content = (
+            (step.get("content") or "").lower() if step.get("content") else ""
+        )
 
         # Boost relevance if step mentions high-relevance keywords
         step_text = f"{action} {condition} {content}".lower()
@@ -210,9 +224,7 @@ def rank_steps(
 
         # If no explicit match, give base relevance based on runbook match
         if relevance_score == 0.0:
-            relevance_score = (
-                0.5  # Base relevance if step is from matched runbook (increased from 0.3)
-            )
+            relevance_score = 0.5  # Base relevance if step is from matched runbook (increased from 0.3)
 
         # 2. Historical success score (0.0 - 1.0)
         if step_id in step_success_stats:
@@ -224,7 +236,9 @@ def rank_steps(
                 success_score = min(success_score * 1.1, 1.0)
         else:
             # No history = slightly positive score (steps from runbooks are generally reliable)
-            success_score = 0.6  # Increased from 0.5 to reflect runbook reliability
+            success_score = (
+                0.6  # Increased from 0.5 to reflect runbook reliability
+            )
 
         # Check historical resolutions for step usage patterns
         step_mentioned_count = 0
@@ -238,7 +252,8 @@ def rank_steps(
             step_found = any(
                 step_id in str(step_text)
                 or action in str(step_text).lower()
-                or step.get("chunk_id") in str(resolution_output.get("provenance", []))
+                or step.get("chunk_id")
+                in str(resolution_output.get("provenance", []))
                 for step_text in steps_list
             )
 
@@ -259,7 +274,9 @@ def rank_steps(
 
         # Combined score (weighted)
         # Relevance: 40%, Success: 40%, Risk: 20%
-        combined_score = relevance_score * 0.4 + success_score * 0.4 + risk_score * 0.2
+        combined_score = (
+            relevance_score * 0.4 + success_score * 0.4 + risk_score * 0.2
+        )
 
         scored_steps.append(
             {
@@ -272,7 +289,9 @@ def rank_steps(
         )
 
     # Sort by combined score (descending)
-    ranked_steps = sorted(scored_steps, key=lambda x: x["combined_score"], reverse=True)
+    ranked_steps = sorted(
+        scored_steps, key=lambda x: x["combined_score"], reverse=True
+    )
 
     return ranked_steps
 
@@ -335,7 +354,9 @@ def assemble_recommendations(
             risk_keywords = _get_risk_level_keywords()
             if any(word in action_lower for word in risk_keywords["high_risk"]):
                 risk_level = "high"
-            elif any(word in action_lower for word in risk_keywords["medium_risk"]):
+            elif any(
+                word in action_lower for word in risk_keywords["medium_risk"]
+            ):
                 risk_level = "medium"
             else:
                 risk_level = "low"
@@ -347,7 +368,8 @@ def assemble_recommendations(
             "condition": (
                 condition_text
                 if condition_text
-                and condition_text.lower() not in [excl.lower() for excl in condition_exclusions]
+                and condition_text.lower()
+                not in [excl.lower() for excl in condition_exclusions]
                 else None
             ),
             "expected_outcome": expected_outcome,

@@ -91,7 +91,9 @@ def extract_technical_terms(text: str) -> List[str]:
     error_code_patterns = patterns_config.get("error_code_patterns", [])
     job_patterns = patterns_config.get("job_patterns", [])
     service_patterns = patterns_config.get("service_patterns", [])
-    error_code_prefix = ingestion_config.get("formatting", {}).get("error_code_prefix", "error")
+    error_code_prefix = ingestion_config.get("formatting", {}).get(
+        "error_code_prefix", "error"
+    )
 
     # Extract error codes (e.g., "Error 500", "SQLSTATE 23505", "HTTP 404")
     for pattern_str in error_code_patterns:
@@ -155,7 +157,9 @@ def expand_abbreviations(text: str) -> str:
             try:
                 # Create regex pattern for word boundary
                 pattern = r"\b" + re.escape(abbrev) + r"\b"
-                expanded_text = re.sub(pattern, expansion, expanded_text, flags=re.IGNORECASE)
+                expanded_text = re.sub(
+                    pattern, expansion, expanded_text, flags=re.IGNORECASE
+                )
             except Exception:
                 # Skip this abbreviation if regex fails (graceful degradation)
                 continue

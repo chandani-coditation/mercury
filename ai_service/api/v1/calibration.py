@@ -34,7 +34,9 @@ def calibrate(req: CalibrationRequest):
     try:
         # Parse dates
         if req.start_date:
-            start_ts = datetime.fromisoformat(req.start_date.replace("Z", "+00:00"))
+            start_ts = datetime.fromisoformat(
+                req.start_date.replace("Z", "+00:00")
+            )
         else:
             start_ts = datetime.utcnow() - timedelta(days=7)
 
@@ -48,8 +50,12 @@ def calibrate(req: CalibrationRequest):
         feedback_list = feedback_service.list_feedback_between(start_ts, end_ts)
 
         # Analyze feedback
-        triage_feedback = [f for f in feedback_list if f.get("feedback_type") == "triage"]
-        resolution_feedback = [f for f in feedback_list if f.get("feedback_type") == "resolution"]
+        triage_feedback = [
+            f for f in feedback_list if f.get("feedback_type") == "triage"
+        ]
+        resolution_feedback = [
+            f for f in feedback_list if f.get("feedback_type") == "resolution"
+        ]
 
         # Generate suggestions (simplified)
         suggestions = {
@@ -129,14 +135,19 @@ def calibrate(req: CalibrationRequest):
                 "total_feedback": len(feedback_list),
                 "triage_feedback": len(triage_feedback),
                 "resolution_feedback": len(resolution_feedback),
-                "date_range": {"start": start_ts.isoformat(), "end": end_ts.isoformat()},
+                "date_range": {
+                    "start": start_ts.isoformat(),
+                    "end": end_ts.isoformat(),
+                },
             },
             "suggestions": suggestions,
         }
 
     except ValueError as e:
         logger.warning(f"Calibration validation error: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid date format: {str(e)}"
+        )
     except Exception as e:
         logger.error(f"Calibration error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

@@ -197,14 +197,12 @@ class AgentStateRepository:
                         (agent_type,),
                     )
                 else:
-                    cur.execute(
-                        """
+                    cur.execute("""
                         SELECT incident_id, pending_action, updated_at
                         FROM agent_state
                         WHERE pending_action IS NOT NULL
                         ORDER BY updated_at DESC
-                        """
-                    )
+                        """)
 
                 results = cur.fetchall()
                 pending = []
@@ -243,20 +241,16 @@ class AgentStateRepository:
 
             try:
                 if include_completed:
-                    cur.execute(
-                        """
+                    cur.execute("""
                         SELECT state_data
                         FROM agent_state
-                        """
-                    )
+                        """)
                 else:
-                    cur.execute(
-                        """
+                    cur.execute("""
                         SELECT state_data
                         FROM agent_state
                         WHERE current_step IS NULL OR current_step != 'completed'
-                        """
-                    )
+                        """)
 
                 results = cur.fetchall()
                 states: List[AgentState] = []

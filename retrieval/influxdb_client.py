@@ -38,7 +38,9 @@ class InfluxDBClient:
         self.bucket = bucket or os.getenv("INFLUXDB_BUCKET", "logs")
 
         if not self.token:
-            logger.warning("INFLUXDB_TOKEN not set - InfluxDB log retrieval will be disabled")
+            logger.warning(
+                "INFLUXDB_TOKEN not set - InfluxDB log retrieval will be disabled"
+            )
 
     def is_configured(self) -> bool:
         """Check if InfluxDB is properly configured."""
@@ -125,8 +127,12 @@ class InfluxDBClient:
                         if len(parts) >= 6:
                             # Extract: _time, _measurement, _field, _value
                             log_entry = {
-                                "timestamp": parts[2] if len(parts) > 2 else None,
-                                "measurement": parts[3] if len(parts) > 3 else None,
+                                "timestamp": (
+                                    parts[2] if len(parts) > 2 else None
+                                ),
+                                "measurement": (
+                                    parts[3] if len(parts) > 3 else None
+                                ),
                                 "field": parts[4] if len(parts) > 4 else None,
                                 "content": parts[5] if len(parts) > 5 else line,
                                 "service": service,
@@ -134,7 +140,9 @@ class InfluxDBClient:
                             }
                             logs.append(log_entry)
             except Exception as parse_error:
-                logger.warning(f"Failed to parse InfluxDB CSV response: {str(parse_error)}")
+                logger.warning(
+                    f"Failed to parse InfluxDB CSV response: {str(parse_error)}"
+                )
                 # Fallback: return raw response as single log entry
                 if response.text:
                     logs.append(

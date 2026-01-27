@@ -15,7 +15,12 @@ load_dotenv()
 log_level = os.getenv("LOG_LEVEL", "INFO")
 log_file = os.getenv("LOG_FILE", None)
 log_dir = os.getenv("LOG_DIR", None)
-setup_logging(log_level=log_level, log_file=log_file, log_dir=log_dir, service_name="ai_service")
+setup_logging(
+    log_level=log_level,
+    log_file=log_file,
+    log_dir=log_dir,
+    service_name="ai_service",
+)
 logger = get_logger(__name__)
 
 app = FastAPI(
@@ -29,7 +34,9 @@ app = FastAPI(
 allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
 if allowed_origins_env:
     allowed_origins = [
-        origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()
+        origin.strip()
+        for origin in allowed_origins_env.split(",")
+        if origin.strip()
     ]
 else:
     allowed_origins = ["http://localhost:5173"]

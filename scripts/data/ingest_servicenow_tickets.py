@@ -8,6 +8,7 @@ Usage:
     python scripts/data/ingest_servicenow_tickets.py --dir tickets_data
     python scripts/data/ingest_servicenow_tickets.py --file "tickets_data/Database Alerts Filtered - Sheet1.csv"
 """
+
 import argparse
 import csv
 import sys
@@ -70,7 +71,9 @@ def derive_severity(impact: str, urgency: str, severity_mapping: Dict) -> str:
     key = f"{impact_val}-{urgency_val}"
 
     # Look up in mapping
-    severity = severity_mapping.get(key, severity_mapping.get("default_severity", "medium"))
+    severity = severity_mapping.get(
+        key, severity_mapping.get("default_severity", "medium")
+    )
     return severity
 
 
@@ -81,42 +84,65 @@ def map_csv_row_to_incident(
     mappings = field_mappings.get("field_mappings", {})
 
     # Extract fields using mappings
-    incident_id = row.get(mappings.get("incident_id", {}).get("source_column", "number"), "")
-    title = row.get(mappings.get("title", {}).get("source_column", "short_description"), "")
-    description = row.get(mappings.get("description", {}).get("source_column", "description"), "")
-    category = row.get(mappings.get("category", {}).get("source_column", "category"), "")
+    incident_id = row.get(
+        mappings.get("incident_id", {}).get("source_column", "number"), ""
+    )
+    title = row.get(
+        mappings.get("title", {}).get("source_column", "short_description"), ""
+    )
+    description = row.get(
+        mappings.get("description", {}).get("source_column", "description"), ""
+    )
+    category = row.get(
+        mappings.get("category", {}).get("source_column", "category"), ""
+    )
 
     # Clean description to normalize whitespace (matches query normalization during triage)
     description = clean_description_text(description)
 
     # Validate required fields before proceeding
     if not title or not title.strip():
-        raise ValueError(f"Missing required field 'title' for incident {incident_id}")
+        raise ValueError(
+            f"Missing required field 'title' for incident {incident_id}"
+        )
     if not description or not description.strip():
-        raise ValueError(f"Missing required field 'description' for incident {incident_id}")
+        raise ValueError(
+            f"Missing required field 'description' for incident {incident_id}"
+        )
 
     # Parse timestamp
     timestamp = None
-    timestamp_col = mappings.get("timestamp", {}).get("source_column", "opened_at")
+    timestamp_col = mappings.get("timestamp", {}).get(
+        "source_column", "opened_at"
+    )
     if timestamp_col in row:
         timestamp = parse_date(row[timestamp_col])
         # Note: timestamp is optional, so we don't fail if parsing fails
         # But we log a warning (already done in parse_date)
 
     # Derive severity from impact + urgency
-    impact = row.get(mappings.get("impact", {}).get("source_column", "impact"), "3 - Low")
-    urgency = row.get(mappings.get("urgency", {}).get("source_column", "urgency"), "3 - Low")
+    impact = row.get(
+        mappings.get("impact", {}).get("source_column", "impact"), "3 - Low"
+    )
+    urgency = row.get(
+        mappings.get("urgency", {}).get("source_column", "urgency"), "3 - Low"
+    )
     severity = derive_severity(impact, urgency, severity_mapping)
 
     # Extract affected services from cmdb_ci
     affected_services = []
-    cmdb_ci = row.get(mappings.get("affected_services", {}).get("source_column", "cmdb_ci"), "")
+    cmdb_ci = row.get(
+        mappings.get("affected_services", {}).get("source_column", "cmdb_ci"), ""
+    )
     if cmdb_ci:
         affected_services = [cmdb_ci]
 
     # Extract assignment_group
     assignment_group = row.get(
-        mappings.get("assignment_group", {}).get("source_column", "assignment_group"), ""
+        mappings.get("assignment_group", {}).get(
+            "source_column", "assignment_group"
+        ),
+        "",
     )
 
     # Build comprehensive tags
@@ -127,13 +153,17 @@ def map_csv_row_to_incident(
         "category": category,
         "severity": severity,
         "assignment_group": assignment_group,
-        "state": row.get(mappings.get("state", {}).get("source_column", "state"), ""),
+        "state": row.get(
+            mappings.get("state", {}).get("source_column", "state"), ""
+        ),
         "impact": impact,
         "urgency": urgency,
     }
 
     # Add optional fields to tags
-    problem_id = row.get(mappings.get("problem_id", {}).get("source_column", "problem_id"), "")
+    problem_id = row.get(
+        mappings.get("problem_id", {}).get("source_column", "problem_id"), ""
+    )
     if problem_id:
         tags["problem_id"] = problem_id
 
@@ -144,12 +174,20 @@ def map_csv_row_to_incident(
     # so that create_incident_signature() can extract them for the incident_signatures table
     metadata = {
         "source": "servicenow",
-        "opened_by": row.get(mappings.get("opened_by", {}).get("source_column", "opened_by"), ""),
+        "opened_by": row.get(
+            mappings.get("opened_by", {}).get("source_column", "opened_by"), ""
+        ),
         "sys_updated_on": row.get(
-            mappings.get("sys_updated_on", {}).get("source_column", "sys_updated_on"), ""
+            mappings.get("sys_updated_on", {}).get(
+                "source_column", "sys_updated_on"
+            ),
+            "",
         ),
         "u_reopen_count": row.get(
-            mappings.get("u_reopen_count", {}).get("source_column", "u_reopen_count"), ""
+            mappings.get("u_reopen_count", {}).get(
+                "source_column", "u_reopen_count"
+            ),
+            "",
         ),
         # Store assignment_group, impact, urgency, and close_notes in metadata for incident_signatures table
         "assignment_group": assignment_group if assignment_group else None,
@@ -187,14 +225,18 @@ def ingest_incident(
         )
         response.raise_for_status()
         result = response.json()
-        signature_id = result.get("signature_id") or result.get("chunk_id")  # Support both formats
+        signature_id = result.get("signature_id") or result.get(
+            "chunk_id"
+        )  # Support both formats
         incident_signature_id = result.get("incident_signature_id")
         logger.info(
             f"Incident signature ingested: signature_id={signature_id}, incident_signature_id={incident_signature_id}"
         )
         return True, signature_id
     except Exception as e:
-        logger.error(f"Failed to ingest incident {incident.incident_id}: {str(e)}")
+        logger.error(
+            f"Failed to ingest incident {incident.incident_id}: {str(e)}"
+        )
         return False, None
 
 
@@ -228,7 +270,9 @@ def split_incidents_for_testing(
     return ingest_incidents, test_incidents
 
 
-def save_test_incidents_to_file(incidents: List[IngestIncident], output_file: Path) -> None:
+def save_test_incidents_to_file(
+    incidents: List[IngestIncident], output_file: Path
+) -> None:
     """Save test incidents to a CSV file (always replaces the file).
 
     Args:
@@ -243,7 +287,9 @@ def save_test_incidents_to_file(incidents: List[IngestIncident], output_file: Pa
 
     # Get field names from first incident
     first_incident = incidents[0]
-    fieldnames = list(first_incident.model_dump(mode="json", exclude_none=True).keys())
+    fieldnames = list(
+        first_incident.model_dump(mode="json", exclude_none=True).keys()
+    )
 
     # Write to CSV (always replace, not append)
     with open(output_file, "w", newline="", encoding="utf-8") as f:
@@ -256,7 +302,9 @@ def save_test_incidents_to_file(incidents: List[IngestIncident], output_file: Pa
             # Convert datetime to ISO format string for CSV
             if "timestamp" in incident_dict and incident_dict["timestamp"]:
                 if isinstance(incident_dict["timestamp"], datetime):
-                    incident_dict["timestamp"] = incident_dict["timestamp"].isoformat()
+                    incident_dict["timestamp"] = incident_dict[
+                        "timestamp"
+                    ].isoformat()
             writer.writerow(incident_dict)
 
     logger.info(f"Saved {len(incidents)} test incidents to {output_file}")
@@ -296,7 +344,9 @@ def ingest_csv_file(
             reader = csv.DictReader(f)
             for row_num, row in enumerate(reader, start=2):
                 try:
-                    incident = map_csv_row_to_incident(row, field_mappings, severity_mapping)
+                    incident = map_csv_row_to_incident(
+                        row, field_mappings, severity_mapping
+                    )
                     incidents.append(incident)
                 except Exception as e:
                     error_count += 1
@@ -325,7 +375,9 @@ def ingest_csv_file(
                     f"  Reserved {len(test_incidents)} ticket(s) for testing -> {test_output_file.name}"
                 )
             else:
-                logger.info(f"  Reserved {len(test_incidents)} ticket(s) for testing")
+                logger.info(
+                    f"  Reserved {len(test_incidents)} ticket(s) for testing"
+                )
             logger.info(
                 f"  Ingesting {len(ingest_incidents)} ticket(s) ({100*(1-test_percentage):.0f}%)"
             )
@@ -347,7 +399,9 @@ def ingest_csv_file(
                 avg_time_per_incident = elapsed / (idx - 1)
                 remaining = avg_time_per_incident * (total_rows - idx + 1)
                 if remaining > 60:
-                    eta_str = f" (ETA: {int(remaining/60)}m {int(remaining%60)}s)"
+                    eta_str = (
+                        f" (ETA: {int(remaining/60)}m {int(remaining%60)}s)"
+                    )
                 else:
                     eta_str = f" (ETA: {int(remaining)}s)"
             else:
@@ -356,7 +410,9 @@ def ingest_csv_file(
             # Update progress bar
             incident_id = incident.incident_id or f"row_{idx}"
             title_preview = (
-                (incident.title[:40] + "...") if len(incident.title) > 40 else incident.title
+                (incident.title[:40] + "...")
+                if len(incident.title) > 40
+                else incident.title
             )
             logger.info(
                 f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}% - {title_preview}{eta_str}"
@@ -369,7 +425,9 @@ def ingest_csv_file(
                 error_count += 1
                 # Show error on new line but keep progress bar
                 logger.warning(f"     WARNING: Failed: {incident_id}")
-                logger.info(f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%")
+                logger.info(
+                    f"  Progress: [{'=' * filled}{' ' * (50 - filled)}] {progress}%"
+                )
 
         logger.info(f"  Progress: [{'=' * 50}] 100% - Complete!")
 
@@ -377,7 +435,9 @@ def ingest_csv_file(
         logger.info(f"  Completed in {elapsed_time:.1f}s")
         logger.info(f"  Success: {success_count}, Errors: {error_count}")
         if success_count > 0:
-            logger.info(f"  Average: {elapsed_time/success_count:.2f}s per ticket")
+            logger.info(
+                f"  Average: {elapsed_time/success_count:.2f}s per ticket"
+            )
 
     except Exception as e:
         logger.error(f"Error reading CSV file {file_path}: {str(e)}")
@@ -390,7 +450,9 @@ def main():
     # Setup logging first to ensure output is visible
     setup_logging(log_level="INFO", service_name="ingestion_script")
 
-    parser = argparse.ArgumentParser(description="Ingest ServiceNow tickets from CSV files")
+    parser = argparse.ArgumentParser(
+        description="Ingest ServiceNow tickets from CSV files"
+    )
     parser.add_argument("--dir", type=str, help="Directory containing CSV files")
     parser.add_argument("--file", type=str, help="Single CSV file to ingest")
     parser.add_argument(
@@ -490,7 +552,9 @@ def main():
                 servicenow_mappings,
                 severity_mapping,
                 args.ingestion_url,
-                test_percentage=0 if args.no_test_split else args.test_percentage,
+                test_percentage=(
+                    0 if args.no_test_split else args.test_percentage
+                ),
                 test_output_file=None,  # Don't save per-file, accumulate instead
             )
             total_success += success
@@ -506,7 +570,9 @@ def main():
                 else dir_path / "test_incidents.csv"
             )
             save_test_incidents_to_file(all_test_incidents, test_output)
-            logger.info(f"Saved {len(all_test_incidents)} test incidents to {test_output}")
+            logger.info(
+                f"Saved {len(all_test_incidents)} test incidents to {test_output}"
+            )
 
     logger.info(f"\n{'='*70}")
     logger.info(f"Ingestion Summary:")
@@ -529,28 +595,48 @@ def main():
                 # Count incident signatures
                 cur.execute("SELECT COUNT(*) FROM incident_signatures;")
                 sig_result = cur.fetchone()
-                sig_count = sig_result["count"] if isinstance(sig_result, dict) else sig_result[0]
+                sig_count = (
+                    sig_result["count"]
+                    if isinstance(sig_result, dict)
+                    else sig_result[0]
+                )
 
                 # Count incident signatures with embeddings
-                cur.execute("SELECT COUNT(*) FROM incident_signatures WHERE embedding IS NOT NULL;")
+                cur.execute(
+                    "SELECT COUNT(*) FROM incident_signatures WHERE embedding IS NOT NULL;"
+                )
                 embed_result = cur.fetchone()
                 embed_count = (
-                    embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
+                    embed_result["count"]
+                    if isinstance(embed_result, dict)
+                    else embed_result[0]
                 )
 
                 # Count incident signatures with tsv
-                cur.execute("SELECT COUNT(*) FROM incident_signatures WHERE tsv IS NOT NULL;")
+                cur.execute(
+                    "SELECT COUNT(*) FROM incident_signatures WHERE tsv IS NOT NULL;"
+                )
                 tsv_result = cur.fetchone()
-                tsv_count = tsv_result["count"] if isinstance(tsv_result, dict) else tsv_result[0]
+                tsv_count = (
+                    tsv_result["count"]
+                    if isinstance(tsv_result, dict)
+                    else tsv_result[0]
+                )
 
                 cur.close()
 
             logger.info(f"\nDatabase Verification:")
             logger.info(f"   Incident signatures created: {sig_count}")
-            logger.info(f"   Signatures with embeddings: {embed_count}/{sig_count}")
+            logger.info(
+                f"   Signatures with embeddings: {embed_count}/{sig_count}"
+            )
             logger.info(f"   Signatures with tsvector: {tsv_count}/{sig_count}")
 
-            if embed_count == sig_count and sig_count > 0 and tsv_count == sig_count:
+            if (
+                embed_count == sig_count
+                and sig_count > 0
+                and tsv_count == sig_count
+            ):
                 logger.info(
                     f"\n   SUCCESS: All {sig_count} incident signatures have embeddings and tsvector!"
                 )
@@ -561,14 +647,20 @@ def main():
                     f"\n   WARNING: {missing_embed} missing embeddings, {missing_tsv} missing tsvector!"
                 )
             else:
-                logger.warning(f"\n   WARNING: No incident signatures found in database!")
+                logger.warning(
+                    f"\n   WARNING: No incident signatures found in database!"
+                )
 
         except Exception as e:
             logger.warning(f"\n   Could not verify embeddings: {str(e)}")
-            logger.warning(f"   You can manually verify using: python scripts/db/verify_db.py")
+            logger.warning(
+                f"   You can manually verify using: python scripts/db/verify_db.py"
+            )
 
     if total_errors > 0:
-        logger.error(f"\n  Completed with {total_errors} error(s). Check logs for details.")
+        logger.error(
+            f"\n  Completed with {total_errors} error(s). Check logs for details."
+        )
         sys.exit(1)
     else:
         logger.info(f"\n Ingestion completed successfully!")

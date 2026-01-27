@@ -8,7 +8,10 @@ from ai_service.core import IncidentNotFoundError
 
 # from ai_service.policy import get_policy_from_config, get_resolution_policy
 from ai_service.policy import get_policy_from_config
-from ai_service.guardrails import validate_triage_output, validate_resolution_output
+from ai_service.guardrails import (
+    validate_triage_output,
+    validate_resolution_output,
+)
 from ai_service.core import (
     get_retrieval_config,
     get_workflow_config,
@@ -16,7 +19,10 @@ from ai_service.core import (
     ApprovalRequiredError,
 )
 from retrieval.hybrid_search import hybrid_search
-from ai_service.agents.triager import format_evidence_chunks, apply_retrieval_preferences
+from ai_service.agents.triager import (
+    format_evidence_chunks,
+    apply_retrieval_preferences,
+)
 
 logger = get_logger(__name__)
 
@@ -38,7 +44,9 @@ def resolution_copilot_agent(
     Returns:
         Dictionary with incident_id, resolution output, evidence, and policy information
     """
-    return _resolution_copilot_agent_internal(incident_id, alert, skip_approval_check)
+    return _resolution_copilot_agent_internal(
+        incident_id, alert, skip_approval_check
+    )
 
 
 def _resolution_copilot_agent_internal(
@@ -85,7 +93,9 @@ def _resolution_copilot_agent_internal(
             query_text = enhance_query(alert)
         except Exception as e:
             logger.warning(f"Query enhancement failed, using basic query: {e}")
-            query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
+            query_text = (
+                f"{alert.get('title', '')} {alert.get('description', '')}"
+            )
 
         labels = alert.get("labels", {}) or {}
 
@@ -99,8 +109,12 @@ def _resolution_copilot_agent_internal(
 
             context_chunks = mmr_search(
                 query_text=query_text,
-                service=labels.get("service") if isinstance(labels, dict) else None,
-                component=labels.get("component") if isinstance(labels, dict) else None,
+                service=(
+                    labels.get("service") if isinstance(labels, dict) else None
+                ),
+                component=(
+                    labels.get("component") if isinstance(labels, dict) else None
+                ),
                 limit=triage_limit,
                 diversity=mmr_diversity,
             )
@@ -109,8 +123,12 @@ def _resolution_copilot_agent_internal(
             triage_rrf_k = triage_retrieval_cfg.get("rrf_k", 60)
             context_chunks = hybrid_search(
                 query_text=query_text,
-                service=labels.get("service") if isinstance(labels, dict) else None,
-                component=labels.get("component") if isinstance(labels, dict) else None,
+                service=(
+                    labels.get("service") if isinstance(labels, dict) else None
+                ),
+                component=(
+                    labels.get("component") if isinstance(labels, dict) else None
+                ),
                 limit=triage_limit,
                 vector_weight=triage_vector_weight,
                 fulltext_weight=triage_fulltext_weight,
@@ -125,7 +143,11 @@ def _resolution_copilot_agent_internal(
                     cur = conn.cursor()
                     cur.execute("SELECT COUNT(*) as count FROM documents")
                     result = cur.fetchone()
-                    doc_count = result["count"] if isinstance(result, dict) else result[0]
+                    doc_count = (
+                        result["count"]
+                        if isinstance(result, dict)
+                        else result[0]
+                    )
                     cur.close()
 
                 if doc_count == 0:
@@ -145,17 +167,19 @@ def _resolution_copilot_agent_internal(
                     )
                     logger.warning(evidence_warning)
             except Exception as e:
-                evidence_warning = (
-                    f"Cannot verify database state: {e}. Proceeding without evidence validation."
-                )
+                evidence_warning = f"Cannot verify database state: {e}. Proceeding without evidence validation."
                 logger.warning(evidence_warning)
 
         triage_output = call_llm_for_triage(alert_dict, context_chunks)
 
         is_valid, validation_errors = validate_triage_output(triage_output)
         if not is_valid:
-            logger.error(f"Triage validation failed during resolution: {validation_errors}")
-            raise ValueError(f"Triage output validation failed: {', '.join(validation_errors)}")
+            logger.error(
+                f"Triage validation failed during resolution: {validation_errors}"
+            )
+            raise ValueError(
+                f"Triage output validation failed: {', '.join(validation_errors)}"
+            )
 
         policy_decision = get_policy_from_config(triage_output)
         existing_policy_band = policy_decision.get("policy_band", "REVIEW")
@@ -173,18 +197,24 @@ def _resolution_copilot_agent_internal(
         policy_decision = get_policy_from_config(triage_output)
         existing_policy_band = policy_decision.get("policy_band", "REVIEW")
         try:
-            repository.update_policy(incident_id, existing_policy_band, policy_decision)
+            repository.update_policy(
+                incident_id, existing_policy_band, policy_decision
+            )
         except Exception as e:
             logger.warning(f"Failed to update policy: {str(e)}")
 
     if existing_policy_band and existing_policy_band != "PENDING":
         incident = repository.get_by_id(incident_id)
-        existing_policy_band = incident.get("policy_band") or existing_policy_band
+        existing_policy_band = (
+            incident.get("policy_band") or existing_policy_band
+        )
         triage_output = incident.get("triage_output") or triage_output
         stored_policy_decision = incident.get("policy_decision")
         if stored_policy_decision:
             can_auto_apply = stored_policy_decision.get("can_auto_apply", False)
-            requires_approval = stored_policy_decision.get("requires_approval", True)
+            requires_approval = stored_policy_decision.get(
+                "requires_approval", True
+            )
         else:
             policy_decision = get_policy_from_config(triage_output)
             can_auto_apply = policy_decision.get("can_auto_apply", False)
@@ -252,7 +282,9 @@ def _resolution_copilot_agent_internal(
             rrf_k=rrf_k,
         )
 
-    context_chunks = apply_retrieval_preferences(context_chunks, retrieval_config)
+    context_chunks = apply_retrieval_preferences(
+        context_chunks, retrieval_config
+    )
 
     try:
         from retrieval.influxdb_client import get_influxdb_client
@@ -296,7 +328,9 @@ def _resolution_copilot_agent_internal(
                 cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) as count FROM documents")
                 result = cur.fetchone()
-                doc_count = result["count"] if isinstance(result, dict) else result[0]
+                doc_count = (
+                    result["count"] if isinstance(result, dict) else result[0]
+                )
                 cur.close()
 
             if doc_count == 0:
@@ -347,29 +381,28 @@ def _resolution_copilot_agent_internal(
             logger.warning(
                 "Resolution context validation failed, but graceful degradation enabled. Continuing with low confidence."
             )
-            resolution_evidence_warning = (
-                "No matching context found, generating resolution with low confidence."
-            )
+            resolution_evidence_warning = "No matching context found, generating resolution with low confidence."
         except Exception as e:
             if allow_resolution_without_context:
-                warning_msg = (
-                    f"Cannot verify database state: {e}. Proceeding with low confidence resolution."
-                )
+                warning_msg = f"Cannot verify database state: {e}. Proceeding with low confidence resolution."
                 logger.warning(warning_msg)
                 resolution_evidence_warning = warning_msg
             else:
-                error_msg = (
-                    f"Cannot verify database state: {e}. Cannot proceed without context validation."
-                )
+                error_msg = f"Cannot verify database state: {e}. Cannot proceed without context validation."
                 logger.error(error_msg)
                 raise ValueError(error_msg)
 
-    resolution_output = call_llm_for_resolution(alert_dict, triage_output, context_chunks)
+    resolution_output = call_llm_for_resolution(
+        alert_dict, triage_output, context_chunks
+    )
 
     if not resolution_output.get("provenance"):
         if context_chunks:
             resolution_output["provenance"] = [
-                {"doc_id": chunk.get("document_id", ""), "chunk_id": chunk.get("chunk_id", "")}
+                {
+                    "doc_id": chunk.get("document_id", ""),
+                    "chunk_id": chunk.get("chunk_id", ""),
+                }
                 for chunk in context_chunks[:10]
                 if chunk.get("chunk_id") and chunk.get("document_id")
             ]
@@ -381,16 +414,23 @@ def _resolution_copilot_agent_internal(
     if resolution_output.get("provenance"):
         valid_provenance = []
         context_chunk_ids = {
-            chunk.get("chunk_id") for chunk in context_chunks if chunk.get("chunk_id")
+            chunk.get("chunk_id")
+            for chunk in context_chunks
+            if chunk.get("chunk_id")
         }
         context_doc_ids = {
-            chunk.get("document_id") for chunk in context_chunks if chunk.get("document_id")
+            chunk.get("document_id")
+            for chunk in context_chunks
+            if chunk.get("document_id")
         }
 
         for prov in resolution_output["provenance"]:
             prov_chunk_id = prov.get("chunk_id")
             prov_doc_id = prov.get("doc_id")
-            if prov_chunk_id in context_chunk_ids and prov_doc_id in context_doc_ids:
+            if (
+                prov_chunk_id in context_chunk_ids
+                and prov_doc_id in context_doc_ids
+            ):
                 valid_provenance.append(prov)
             else:
                 logger.warning(
@@ -400,7 +440,10 @@ def _resolution_copilot_agent_internal(
 
         if not valid_provenance and context_chunks:
             resolution_output["provenance"] = [
-                {"doc_id": chunk.get("document_id", ""), "chunk_id": chunk.get("chunk_id", "")}
+                {
+                    "doc_id": chunk.get("document_id", ""),
+                    "chunk_id": chunk.get("chunk_id", ""),
+                }
                 for chunk in context_chunks[:10]
                 if chunk.get("chunk_id") and chunk.get("document_id")
             ]
@@ -419,7 +462,9 @@ def _resolution_copilot_agent_internal(
     )
     if not is_valid:
         logger.error(f"Resolution validation failed: {validation_errors}")
-        raise ValueError(f"Resolution output validation failed: {', '.join(validation_errors)}")
+        raise ValueError(
+            f"Resolution output validation failed: {', '.join(validation_errors)}"
+        )
 
     if incident_id:
         incident = repository.get_by_id(incident_id)
@@ -429,15 +474,21 @@ def _resolution_copilot_agent_internal(
         severity = triage_output.get("severity", "medium")
         policy_decision = get_policy_from_config(triage_output)
 
-    policy_band = existing_policy_band or policy_decision.get("policy_band", "REVIEW")
+    policy_band = existing_policy_band or policy_decision.get(
+        "policy_band", "REVIEW"
+    )
 
     resolution_evidence = format_evidence_chunks(
         context_chunks,
         retrieval_method="hybrid_search",
         retrieval_params={
             "query_text": query_text,
-            "service": labels.get("service") if isinstance(labels, dict) else None,
-            "component": labels.get("component") if isinstance(labels, dict) else None,
+            "service": (
+                labels.get("service") if isinstance(labels, dict) else None
+            ),
+            "component": (
+                labels.get("component") if isinstance(labels, dict) else None
+            ),
             "limit": retrieval_limit,
         },
     )
@@ -460,7 +511,9 @@ def _resolution_copilot_agent_internal(
     }
 
     has_resolution_evidence = len(context_chunks) > 0
-    resolution_status = "success" if has_resolution_evidence else "failed_no_evidence"
+    resolution_status = (
+        "success" if has_resolution_evidence else "failed_no_evidence"
+    )
 
     if resolution_evidence_warning:
         if "No historical data" in resolution_evidence_warning:
@@ -481,21 +534,23 @@ def _resolution_copilot_agent_internal(
             )
             resolution_status = "failed_no_matching_evidence"
         else:
-            resolution_evidence_warning = (
-                f"{resolution_evidence_warning} Status: {resolution_status.upper()}."
-            )
+            resolution_evidence_warning = f"{resolution_evidence_warning} Status: {resolution_status.upper()}."
 
     if evidence_warning:
         result["evidence_warning"] = evidence_warning
         result["evidence_status"] = (
-            "failed_no_evidence" if "NO EVIDENCE" in evidence_warning else "success"
+            "failed_no_evidence"
+            if "NO EVIDENCE" in evidence_warning
+            else "success"
         )
 
     if resolution_evidence_warning:
         result["resolution_evidence_warning"] = resolution_evidence_warning
         result["resolution_evidence_status"] = resolution_status
 
-    result["status"] = "success" if has_resolution_evidence else "failed_no_evidence"
+    result["status"] = (
+        "success" if has_resolution_evidence else "failed_no_evidence"
+    )
     result["evidence_count"] = {
         "context_chunks": len(context_chunks),
         "has_evidence": has_resolution_evidence,

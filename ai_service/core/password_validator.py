@@ -4,7 +4,6 @@ import os
 import re
 from typing import List, Tuple
 
-
 # Common weak passwords that should be rejected
 WEAK_PASSWORDS = [
     "password",
@@ -23,7 +22,9 @@ WEAK_PASSWORDS = [
 ]
 
 
-def validate_password_strength(password: str, is_production: bool = None) -> Tuple[bool, List[str]]:
+def validate_password_strength(
+    password: str, is_production: bool = None
+) -> Tuple[bool, List[str]]:
     """
     Validate password strength based on security requirements.
 
@@ -35,7 +36,10 @@ def validate_password_strength(password: str, is_production: bool = None) -> Tup
         Tuple of (is_valid, list_of_errors)
     """
     if is_production is None:
-        is_production = os.getenv("ENVIRONMENT", "").lower() in ("production", "prod")
+        is_production = os.getenv("ENVIRONMENT", "").lower() in (
+            "production",
+            "prod",
+        )
 
     errors = []
 
@@ -50,21 +54,29 @@ def validate_password_strength(password: str, is_production: bool = None) -> Tup
 
     # Check for weak passwords (case-insensitive)
     if password.lower() in [p.lower() for p in WEAK_PASSWORDS]:
-        errors.append("Password is too common or weak. Please use a stronger password.")
+        errors.append(
+            "Password is too common or weak. Please use a stronger password."
+        )
 
     # Production-specific requirements
     if is_production:
         # Require at least 12 characters in production
         if len(password) < 12:
-            errors.append("Production passwords must be at least 12 characters long")
+            errors.append(
+                "Production passwords must be at least 12 characters long"
+            )
 
         # Require at least one uppercase letter
         if not re.search(r"[A-Z]", password):
-            errors.append("Production passwords must contain at least one uppercase letter")
+            errors.append(
+                "Production passwords must contain at least one uppercase letter"
+            )
 
         # Require at least one lowercase letter
         if not re.search(r"[a-z]", password):
-            errors.append("Production passwords must contain at least one lowercase letter")
+            errors.append(
+                "Production passwords must contain at least one lowercase letter"
+            )
 
         # Require at least one digit
         if not re.search(r"\d", password):
@@ -72,7 +84,9 @@ def validate_password_strength(password: str, is_production: bool = None) -> Tup
 
         # Require at least one special character
         if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]", password):
-            errors.append("Production passwords must contain at least one special character")
+            errors.append(
+                "Production passwords must contain at least one special character"
+            )
 
         # Check for common patterns
         if re.search(r"(.)\1{2,}", password):  # Same character repeated 3+ times
@@ -96,7 +110,10 @@ def validate_database_password() -> Tuple[bool, List[str]]:
         Tuple of (is_valid, list_of_errors)
     """
     password = os.getenv("POSTGRES_PASSWORD", "")
-    is_production = os.getenv("ENVIRONMENT", "").lower() in ("production", "prod")
+    is_production = os.getenv("ENVIRONMENT", "").lower() in (
+        "production",
+        "prod",
+    )
 
     # In development, allow default passwords but warn
     if not is_production:

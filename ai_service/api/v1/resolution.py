@@ -55,7 +55,9 @@ async def resolution(
     incident_id: str = None,
     alert: Alert = None,
     use_state: bool = Query(False, description="Use state-based HITL workflow"),
-    use_langgraph: bool = Query(None, description="Use LangGraph framework (overrides env var)"),
+    use_langgraph: bool = Query(
+        None, description="Use LangGraph framework (overrides env var)"
+    ),
 ):
     """
     Generate resolution for an incident.
@@ -77,12 +79,18 @@ async def resolution(
         alert_dict = None
         if alert:
             alert_dict = alert.model_dump()
-            alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
+            alert_dict["ts"] = (
+                alert.ts.isoformat()
+                if isinstance(alert.ts, datetime)
+                else alert.ts
+            )
 
         if use_lg:
             from ai_service.agents.langgraph_wrapper import run_resolution_graph
 
-            result = run_resolution_graph(incident_id=incident_id, alert=alert_dict)
+            result = run_resolution_graph(
+                incident_id=incident_id, alert=alert_dict
+            )
         elif use_state:
             if not incident_id:
                 error_msg = format_user_friendly_error(
@@ -118,8 +126,12 @@ async def resolution(
                         try:
                             triage_output = json.loads(triage_output)
                         except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse triage_output JSON: {e}")
-                            raise ValueError(f"Invalid triage_output format: {e}")
+                            logger.error(
+                                f"Failed to parse triage_output JSON: {e}"
+                            )
+                            raise ValueError(
+                                f"Invalid triage_output format: {e}"
+                            )
 
                     triage_evidence = incident.get("triage_evidence")
                     if triage_evidence:
@@ -127,20 +139,28 @@ async def resolution(
                             try:
                                 triage_evidence = json.loads(triage_evidence)
                             except json.JSONDecodeError as e:
-                                logger.warning(f"Failed to parse triage_evidence JSON: {e}")
+                                logger.warning(
+                                    f"Failed to parse triage_evidence JSON: {e}"
+                                )
                                 triage_evidence = {}
 
                         if isinstance(triage_output, dict):
                             triage_output["evidence"] = triage_evidence
                         else:
-                            logger.warning("triage_output is not a dict, cannot merge evidence")
+                            logger.warning(
+                                "triage_output is not a dict, cannot merge evidence"
+                            )
                     else:
-                        logger.warning(f"No triage_evidence found for incident {incident_id}")
+                        logger.warning(
+                            f"No triage_evidence found for incident {incident_id}"
+                        )
 
                     resolution_result = resolution_agent(triage_output)
 
                     metadata = resolution_result.get("_metadata", {})
-                    original_runbook_steps_count = metadata.get("runbook_steps_retrieved", 0)
+                    original_runbook_steps_count = metadata.get(
+                        "runbook_steps_retrieved", 0
+                    )
 
                     if "_metadata" in resolution_result:
                         del resolution_result["_metadata"]
@@ -166,7 +186,9 @@ async def resolution(
                             f"RAG-only mode: No LLM fallback. Returning empty steps."
                         )
                 except IncidentNotFoundError as e:
-                    error_msg = format_user_friendly_error(e, error_type="not_found")
+                    error_msg = format_user_friendly_error(
+                        e, error_type="not_found"
+                    )
                     raise HTTPException(status_code=404, detail=error_msg)
             else:
                 # RAG-only mode: incident_id is required for resolution (needs triage_output)
@@ -184,7 +206,11 @@ async def resolution(
         )
 
         resolution_data = result.get("resolution") or {}
-        steps = resolution_data.get("steps") or resolution_data.get("resolution_steps") or []
+        steps = (
+            resolution_data.get("steps")
+            or resolution_data.get("resolution_steps")
+            or []
+        )
 
         return result
 

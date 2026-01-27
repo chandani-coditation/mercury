@@ -7,13 +7,18 @@ from ai_service.policy import get_policy_from_config
 from ai_service.guardrails import validate_triage_output
 from ai_service.state import AgentState, AgentStep, get_state_bus
 from ai_service.core import get_retrieval_config, get_workflow_config, get_logger
-from ai_service.agents.triager import format_evidence_chunks, apply_retrieval_preferences
+from ai_service.agents.triager import (
+    format_evidence_chunks,
+    apply_retrieval_preferences,
+)
 
 logger = get_logger(__name__)
 state_bus = get_state_bus()
 
 
-async def triage_agent_state(alert: Dict[str, Any], use_state_bus: bool = True) -> Dict[str, Any]:
+async def triage_agent_state(
+    alert: Dict[str, Any], use_state_bus: bool = True
+) -> Dict[str, Any]:
     """
     State-based Triager Agent - Emits state snapshots and pauses for HITL.
 
@@ -113,7 +118,9 @@ async def _triage_agent_state_internal(
                 cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) as count FROM documents")
                 result = cur.fetchone()
-                doc_count = result["count"] if isinstance(result, dict) else result[0]
+                doc_count = (
+                    result["count"] if isinstance(result, dict) else result[0]
+                )
                 cur.close()
 
             if doc_count == 0:
@@ -164,7 +171,9 @@ async def _triage_agent_state_internal(
         state.error = f"Validation failed: {', '.join(validation_errors)}"
         if use_state_bus:
             await state_bus.emit_state(state)
-        raise ValueError(f"Triage output validation failed: {', '.join(validation_errors)}")
+        raise ValueError(
+            f"Triage output validation failed: {', '.join(validation_errors)}"
+        )
 
     # Update state: validation complete
     state.current_step = AgentStep.VALIDATION_COMPLETE
@@ -178,7 +187,9 @@ async def _triage_agent_state_internal(
 
     # Determine if policy should be deferred
     workflow_cfg = get_workflow_config() or {}
-    feedback_before_policy = bool(workflow_cfg.get("feedback_before_policy", False))
+    feedback_before_policy = bool(
+        workflow_cfg.get("feedback_before_policy", False)
+    )
 
     if feedback_before_policy:
         policy_decision = None
@@ -257,7 +268,9 @@ async def _triage_agent_state_internal(
             "policy_band": policy_band,
             "policy_decision": policy_decision,
             "pending_action": (
-                state.pending_action.model_dump(mode="json") if state.pending_action else None
+                state.pending_action.model_dump(mode="json")
+                if state.pending_action
+                else None
             ),
             "state": state.model_dump(mode="json"),
             "warning": evidence_warning,

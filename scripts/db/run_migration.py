@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Run database migrations."""
+
 import sys
 import os
 
 # Add project root to path (go up 3 levels: scripts/db -> scripts -> project root)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+)
 
 try:
     from ai_service.core import get_logger, setup_logging
@@ -50,14 +54,20 @@ def run_migration(migration_file):
 
 if __name__ == "__main__":
     migration_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "db", "migrations"
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "db",
+        "migrations",
     )
 
     # Check for combined migration file first
-    combined_migration = os.path.join(migration_dir, "000_combined_migration.sql")
+    combined_migration = os.path.join(
+        migration_dir, "000_combined_migration.sql"
+    )
 
     if os.path.exists(combined_migration):
-        logger.info("Found combined migration file - using it instead of individual migrations")
+        logger.info(
+            "Found combined migration file - using it instead of individual migrations"
+        )
         run_migration(combined_migration)
         logger.info("\n Combined migration completed")
     else:

@@ -26,7 +26,11 @@ from ai_service.core.exceptions import (
     ConfigurationError,
     ApprovalRequiredError,
 )
-from ai_service.core.llm_handler import get_llm_handler, LLMHandler, reset_llm_handler
+from ai_service.core.llm_handler import (
+    get_llm_handler,
+    LLMHandler,
+    reset_llm_handler,
+)
 
 __all__ = [
     "setup_logging",

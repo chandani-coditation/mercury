@@ -75,7 +75,11 @@ def _should_retry_embedding_error(error: Exception) -> bool:
         return True
     # Retry on 5xx server errors
     if isinstance(error, APIError):
-        if hasattr(error, "status_code") and error.status_code and 500 <= error.status_code < 600:
+        if (
+            hasattr(error, "status_code")
+            and error.status_code
+            and 500 <= error.status_code < 600
+        ):
             return True
     # Don't retry on client errors (4xx) or validation errors
     return False
@@ -85,7 +89,9 @@ def count_tokens(text: str, model: str = None) -> int:
     """Count tokens in text using the same encoding as the embedding model."""
     if model is None:
         model = DEFAULT_MODEL
-    encoding = tiktoken.get_encoding("cl100k_base")  # Used by OpenAI embedding models
+    encoding = tiktoken.get_encoding(
+        "cl100k_base"
+    )  # Used by OpenAI embedding models
     return len(encoding.encode(text))
 
 
@@ -148,14 +154,19 @@ def embed_text(text: str, model: str = None) -> Optional[List[float]]:
     for attempt in range(MAX_RETRIES):
         try:
             # Use common handler (works for both gateway and OpenAI)
-            response = handler.embeddings_create(text, model, timeout=EMBEDDING_TIMEOUT)
+            response = handler.embeddings_create(
+                text, model, timeout=EMBEDDING_TIMEOUT
+            )
             return response.data[0].embedding
 
         except Exception as e:
             last_error = e
 
             # Check if we should retry
-            if not _should_retry_embedding_error(e) or attempt == MAX_RETRIES - 1:
+            if (
+                not _should_retry_embedding_error(e)
+                or attempt == MAX_RETRIES - 1
+            ):
                 error_type = type(e).__name__
                 logger.error(
                     f"Embedding API error ({error_type}, attempt {attempt + 1}/{MAX_RETRIES}): {str(e)}. "
@@ -175,11 +186,15 @@ def embed_text(text: str, model: str = None) -> Optional[List[float]]:
 
             # Calculate exponential backoff with jitter
             if isinstance(e, RateLimitError):
-                base_delay = INITIAL_RETRY_DELAY * 2  # Start with 2s for rate limits
+                base_delay = (
+                    INITIAL_RETRY_DELAY * 2
+                )  # Start with 2s for rate limits
             else:
                 base_delay = INITIAL_RETRY_DELAY
 
-            delay = min(base_delay * (RETRY_EXPONENTIAL_BASE**attempt), MAX_RETRY_DELAY)
+            delay = min(
+                base_delay * (RETRY_EXPONENTIAL_BASE**attempt), MAX_RETRY_DELAY
+            )
             jitter = random.uniform(0, delay * 0.1)  # Add up to 10% jitter
             total_delay = delay + jitter
 
@@ -294,7 +309,10 @@ def embed_texts_batch(
                 last_error = e
 
                 # Check if we should retry
-                if not _should_retry_embedding_error(e) or attempt == MAX_RETRIES - 1:
+                if (
+                    not _should_retry_embedding_error(e)
+                    or attempt == MAX_RETRIES - 1
+                ):
                     error_type = type(e).__name__
                     logger.error(
                         f"Batch embedding API error ({error_type}, attempt {attempt + 1}/{MAX_RETRIES}): {str(e)}. "
@@ -321,7 +339,9 @@ def embed_texts_batch(
                                 )
                                 # Use zero vector of appropriate dimension (1536 for text-embedding-3-small)
                                 dim = (
-                                    1536 if "small" in model else 3072 if "large" in model else 1536
+                                    1536
+                                    if "small" in model
+                                    else 3072 if "large" in model else 1536
                                 )
                                 batch_embeddings.append([0.0] * dim)
                         break
@@ -333,7 +353,10 @@ def embed_texts_batch(
                 else:
                     base_delay = INITIAL_RETRY_DELAY
 
-                delay = min(base_delay * (RETRY_EXPONENTIAL_BASE**attempt), MAX_RETRY_DELAY)
+                delay = min(
+                    base_delay * (RETRY_EXPONENTIAL_BASE**attempt),
+                    MAX_RETRY_DELAY,
+                )
                 jitter = random.uniform(0, delay * 0.1)
                 total_delay = delay + jitter
 
@@ -351,7 +374,9 @@ def embed_texts_batch(
             logger.error(
                 f"Failed to generate embeddings for batch after all retries. Using zero vectors."
             )
-            dim = 1536 if "small" in model else 3072 if "large" in model else 1536
+            dim = (
+                1536 if "small" in model else 3072 if "large" in model else 1536
+            )
             all_embeddings.extend([[0.0] * dim] * len(cleaned_batch))
 
     return all_embeddings

@@ -31,51 +31,69 @@ class TestPasswordStrength:
 
     def test_valid_development_password(self):
         """Test that valid passwords for development are accepted."""
-        is_valid, errors = validate_password_strength("validpass123", is_production=False)
+        is_valid, errors = validate_password_strength(
+            "validpass123", is_production=False
+        )
         assert is_valid
         assert len(errors) == 0
 
     def test_production_password_requirements(self):
         """Test that production passwords have stricter requirements."""
         # Too short for production
-        is_valid, errors = validate_password_strength("short123", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "short123", is_production=True
+        )
         assert not is_valid
         assert any("12 characters" in e for e in errors)
 
         # Missing uppercase
-        is_valid, errors = validate_password_strength("lowercase123!", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "lowercase123!", is_production=True
+        )
         assert not is_valid
         assert any("uppercase" in e.lower() for e in errors)
 
         # Missing lowercase
-        is_valid, errors = validate_password_strength("UPPERCASE123!", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "UPPERCASE123!", is_production=True
+        )
         assert not is_valid
         assert any("lowercase" in e.lower() for e in errors)
 
         # Missing digit
-        is_valid, errors = validate_password_strength("NoDigitsHere!", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "NoDigitsHere!", is_production=True
+        )
         assert not is_valid
         assert any("digit" in e.lower() for e in errors)
 
         # Missing special character
-        is_valid, errors = validate_password_strength("NoSpecial123", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "NoSpecial123", is_production=True
+        )
         assert not is_valid
         assert any("special" in e.lower() for e in errors)
 
         # Valid production password
-        is_valid, errors = validate_password_strength("ValidPass123!@#", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "ValidPass123!@#", is_production=True
+        )
         assert is_valid
         assert len(errors) == 0
 
     def test_repeated_characters(self):
         """Test that passwords with repeated characters are rejected in production."""
-        is_valid, errors = validate_password_strength("aaaBBB123!", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "aaaBBB123!", is_production=True
+        )
         assert not is_valid
         assert any("repeated" in e.lower() for e in errors)
 
     def test_sequential_characters(self):
         """Test that passwords with sequential characters are rejected in production."""
-        is_valid, errors = validate_password_strength("abcDEF123!", is_production=True)
+        is_valid, errors = validate_password_strength(
+            "abcDEF123!", is_production=True
+        )
         assert not is_valid
         assert any("sequential" in e.lower() for e in errors)
 
@@ -90,7 +108,9 @@ class TestDatabasePasswordValidation:
 
         is_valid, errors = validate_database_password()
         assert not is_valid
-        assert any("default" in e.lower() or "placeholder" in e.lower() for e in errors)
+        assert any(
+            "default" in e.lower() or "placeholder" in e.lower() for e in errors
+        )
 
     def test_default_password_in_development(self, monkeypatch):
         """Test that default passwords are allowed in development."""

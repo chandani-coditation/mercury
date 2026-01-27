@@ -14,7 +14,9 @@ import uuid
 logger = get_logger(__name__)
 
 
-def _normalize_uuid_list(ids: Optional[List[Union[str, uuid.UUID]]]) -> List[str]:
+def _normalize_uuid_list(
+    ids: Optional[List[Union[str, uuid.UUID]]],
+) -> List[str]:
     """
     Normalize a list of IDs to strings (handles UUID objects, strings, None values).
 
@@ -52,7 +54,9 @@ def _normalize_uuid_list(ids: Optional[List[Union[str, uuid.UUID]]]) -> List[str
     return normalized
 
 
-def _normalize_limit(limit: Union[int, str, float, None], default: int = 20) -> int:
+def _normalize_limit(
+    limit: Union[int, str, float, None], default: int = 20
+) -> int:
     """
     Normalize limit parameter to integer.
 
@@ -79,7 +83,9 @@ def _normalize_limit(limit: Union[int, str, float, None], default: int = 20) -> 
             return default
         return limit_int
     except (ValueError, TypeError, AttributeError):
-        logger.warning(f"Invalid limit value: {repr(limit)}, using default: {default}")
+        logger.warning(
+            f"Invalid limit value: {repr(limit)}, using default: {default}"
+        )
         return default
 
 
@@ -140,7 +146,9 @@ def retrieve_runbook_chunks_by_document_id(
         try:
             # Safety check: ensure we have valid IDs (should already be validated, but double-check)
             if not document_ids or len(document_ids) == 0:
-                logger.warning("Empty document_ids list, returning empty results")
+                logger.warning(
+                    "Empty document_ids list, returning empty results"
+                )
                 return []
 
             placeholders = ",".join(["%s"] * len(document_ids))
@@ -156,7 +164,9 @@ def retrieve_runbook_chunks_by_document_id(
                         )
                         query_text = None
                     else:
-                        embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+                        embedding_str = (
+                            "[" + ",".join(map(str, query_embedding)) + "]"
+                        )
 
                     query = f"""
                     SELECT 
@@ -178,13 +188,19 @@ def retrieve_runbook_chunks_by_document_id(
                     """
 
                     # Execute with: embedding (for similarity calc), document_ids, embedding (for ORDER BY), limit
-                    params = (embedding_str,) + tuple(document_ids) + (embedding_str, limit)
+                    params = (
+                        (embedding_str,)
+                        + tuple(document_ids)
+                        + (embedding_str, limit)
+                    )
                     cur.execute(query, params)
                     logger.info(
                         f"Retrieved runbook chunks using semantic search for document_ids: {document_ids}, query_text length: {len(query_text) if query_text else 0}"
                     )
                 except Exception as e:
-                    logger.warning(f"Semantic search failed, falling back to direct retrieval: {e}")
+                    logger.warning(
+                        f"Semantic search failed, falling back to direct retrieval: {e}"
+                    )
                     # Rollback the failed transaction before trying fallback
                     conn.rollback()
                     query_text = None
@@ -217,7 +233,9 @@ def retrieve_runbook_chunks_by_document_id(
             for row in rows:
                 if isinstance(row, dict):
                     metadata = (
-                        row.get("metadata", {}) if isinstance(row.get("metadata"), dict) else {}
+                        row.get("metadata", {})
+                        if isinstance(row.get("metadata"), dict)
+                        else {}
                     )
                     # IMPORTANT: Use metadata.action (structured) instead of content (embedding text with prerequisites)
                     # The content field contains full embedding text: "Prerequisites: ... Condition: ... Action: ..."
@@ -233,16 +251,22 @@ def retrieve_runbook_chunks_by_document_id(
                                 action_text = action_parts[1].strip()
                                 # Remove trailing Service/Component info
                                 if "\nService:" in action_text:
-                                    action_text = action_text.split("\nService:")[0].strip()
+                                    action_text = action_text.split(
+                                        "\nService:"
+                                    )[0].strip()
                                 if "\nComponent:" in action_text:
-                                    action_text = action_text.split("\nComponent:")[0].strip()
+                                    action_text = action_text.split(
+                                        "\nComponent:"
+                                    )[0].strip()
                         else:
                             # Use content as fallback if no Action: marker
                             action_text = content
 
                     step = {
-                        "step_id": metadata.get("step_id") or f"chunk-{row['id']}",
-                        "runbook_id": row.get("runbook_id") or metadata.get("runbook_id"),
+                        "step_id": metadata.get("step_id")
+                        or f"chunk-{row['id']}",
+                        "runbook_id": row.get("runbook_id")
+                        or metadata.get("runbook_id"),
                         "condition": metadata.get("condition") or "Step applies",
                         "action": action_text,
                         "expected_outcome": metadata.get("expected_outcome"),
@@ -284,9 +308,13 @@ def retrieve_runbook_chunks_by_document_id(
                             if len(action_parts) > 1:
                                 action_text = action_parts[1].strip()
                                 if "\nService:" in action_text:
-                                    action_text = action_text.split("\nService:")[0].strip()
+                                    action_text = action_text.split(
+                                        "\nService:"
+                                    )[0].strip()
                                 if "\nComponent:" in action_text:
-                                    action_text = action_text.split("\nComponent:")[0].strip()
+                                    action_text = action_text.split(
+                                        "\nComponent:"
+                                    )[0].strip()
                         else:
                             action_text = content
 
@@ -297,7 +325,11 @@ def retrieve_runbook_chunks_by_document_id(
                             else f"chunk-{row[0]}"
                         ),
                         "runbook_id": row[7]
-                        or (metadata.get("runbook_id") if isinstance(metadata, dict) else None),
+                        or (
+                            metadata.get("runbook_id")
+                            if isinstance(metadata, dict)
+                            else None
+                        ),
                         "condition": (
                             metadata.get("condition")
                             if isinstance(metadata, dict)
@@ -305,14 +337,24 @@ def retrieve_runbook_chunks_by_document_id(
                         ),
                         "action": action_text,
                         "expected_outcome": (
-                            metadata.get("expected_outcome") if isinstance(metadata, dict) else None
+                            metadata.get("expected_outcome")
+                            if isinstance(metadata, dict)
+                            else None
                         ),
                         "rollback": (
-                            metadata.get("rollback") if isinstance(metadata, dict) else None
+                            metadata.get("rollback")
+                            if isinstance(metadata, dict)
+                            else None
                         ),
-                        "service": metadata.get("service") if isinstance(metadata, dict) else None,
+                        "service": (
+                            metadata.get("service")
+                            if isinstance(metadata, dict)
+                            else None
+                        ),
                         "component": (
-                            metadata.get("component") if isinstance(metadata, dict) else None
+                            metadata.get("component")
+                            if isinstance(metadata, dict)
+                            else None
                         ),
                         "runbook_title": row[6],
                         "runbook_document_id": str(row[1]),
@@ -320,7 +362,9 @@ def retrieve_runbook_chunks_by_document_id(
                         "document_id": str(row[1]),
                     }
                     if len(row) > 5:
-                        similarity = float(row[5]) if row[5] is not None else None
+                        similarity = (
+                            float(row[5]) if row[5] is not None else None
+                        )
                         # Validate similarity score - 1.0 is suspicious (perfect match)
                         if similarity is not None and similarity >= 0.999:
                             logger.warning(
@@ -332,7 +376,9 @@ def retrieve_runbook_chunks_by_document_id(
                         step["similarity_score"] = similarity
                     steps.append(step)
 
-            logger.info(f"Retrieved {len(steps)} runbook chunks for document_ids: {document_ids}")
+            logger.info(
+                f"Retrieved {len(steps)} runbook chunks for document_ids: {document_ids}"
+            )
             return steps
 
         finally:
@@ -388,7 +434,9 @@ def retrieve_close_notes_from_signatures(
         try:
             # Safety check: ensure we have valid IDs (should already be validated, but double-check)
             if not incident_signature_ids or len(incident_signature_ids) == 0:
-                logger.warning("Empty incident_signature_ids list, returning empty results")
+                logger.warning(
+                    "Empty incident_signature_ids list, returning empty results"
+                )
                 return []
 
             placeholders = ",".join(["%s"] * len(incident_signature_ids))
@@ -417,7 +465,9 @@ def retrieve_close_notes_from_signatures(
                 if isinstance(row, dict):
                     close_notes_list.append(
                         {
-                            "incident_signature_id": row["incident_signature_id"],
+                            "incident_signature_id": row[
+                                "incident_signature_id"
+                            ],
                             "close_notes": row["close_notes"],
                             "failure_type": row["failure_type"],
                             "error_class": row["error_class"],
@@ -532,7 +582,9 @@ def retrieve_historical_resolutions(
             for row in rows:
                 if isinstance(row, dict):
                     triage_output = (
-                        row["triage_output"] if isinstance(row["triage_output"], dict) else {}
+                        row["triage_output"]
+                        if isinstance(row["triage_output"], dict)
+                        else {}
                     )
                     resolution_output = (
                         row["resolution_output"]
@@ -569,17 +621,25 @@ def retrieve_historical_resolutions(
                             "rollback_triggered": rollback_triggered,
                             "rollback_status": row["rollback_status"],
                             "created_at": (
-                                row["created_at"].isoformat() if row["created_at"] else None
+                                row["created_at"].isoformat()
+                                if row["created_at"]
+                                else None
                             ),
                         }
                     )
                 else:
                     # Handle tuple result
                     triage_output = row[2] if isinstance(row[2], dict) else {}
-                    resolution_output = row[3] if isinstance(row[3], dict) else {}
+                    resolution_output = (
+                        row[3] if isinstance(row[3], dict) else {}
+                    )
 
                     is_successful = row[6] is not None
-                    rollback_triggered = row[7] in ["initiated", "in_progress", "completed"]
+                    rollback_triggered = row[7] in [
+                        "initiated",
+                        "in_progress",
+                        "completed",
+                    ]
 
                     historical_resolutions.append(
                         {
@@ -588,8 +648,12 @@ def retrieve_historical_resolutions(
                             "triage_output": triage_output,
                             "resolution_output": resolution_output,
                             "resolution_evidence": row[4],
-                            "resolution_proposed_at": row[5].isoformat() if row[5] else None,
-                            "resolution_accepted_at": row[6].isoformat() if row[6] else None,
+                            "resolution_proposed_at": (
+                                row[5].isoformat() if row[5] else None
+                            ),
+                            "resolution_accepted_at": (
+                                row[6].isoformat() if row[6] else None
+                            ),
                             "is_successful": is_successful,
                             "rollback_triggered": rollback_triggered,
                             "rollback_status": row[7],
@@ -663,7 +727,9 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
                     step_to_chunks[step_id].append(chunk_id)
 
             # Now find incidents that reference these chunk_ids in provenance
-            all_chunk_ids = [cid for chunks in step_to_chunks.values() for cid in chunks]
+            all_chunk_ids = [
+                cid for chunks in step_to_chunks.values() for cid in chunks
+            ]
 
             if not all_chunk_ids:
                 # No chunks found for these step_ids
@@ -679,7 +745,9 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
 
             # Safety check: ensure we have valid chunk_ids
             if not all_chunk_ids or len(all_chunk_ids) == 0:
-                logger.warning("Empty all_chunk_ids list, returning empty statistics")
+                logger.warning(
+                    "Empty all_chunk_ids list, returning empty statistics"
+                )
                 return {}
 
             chunk_placeholders = ",".join(["%s"] * len(all_chunk_ids))
@@ -706,7 +774,11 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
 
             # Build statistics
             stats = {
-                step_id: {"total_uses": 0, "successful_uses": 0, "last_used": None}
+                step_id: {
+                    "total_uses": 0,
+                    "successful_uses": 0,
+                    "last_used": None,
+                }
                 for step_id in step_ids
             }
 
@@ -720,7 +792,9 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
                     is_successful = row["resolution_accepted_at"] is not None
                     proposed_at = row["resolution_proposed_at"]
                 else:
-                    resolution_output = row[0] if isinstance(row[0], dict) else {}
+                    resolution_output = (
+                        row[0] if isinstance(row[0], dict) else {}
+                    )
                     is_successful = row[1] is not None
                     proposed_at = row[2]
 
@@ -747,9 +821,13 @@ def get_step_success_stats(step_ids: List[str]) -> Dict[str, Dict]:
             # Calculate success rates
             for step_id, stat in stats.items():
                 if stat["total_uses"] > 0:
-                    stat["success_rate"] = stat["successful_uses"] / stat["total_uses"]
+                    stat["success_rate"] = (
+                        stat["successful_uses"] / stat["total_uses"]
+                    )
                 else:
-                    stat["success_rate"] = 0.5  # Default to neutral if no history
+                    stat["success_rate"] = (
+                        0.5  # Default to neutral if no history
+                    )
 
             logger.debug(f"Step success stats: {stats}")
             return stats

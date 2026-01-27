@@ -5,7 +5,10 @@ import os
 from datetime import datetime, timedelta
 
 # Add project root to path (go up 3 levels: scripts/db -> scripts -> project root)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+)
 
 try:
     from ai_service.core import get_logger, setup_logging
@@ -113,11 +116,21 @@ def print_metrics(hours: int = 24):
     logger.info(f"Resolutions Accepted:   {metrics['accepted_count']}")
     logger.info("")
     logger.info("Timing Metrics:")
-    logger.info(f"  Avg Triage Time:      {format_seconds(metrics['avg_triage_secs'])}")
-    logger.info(f"  Avg Resolution Time: {format_seconds(metrics['avg_resolution_secs'])}")
-    logger.info(f"  Avg MTTR:             {format_seconds(metrics['avg_mttr_secs'])}")
-    logger.info(f"  Median MTTR:          {format_seconds(metrics['median_mttr_secs'])}")
-    logger.info(f"  P95 MTTR:             {format_seconds(metrics['p95_mttr_secs'])}")
+    logger.info(
+        f"  Avg Triage Time:      {format_seconds(metrics['avg_triage_secs'])}"
+    )
+    logger.info(
+        f"  Avg Resolution Time: {format_seconds(metrics['avg_resolution_secs'])}"
+    )
+    logger.info(
+        f"  Avg MTTR:             {format_seconds(metrics['avg_mttr_secs'])}"
+    )
+    logger.info(
+        f"  Median MTTR:          {format_seconds(metrics['median_mttr_secs'])}"
+    )
+    logger.info(
+        f"  P95 MTTR:             {format_seconds(metrics['p95_mttr_secs'])}"
+    )
     logger.info("=" * 60)
 
 
@@ -126,7 +139,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="View MTTR metrics")
     parser.add_argument(
-        "--hours", type=int, default=24, help="Number of hours to look back (default: 24)"
+        "--hours",
+        type=int,
+        default=24,
+        help="Number of hours to look back (default: 24)",
     )
 
     args = parser.parse_args()

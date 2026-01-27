@@ -7,7 +7,9 @@ from ai_service.core import get_logger
 logger = get_logger(__name__)
 
 
-def get_incident_descriptions(incident_ids: List[str]) -> Dict[str, Dict[str, str]]:
+def get_incident_descriptions(
+    incident_ids: List[str],
+) -> Dict[str, Dict[str, str]]:
     """
     Get original incident titles and descriptions from documents table.
 
@@ -28,7 +30,9 @@ def get_incident_descriptions(incident_ids: List[str]) -> Dict[str, Dict[str, st
         try:
             # Safety check: ensure we have valid IDs
             if not incident_ids or len(incident_ids) == 0:
-                logger.warning("Empty incident_ids list, returning empty results")
+                logger.warning(
+                    "Empty incident_ids list, returning empty results"
+                )
                 return {}
 
             # Query documents table for incidents matching the incident_ids in tags
@@ -56,7 +60,9 @@ def get_incident_descriptions(incident_ids: List[str]) -> Dict[str, Dict[str, st
             result = {}
             for row in rows:
                 if isinstance(row, dict):
-                    incident_id = row.get("incident_id") or row.get("alt_incident_id")
+                    incident_id = row.get("incident_id") or row.get(
+                        "alt_incident_id"
+                    )
                     title = row.get("title", "")
                     description = row.get("content", "")
                 else:
@@ -65,9 +71,14 @@ def get_incident_descriptions(incident_ids: List[str]) -> Dict[str, Dict[str, st
                     description = row[1] or ""
 
                 if incident_id and incident_id in incident_ids:
-                    result[incident_id] = {"title": title, "description": description}
+                    result[incident_id] = {
+                        "title": title,
+                        "description": description,
+                    }
 
-            logger.debug(f"Retrieved descriptions for {len(result)}/{len(incident_ids)} incidents")
+            logger.debug(
+                f"Retrieved descriptions for {len(result)}/{len(incident_ids)} incidents"
+            )
             return result
 
         finally:

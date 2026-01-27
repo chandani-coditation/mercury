@@ -22,7 +22,9 @@ def _get_config_dir() -> str:
     """
     # __file__ is ai_service/core/config_loader.py
     # Go up 3 levels: ai_service/core/ -> ai_service/ -> project root
-    current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    current_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     return os.path.join(current_dir, "config")
 
 
@@ -84,16 +86,24 @@ def load_config(config_dir: Optional[str] = None) -> Dict:
                 merged_config["historical_data_inputs"] = file_config.get(
                     "historical_data_inputs", {}
                 )
-                merged_config["alert_metadata"] = file_config.get("alert_metadata", {})
+                merged_config["alert_metadata"] = file_config.get(
+                    "alert_metadata", {}
+                )
             else:
                 merged_config[key] = file_config
 
         except FileNotFoundError:
             logger.error(f"Configuration file not found: {config_path}")
-            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+            raise FileNotFoundError(
+                f"Configuration file not found: {config_path}"
+            )
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in configuration file {config_path}: {e}")
-            raise ValueError(f"Invalid JSON in configuration file {config_path}: {e}")
+            logger.error(
+                f"Invalid JSON in configuration file {config_path}: {e}"
+            )
+            raise ValueError(
+                f"Invalid JSON in configuration file {config_path}: {e}"
+            )
 
     _CONFIG_CACHE = merged_config
     return merged_config

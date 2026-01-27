@@ -98,7 +98,9 @@ class IncidentService:
         Returns:
             Tuple of (list of incident dictionaries, total count)
         """
-        return self.repository.list_all(limit=limit, offset=offset, search=search)
+        return self.repository.list_all(
+            limit=limit, offset=offset, search=search
+        )
 
     def update_resolution(
         self,
@@ -144,7 +146,10 @@ class IncidentService:
         )
 
     def update_policy(
-        self, incident_id: str, policy_band: str, policy_decision: Optional[dict] = None
+        self,
+        incident_id: str,
+        policy_band: str,
+        policy_decision: Optional[dict] = None,
     ) -> None:
         """
         Update incident with policy band and decision.
@@ -158,10 +163,14 @@ class IncidentService:
             IncidentNotFoundError: If incident not found
         """
         self.repository.update_policy(
-            incident_id=incident_id, policy_band=policy_band, policy_decision=policy_decision
+            incident_id=incident_id,
+            policy_band=policy_band,
+            policy_decision=policy_decision,
         )
 
-    def update_triage_output(self, incident_id: str, triage_output: dict) -> None:
+    def update_triage_output(
+        self, incident_id: str, triage_output: dict
+    ) -> None:
         """
         Update incident with user-edited triage output.
 
@@ -172,4 +181,6 @@ class IncidentService:
         Raises:
             IncidentNotFoundError: If incident not found
         """
-        self.repository.update_triage_output(incident_id=incident_id, triage_output=triage_output)
+        self.repository.update_triage_output(
+            incident_id=incident_id, triage_output=triage_output
+        )

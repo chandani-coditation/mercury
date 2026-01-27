@@ -74,7 +74,9 @@ class StateBus:
             if state.pending_action:
                 self._pending_actions[state.incident_id] = state.pending_action
                 pending_counts[state.pending_action.action_type] += 1
-                self._processed_actions.pop(state.pending_action.action_name, None)
+                self._processed_actions.pop(
+                    state.pending_action.action_name, None
+                )
 
         # Log recovered pending actions
         if pending_counts:
@@ -104,10 +106,16 @@ class StateBus:
                 try:
                     self._state_repo.save_state(state)
                 except Exception as e:
-                    logger.warning("Failed to persist state to database: %s", e, exc_info=True)
+                    logger.warning(
+                        "Failed to persist state to database: %s",
+                        e,
+                        exc_info=True,
+                    )
 
             # Notify subscribers
-            subscribers = self._state_subscribers.get(state.incident_id or "global", [])
+            subscribers = self._state_subscribers.get(
+                state.incident_id or "global", []
+            )
             for callback in subscribers:
                 try:
                     if asyncio.iscoroutinefunction(callback):
@@ -115,7 +123,11 @@ class StateBus:
                     else:
                         callback(state)
                 except Exception as e:
-                    logger.error("Error in state subscriber callback: %s", e, exc_info=True)
+                    logger.error(
+                        "Error in state subscriber callback: %s",
+                        e,
+                        exc_info=True,
+                    )
 
             logger.debug(
                 "State emitted: incident_id=%s, step=%s, agent_type=%s",
@@ -138,11 +150,16 @@ class StateBus:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # pragma: no cover - only if called outside loop
-            logger.warning("Cannot start state bus monitor outside an event loop")
+            logger.warning(
+                "Cannot start state bus monitor outside an event loop"
+            )
             return
 
         self._monitor_task = loop.create_task(self._pending_action_monitor())
-        logger.info("State bus pending-action monitor started (interval=%ss)", monitor_interval)
+        logger.info(
+            "State bus pending-action monitor started (interval=%ss)",
+            monitor_interval,
+        )
 
     async def stop(self) -> None:
         """Stop background monitoring tasks."""
@@ -170,14 +187,18 @@ class StateBus:
     async def _check_pending_action_timeouts(self) -> None:
         """Check for and handle expired pending actions."""
         async with self._lock:
-            pending_snapshot: List[Tuple[str, PendingAction]] = list(self._pending_actions.items())
+            pending_snapshot: List[Tuple[str, PendingAction]] = list(
+                self._pending_actions.items()
+            )
 
         now = datetime.utcnow()
         for incident_id, pending_action in pending_snapshot:
             if pending_action.expires_at and pending_action.expires_at <= now:
                 await self._handle_action_timeout(incident_id, pending_action)
 
-    async def _handle_action_timeout(self, incident_id: str, pending_action: PendingAction) -> None:
+    async def _handle_action_timeout(
+        self, incident_id: str, pending_action: PendingAction
+    ) -> None:
         """Handle timeout for a pending HITL action."""
         async with self._lock:
             state = self._states.get(incident_id)
@@ -188,7 +209,9 @@ class StateBus:
 
             action_type = pending_action.action_type
 
-            state.warning = f"HITL action '{action_type}' timed out; escalating to approver."
+            state.warning = (
+                f"HITL action '{action_type}' timed out; escalating to approver."
+            )
             state.updated_at = datetime.utcnow()
 
             escalated = None
@@ -212,7 +235,9 @@ class StateBus:
             else:
                 state.pending_action = None
                 state.current_step = AgentStep.ERROR
-                state.error = "Escalated approval timed out; manual intervention required."
+                state.error = (
+                    "Escalated approval timed out; manual intervention required."
+                )
 
             self._states[incident_id] = state
 
@@ -220,13 +245,17 @@ class StateBus:
             try:
                 self._state_repo.save_state(state)
             except Exception as exc:  # pragma: no cover
-                logger.warning("Failed to persist timeout for %s: %s", incident_id, exc)
+                logger.warning(
+                    "Failed to persist timeout for %s: %s", incident_id, exc
+                )
 
         await self.emit_state(state)
 
         action_type = pending_action.action_type
         if pending_action.created_at:
-            duration = (datetime.utcnow() - pending_action.created_at).total_seconds()
+            duration = (
+                datetime.utcnow() - pending_action.created_at
+            ).total_seconds()
 
     async def pause_for_action(
         self,
@@ -254,7 +283,9 @@ class StateBus:
         async with self._lock:
             expires_at = None
             if timeout_minutes:
-                expires_at = datetime.utcnow() + timedelta(minutes=timeout_minutes)
+                expires_at = datetime.utcnow() + timedelta(
+                    minutes=timeout_minutes
+                )
 
             pending_action = PendingAction(
                 action_name=action_name,
@@ -369,7 +400,9 @@ class StateBus:
 
         action_type = pending_action.action_type if pending_action else "unknown"
         if pending_action and pending_action.created_at:
-            duration = (datetime.utcnow() - pending_action.created_at).total_seconds()
+            duration = (
+                datetime.utcnow() - pending_action.created_at
+            ).total_seconds()
 
         logger.info(
             "Agent resumed from action: incident_id=%s, action=%s, approved=%s",
@@ -380,7 +413,9 @@ class StateBus:
 
         return state
 
-    def subscribe_state(self, incident_id: Optional[str], callback: Callable) -> None:
+    def subscribe_state(
+        self, incident_id: Optional[str], callback: Callable
+    ) -> None:
         """
         Subscribe to state updates for an incident.
 
@@ -392,7 +427,9 @@ class StateBus:
         self._state_subscribers[key].append(callback)
         logger.debug("State subscriber added: incident_id=%s", incident_id)
 
-    def unsubscribe_state(self, incident_id: Optional[str], callback: Callable) -> None:
+    def unsubscribe_state(
+        self, incident_id: Optional[str], callback: Callable
+    ) -> None:
         """
         Unsubscribe from state updates.
 

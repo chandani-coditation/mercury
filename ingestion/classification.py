@@ -40,7 +40,9 @@ class ClassificationRule:
     pattern: str
     value: str  # The classification value to assign
     context_field: str  # Which fields to search (e.g., "title|description")
-    failure_type: Optional[str] = None  # For error_class rules, which failure_type they apply to
+    failure_type: Optional[str] = (
+        None  # For error_class rules, which failure_type they apply to
+    )
     notes: Optional[str] = None
 
 
@@ -63,7 +65,9 @@ class IncidentClassifier:
     def _load_rules(self):
         """Load classification rules from CSV files."""
         # Load failure type rules
-        failure_rules_file = self.config_dir / "incident_classification_rules.csv"
+        failure_rules_file = (
+            self.config_dir / "incident_classification_rules.csv"
+        )
         if failure_rules_file.exists():
             with open(failure_rules_file, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -123,7 +127,9 @@ class IncidentClassifier:
                     normalized = row["normalized_symptom"]
                     self.symptom_vocabulary[pattern] = normalized
 
-        logger.info(f"Loaded {len(self.symptom_vocabulary)} symptom normalization patterns")
+        logger.info(
+            f"Loaded {len(self.symptom_vocabulary)} symptom normalization patterns"
+        )
 
     def _extract_text_from_fields(self, incident: "IngestIncident", field_spec: str) -> str:  # type: ignore
         """Extract text from specified fields of an incident."""
@@ -142,7 +148,9 @@ class IncidentClassifier:
 
         return " ".join(text_parts)
 
-    def _match_pattern(self, text: str, pattern: str, pattern_type: PatternType) -> bool:
+    def _match_pattern(
+        self, text: str, pattern: str, pattern_type: PatternType
+    ) -> bool:
         """Match a pattern against text."""
         text_lower = text.lower()
 
@@ -171,7 +179,9 @@ class IncidentClassifier:
         for rule in self.failure_type_rules:
             text = self._extract_text_from_fields(incident, rule.context_field)
             if self._match_pattern(text, rule.pattern, rule.pattern_type):
-                logger.debug(f"Matched failure_type rule {rule.rule_id}: {rule.value}")
+                logger.debug(
+                    f"Matched failure_type rule {rule.rule_id}: {rule.value}"
+                )
                 return rule.value
 
         # Should never reach here if fallback rule exists
@@ -188,7 +198,9 @@ class IncidentClassifier:
 
             text = self._extract_text_from_fields(incident, rule.context_field)
             if self._match_pattern(text, rule.pattern, rule.pattern_type):
-                logger.debug(f"Matched error_class rule {rule.rule_id}: {rule.value}")
+                logger.debug(
+                    f"Matched error_class rule {rule.rule_id}: {rule.value}"
+                )
                 return rule.value
 
         # Should never reach here if fallback rule exists
@@ -217,7 +229,9 @@ class IncidentClassifier:
                     if len(normalized_symptoms) >= 5:
                         break
             except re.error:
-                logger.warning(f"Invalid regex pattern in symptom vocabulary: {pattern}")
+                logger.warning(
+                    f"Invalid regex pattern in symptom vocabulary: {pattern}"
+                )
 
         # If no symptoms found, use a default
         if not normalized_symptoms:
@@ -230,11 +244,11 @@ class IncidentClassifier:
     ) -> str:
         """Generate deterministic hash-based signature ID."""
         # Create a stable hash from key identifying fields
-        hash_input = (
-            f"{failure_type}:{error_class}:{incident.title or ''}:{incident.incident_id or ''}"
-        )
+        hash_input = f"{failure_type}:{error_class}:{incident.title or ''}:{incident.incident_id or ''}"
         hash_bytes = hashlib.sha256(hash_input.encode("utf-8")).digest()
-        hash_hex = hash_bytes.hex()[:12].upper()  # Use first 12 chars for readability
+        hash_hex = hash_bytes.hex()[
+            :12
+        ].upper()  # Use first 12 chars for readability
 
         # Format: SIG-<hash>
         return f"SIG-{hash_hex}"

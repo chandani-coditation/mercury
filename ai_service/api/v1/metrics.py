@@ -45,7 +45,9 @@ def get_retrieval_metrics():
         )
     except Exception as e:
         logger.error(f"Error retrieving metrics: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve metrics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve metrics: {str(e)}"
+        )
 
 
 @router.post("/metrics/reset")
@@ -69,4 +71,6 @@ def reset_retrieval_metrics():
         )
     except Exception as e:
         logger.error(f"Error resetting metrics: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to reset metrics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reset metrics: {str(e)}"
+        )

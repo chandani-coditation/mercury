@@ -16,7 +16,9 @@ router = APIRouter()
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
 
 
-def _record_triage_latency_and_update_incident(result: dict, start_time: datetime) -> float:
+def _record_triage_latency_and_update_incident(
+    result: dict, start_time: datetime
+) -> float:
     """Attach end-to-end API latency to triage output and persist to the incident."""
     latency = (datetime.utcnow() - start_time).total_seconds()
 
@@ -41,7 +43,9 @@ def _record_triage_latency_and_update_incident(result: dict, start_time: datetim
 async def triage(
     alert: Alert,
     use_state: bool = Query(False, description="Use state-based HITL workflow"),
-    use_langgraph: bool = Query(None, description="Use LangGraph framework (overrides env var)"),
+    use_langgraph: bool = Query(
+        None, description="Use LangGraph framework (overrides env var)"
+    ),
 ):
     """
     Triage an alert.
@@ -69,14 +73,23 @@ async def triage(
     try:
         alert_dict = alert.model_dump(mode="json", exclude_none=True)
         if alert.ts:
-            alert_dict["ts"] = alert.ts.isoformat() if isinstance(alert.ts, datetime) else alert.ts
+            alert_dict["ts"] = (
+                alert.ts.isoformat()
+                if isinstance(alert.ts, datetime)
+                else alert.ts
+            )
         else:
             alert_dict["ts"] = datetime.utcnow().isoformat()
-        if hasattr(alert, "affected_services") and alert.affected_services is not None:
+        if (
+            hasattr(alert, "affected_services")
+            and alert.affected_services is not None
+        ):
             alert_dict["affected_services"] = alert.affected_services
         if "affected_services" not in alert_dict and hasattr(alert, "__dict__"):
             if hasattr(alert, "affected_services"):
-                logger.debug(f"Alert.affected_services attribute: {alert.affected_services}")
+                logger.debug(
+                    f"Alert.affected_services attribute: {alert.affected_services}"
+                )
 
         # Call triager agent (LangGraph, state-based, or synchronous)
         if use_lg:
@@ -92,7 +105,9 @@ async def triage(
             result = triage_agent(alert_dict)
 
         # Compute latency and persist triage output in a helper
-        latency = _record_triage_latency_and_update_incident(result=result, start_time=start_time)
+        latency = _record_triage_latency_and_update_incident(
+            result=result, start_time=start_time
+        )
 
         return result
 

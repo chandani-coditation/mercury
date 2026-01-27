@@ -32,7 +32,9 @@ _metrics_store = {
     "service_mismatch_count": 0,
     "component_mismatch_count": 0,
     "retrieval_times": [],
-    "by_retrieval_type": defaultdict(lambda: {"count": 0, "empty_count": 0, "avg_scores": {}}),
+    "by_retrieval_type": defaultdict(
+        lambda: {"count": 0, "empty_count": 0, "avg_scores": {}}
+    ),
     "last_updated": None,
 }
 
@@ -82,7 +84,9 @@ def record_retrieval(
         if not results or len(results) == 0:
             _metrics_store["empty_results_count"] += 1
             type_metrics["empty_count"] += 1
-            logger.debug(f"Retrieval metrics: Empty results for {retrieval_type}")
+            logger.debug(
+                f"Retrieval metrics: Empty results for {retrieval_type}"
+            )
             return
 
         # Calculate average scores
@@ -103,7 +107,10 @@ def record_retrieval(
                 valid_scores += 1
             if "vector_score" in result and result["vector_score"] is not None:
                 total_vector += float(result["vector_score"])
-            if "fulltext_score" in result and result["fulltext_score"] is not None:
+            if (
+                "fulltext_score" in result
+                and result["fulltext_score"] is not None
+            ):
                 total_fulltext += float(result["fulltext_score"])
 
             # Check service/component matches
@@ -146,15 +153,15 @@ def record_retrieval(
 
             if total_vector > 0:
                 avg_vector = total_vector / len(results)
-                _metrics_store["avg_vector_score"] = (1 - alpha) * _metrics_store[
-                    "avg_vector_score"
-                ] + alpha * avg_vector
+                _metrics_store["avg_vector_score"] = (
+                    1 - alpha
+                ) * _metrics_store["avg_vector_score"] + alpha * avg_vector
 
             if total_fulltext > 0:
                 avg_fulltext = total_fulltext / len(results)
-                _metrics_store["avg_fulltext_score"] = (1 - alpha) * _metrics_store[
-                    "avg_fulltext_score"
-                ] + alpha * avg_fulltext
+                _metrics_store["avg_fulltext_score"] = (
+                    1 - alpha
+                ) * _metrics_store["avg_fulltext_score"] + alpha * avg_fulltext
 
         # Update service/component match counts
         if service_matches > 0:
@@ -171,7 +178,9 @@ def record_retrieval(
             _metrics_store["retrieval_times"].append(retrieval_time_ms)
             # Keep only last 1000 retrieval times
             if len(_metrics_store["retrieval_times"]) > 1000:
-                _metrics_store["retrieval_times"] = _metrics_store["retrieval_times"][-1000:]
+                _metrics_store["retrieval_times"] = _metrics_store[
+                    "retrieval_times"
+                ][-1000:]
 
         # Log periodic summary (every 100 retrievals)
         if _metrics_store["retrieval_count"] % 100 == 0:
@@ -222,7 +231,9 @@ def get_metrics() -> Dict:
             metrics["avg_results_per_retrieval"] = 0.0
 
         # Calculate service/component match rates
-        total_service_checks = metrics["service_match_count"] + metrics["service_mismatch_count"]
+        total_service_checks = (
+            metrics["service_match_count"] + metrics["service_mismatch_count"]
+        )
         if total_service_checks > 0:
             metrics["service_match_rate"] = (
                 metrics["service_match_count"] / total_service_checks * 100
@@ -231,7 +242,8 @@ def get_metrics() -> Dict:
             metrics["service_match_rate"] = 0.0
 
         total_component_checks = (
-            metrics["component_match_count"] + metrics["component_mismatch_count"]
+            metrics["component_match_count"]
+            + metrics["component_mismatch_count"]
         )
         if total_component_checks > 0:
             metrics["component_match_rate"] = (
@@ -242,12 +254,12 @@ def get_metrics() -> Dict:
 
         # Calculate average retrieval time
         if metrics["retrieval_times"]:
-            metrics["avg_retrieval_time_ms"] = sum(metrics["retrieval_times"]) / len(
+            metrics["avg_retrieval_time_ms"] = sum(
                 metrics["retrieval_times"]
-            )
-            metrics["p95_retrieval_time_ms"] = sorted(metrics["retrieval_times"])[
-                int(len(metrics["retrieval_times"]) * 0.95)
-            ]
+            ) / len(metrics["retrieval_times"])
+            metrics["p95_retrieval_time_ms"] = sorted(
+                metrics["retrieval_times"]
+            )[int(len(metrics["retrieval_times"]) * 0.95)]
         else:
             metrics["avg_retrieval_time_ms"] = 0.0
             metrics["p95_retrieval_time_ms"] = 0.0

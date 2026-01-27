@@ -22,7 +22,9 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-def _normalize_limit(limit: Union[int, str, float, None], default: int = 10) -> int:
+def _normalize_limit(
+    limit: Union[int, str, float, None], default: int = 10
+) -> int:
     """
     Normalize limit parameter to integer.
 
@@ -49,7 +51,9 @@ def _normalize_limit(limit: Union[int, str, float, None], default: int = 10) -> 
             return default
         return limit_int
     except (ValueError, TypeError, AttributeError):
-        logger.warning(f"Invalid limit value: {repr(limit)}, using default: {default}")
+        logger.warning(
+            f"Invalid limit value: {repr(limit)}, using default: {default}"
+        )
         return default
 
 
@@ -109,10 +113,14 @@ def hybrid_search(
         else query_text
     )
     limit = _normalize_limit(limit, default=10)
-    rrf_k = _normalize_limit(rrf_k, default=HybridSearchQueryBuilder.DEFAULT_RRF_K)
+    rrf_k = _normalize_limit(
+        rrf_k, default=HybridSearchQueryBuilder.DEFAULT_RRF_K
+    )
 
     if not query_text:
-        logger.warning("Empty query text provided to hybrid_search, returning empty results")
+        logger.warning(
+            "Empty query text provided to hybrid_search, returning empty results"
+        )
         return []
 
     start_time = time.time()
@@ -140,10 +148,11 @@ def hybrid_search(
 
             # Normalize service and component (ensure None or non-empty strings)
             service_val = service if service and str(service).strip() else None
-            component_val = component if component and str(component).strip() else None
+            component_val = (
+                component if component and str(component).strip() else None
+            )
 
             filter_clause = ""
-
 
             query = f"""
         WITH vector_results AS (
@@ -236,7 +245,9 @@ def hybrid_search(
             exec_params = []
 
             # Calculate RRF candidate limit (higher multiplier for better fusion results)
-            candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
+            candidate_limit = (
+                HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
+            )
 
             exec_params.append(query_embedding_str)
             exec_params.append(query_embedding_str)
@@ -251,7 +262,9 @@ def hybrid_search(
             exec_params.append(candidate_limit)
 
             exec_params.extend(
-                HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
+                HybridSearchQueryBuilder.build_soft_filter_boost_params(
+                    service_val, component_val
+                )
             )
             exec_params.append(fulltext_query)
             exec_params.append(fulltext_query)
@@ -268,8 +281,10 @@ def hybrid_search(
                 )
 
             # Validate parameter count using centralized validator
-            is_valid, error_msg = HybridSearchQueryBuilder.validate_parameter_count(
-                query, exec_params, expected_count=19
+            is_valid, error_msg = (
+                HybridSearchQueryBuilder.validate_parameter_count(
+                    query, exec_params, expected_count=19
+                )
             )
             if not is_valid:
                 logger.error(f"HYBRID_SEARCH ERROR: {error_msg}")
@@ -283,8 +298,12 @@ def hybrid_search(
                 cur.execute(query, exec_params)
             except Exception as e:
                 logger.error(f"HYBRID_SEARCH SQL ERROR: {e}")
-                logger.error(f"Query placeholders: {query.count('%s')}, Params: {len(exec_params)}")
-                logger.error(f"Service: {repr(service_val)}, Component: {repr(component_val)}")
+                logger.error(
+                    f"Query placeholders: {query.count('%s')}, Params: {len(exec_params)}"
+                )
+                logger.error(
+                    f"Service: {repr(service_val)}, Component: {repr(component_val)}"
+                )
                 raise
 
             results = cur.fetchall()
@@ -293,7 +312,9 @@ def hybrid_search(
             for row in results:
                 metadata = row.get("metadata") if isinstance(row, dict) else {}
                 if not isinstance(metadata, dict):
-                    logger.warning(f"Metadata is not a dict, converting: {type(metadata)}")
+                    logger.warning(
+                        f"Metadata is not a dict, converting: {type(metadata)}"
+                    )
                     metadata = {}
 
                 chunks.append(
@@ -306,7 +327,9 @@ def hybrid_search(
                         "doc_title": row.get("doc_title", ""),
                         "doc_type": row.get("doc_type", ""),
                         "vector_score": (
-                            float(row.get("vector_score", 0.0)) if row.get("vector_score") else 0.0
+                            float(row.get("vector_score", 0.0))
+                            if row.get("vector_score")
+                            else 0.0
                         ),
                         "fulltext_score": (
                             float(row.get("fulltext_score", 0.0))
@@ -314,9 +337,15 @@ def hybrid_search(
                             else 0.0
                         ),
                         "rrf_score": float(row.get("rrf_score", 0.0)),
-                        "service_match_boost": float(row.get("service_match_boost", 0.0)),
-                        "component_match_boost": float(row.get("component_match_boost", 0.0)),
-                        "final_score": float(row.get("final_score", row.get("rrf_score", 0.0))),
+                        "service_match_boost": float(
+                            row.get("service_match_boost", 0.0)
+                        ),
+                        "component_match_boost": float(
+                            row.get("component_match_boost", 0.0)
+                        ),
+                        "final_score": float(
+                            row.get("final_score", row.get("rrf_score", 0.0))
+                        ),
                     }
                 )
 
@@ -396,7 +425,9 @@ def mmr_search(
                     if candidate["document_id"] == sel["document_id"]:
                         max_sim = 0.8  # High similarity if same doc
                     else:
-                        max_sim = max(max_sim, 0.3)  # Lower similarity if different doc
+                        max_sim = max(
+                            max_sim, 0.3
+                        )  # Lower similarity if different doc
 
             # MMR score: lambda * relevance - (1 - lambda) * max_similarity
             mmr_score = diversity * relevance - (1 - diversity) * max_sim
@@ -440,7 +471,9 @@ def triage_retrieval(
     """
     start_time = time.time()
     # Use simpler query for full-text search if provided, otherwise use query_text for both
-    fulltext_query = fulltext_query_text if fulltext_query_text is not None else query_text
+    fulltext_query = (
+        fulltext_query_text if fulltext_query_text is not None else query_text
+    )
 
     # For runbooks, clean the enhanced query_text to remove URLs and special characters
     # that can break plainto_tsquery, but keep more context than the cleaned fulltext_query_text
@@ -456,7 +489,9 @@ def triage_retrieval(
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned
 
-    runbook_fulltext_query = clean_query_for_runbooks(query_text) if query_text else fulltext_query
+    runbook_fulltext_query = (
+        clean_query_for_runbooks(query_text) if query_text else fulltext_query
+    )
     if not runbook_fulltext_query or len(runbook_fulltext_query.strip()) < 10:
         runbook_fulltext_query = fulltext_query
 
@@ -472,7 +507,9 @@ def triage_retrieval(
 
         try:
             service_val = service if service and str(service).strip() else None
-            component_val = component if component and str(component).strip() else None
+            component_val = (
+                component if component and str(component).strip() else None
+            )
 
             query_embedding = embed_text(query_text)
             if query_embedding is None:
@@ -608,7 +645,9 @@ def triage_retrieval(
             LIMIT %s
             """
 
-            candidate_limit = HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
+            candidate_limit = (
+                HybridSearchQueryBuilder.calculate_rrf_candidate_limit(limit)
+            )
 
             sig_params = []
             sig_params.append(query_embedding_str)
@@ -647,14 +686,20 @@ def triage_retrieval(
             if all_source_incident_ids:
                 unique_incident_ids = list(set(all_source_incident_ids))
                 try:
-                    incident_descriptions = get_incident_descriptions(unique_incident_ids)
+                    incident_descriptions = get_incident_descriptions(
+                        unique_incident_ids
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to fetch incident descriptions: {e}")
 
             incident_signatures = []
             for row in incident_sig_rows:
                 if isinstance(row, dict):
-                    metadata = row["metadata"] if isinstance(row["metadata"], dict) else {}
+                    metadata = (
+                        row["metadata"]
+                        if isinstance(row["metadata"], dict)
+                        else {}
+                    )
                     source_ids = metadata.get("source_incident_ids", [])
 
                     enhanced_content = row["content"]
@@ -670,13 +715,17 @@ def triage_retrieval(
                                 if desc.get("description"):
                                     # Truncate description to 200 chars
                                     desc_text = desc["description"][:200] + (
-                                        "..." if len(desc["description"]) > 200 else ""
+                                        "..."
+                                        if len(desc["description"]) > 200
+                                        else ""
                                     )
                                     desc_parts.append(
                                         f"Original Incident {inc_id} - Description: {desc_text}"
                                     )
                         if desc_parts:
-                            enhanced_content = row["content"] + "\n\n" + "\n".join(desc_parts)
+                            enhanced_content = (
+                                row["content"] + "\n\n" + "\n".join(desc_parts)
+                            )
 
                     incident_signatures.append(
                         {
@@ -688,12 +737,20 @@ def triage_retrieval(
                             "doc_title": row["doc_title"],
                             "doc_type": row["doc_type"],
                             "vector_score": (
-                                float(row["vector_score"]) if row["vector_score"] else 0.0
+                                float(row["vector_score"])
+                                if row["vector_score"]
+                                else 0.0
                             ),
                             "fulltext_score": (
-                                float(row["fulltext_score"]) if row["fulltext_score"] else 0.0
+                                float(row["fulltext_score"])
+                                if row["fulltext_score"]
+                                else 0.0
                             ),
-                            "rrf_score": float(row["rrf_score"]) if row["rrf_score"] else 0.0,
+                            "rrf_score": (
+                                float(row["rrf_score"])
+                                if row["rrf_score"]
+                                else 0.0
+                            ),
                         }
                     )
                 else:
@@ -714,13 +771,17 @@ def triage_retrieval(
                                 if desc.get("description"):
                                     # Truncate description to 200 chars
                                     desc_text = desc["description"][:200] + (
-                                        "..." if len(desc["description"]) > 200 else ""
+                                        "..."
+                                        if len(desc["description"]) > 200
+                                        else ""
                                     )
                                     desc_parts.append(
                                         f"Original Incident {inc_id} - Description: {desc_text}"
                                     )
                         if desc_parts:
-                            enhanced_content = row[3] + "\n\n" + "\n".join(desc_parts)
+                            enhanced_content = (
+                                row[3] + "\n\n" + "\n".join(desc_parts)
+                            )
 
                     row_len = len(row)
                     incident_signatures.append(
@@ -736,10 +797,14 @@ def triage_retrieval(
                             "fulltext_score": float(row[8]) if row[8] else 0.0,
                             "rrf_score": float(row[9]) if row[9] else 0.0,
                             "service_match_boost": (
-                                float(row[10]) if row_len > 10 and row[10] else 0.0
+                                float(row[10])
+                                if row_len > 10 and row[10]
+                                else 0.0
                             ),
                             "component_match_boost": (
-                                float(row[11]) if row_len > 11 and row[11] else 0.0
+                                float(row[11])
+                                if row_len > 11 and row[11]
+                                else 0.0
                             ),
                             "final_score": (
                                 float(row[12])
@@ -781,7 +846,9 @@ def triage_retrieval(
                 runbook_fulltext_query,
             ]
             runbook_params_extended.extend(
-                HybridSearchQueryBuilder.build_soft_filter_boost_params(service_val, component_val)
+                HybridSearchQueryBuilder.build_soft_filter_boost_params(
+                    service_val, component_val
+                )
             )
             runbook_params_extended.append(limit)
             cur.execute(runbook_meta_query, runbook_params_extended)
@@ -805,7 +872,9 @@ def triage_retrieval(
                                 else None
                             ),
                             "relevance_score": (
-                                float(row["relevance_score"]) if row["relevance_score"] else 0.0
+                                float(row["relevance_score"])
+                                if row["relevance_score"]
+                                else 0.0
                             ),
                             "service_match_boost": (
                                 float(row.get("service_match_boost", 0.0))
@@ -829,7 +898,9 @@ def triage_retrieval(
                             "component": row[3],
                             "title": row[4],
                             "tags": tags,
-                            "last_reviewed_at": row[6].isoformat() if row[6] else None,
+                            "last_reviewed_at": (
+                                row[6].isoformat() if row[6] else None
+                            ),
                             "relevance_score": float(row[7]) if row[7] else 0.0,
                             "service_match_boost": (
                                 float(row[8]) if len(row) > 8 and row[8] else 0.0

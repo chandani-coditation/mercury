@@ -4,13 +4,18 @@ from typing import Dict, Any, TypedDict, Annotated, Optional
 from langgraph.graph import StateGraph, END
 from ai_service.core import get_logger, get_retrieval_config
 from retrieval.hybrid_search import hybrid_search
-from ai_service.agents.triager import apply_retrieval_preferences, format_evidence_chunks
+from ai_service.agents.triager import (
+    apply_retrieval_preferences,
+    format_evidence_chunks,
+)
 from ai_service.llm_client import call_llm_for_triage, call_llm_for_resolution
 from ai_service.repositories import IncidentRepository
 from ai_service.policy import get_policy_from_config, get_resolution_policy
-from ai_service.guardrails import validate_triage_output, validate_resolution_output
+from ai_service.guardrails import (
+    validate_triage_output,
+    validate_resolution_output,
+)
 from ai_service.core import IncidentNotFoundError, ApprovalRequiredError
-
 
 logger = get_logger(__name__)
 
@@ -59,10 +64,14 @@ def create_triage_graph():
             query_text = enhance_query(alert)
         except Exception as e:
             logger.warning(f"Query enhancement failed, using basic query: {e}")
-            query_text = f"{alert.get('title', '')} {alert.get('description', '')}"
+            query_text = (
+                f"{alert.get('title', '')} {alert.get('description', '')}"
+            )
         labels = alert.get("labels", {}) or {}
         service_val = labels.get("service") if isinstance(labels, dict) else None
-        component_val = labels.get("component") if isinstance(labels, dict) else None
+        component_val = (
+            labels.get("component") if isinstance(labels, dict) else None
+        )
 
         logger.debug(
             f"LangGraph: Retrieving context for triage - service={service_val}, component={component_val}"
@@ -87,7 +96,9 @@ def create_triage_graph():
         )
 
         # Apply retrieval preferences
-        context_chunks = apply_retrieval_preferences(context_chunks, retrieval_cfg)
+        context_chunks = apply_retrieval_preferences(
+            context_chunks, retrieval_cfg
+        )
 
         # Optionally retrieve logs from InfluxDB if configured
         try:
@@ -96,7 +107,10 @@ def create_triage_graph():
             influxdb_client = get_influxdb_client()
             if influxdb_client.is_configured():
                 logs = influxdb_client.get_logs_for_context(
-                    query_text=query_text, service=service_val, component=component_val, limit=5
+                    query_text=query_text,
+                    service=service_val,
+                    component=component_val,
+                    limit=5,
                 )
                 for log_content in logs:
                     if log_content:
@@ -109,7 +123,9 @@ def create_triage_graph():
                             }
                         )
         except Exception as e:
-            logger.debug(f"InfluxDB log retrieval not available or failed: {str(e)}")
+            logger.debug(
+                f"InfluxDB log retrieval not available or failed: {str(e)}"
+            )
 
         state["context_chunks"] = context_chunks
         return state
@@ -135,7 +151,9 @@ def create_triage_graph():
 
         is_valid, validation_errors = validate_triage_output(triage_output)
         if not is_valid:
-            error_msg = f"Triage validation failed: {', '.join(validation_errors)}"
+            error_msg = (
+                f"Triage validation failed: {', '.join(validation_errors)}"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -185,7 +203,11 @@ def create_triage_graph():
                     cur = conn.cursor()
                     cur.execute("SELECT COUNT(*) as count FROM documents")
                     result = cur.fetchone()
-                    doc_count = result["count"] if isinstance(result, dict) else result[0]
+                    doc_count = (
+                        result["count"]
+                        if isinstance(result, dict)
+                        else result[0]
+                    )
                     cur.close()
 
                 if doc_count == 0:
@@ -274,12 +296,12 @@ def create_resolution_graph():
             query_text = f"{base_query} resolution steps runbook"
         except Exception as e:
             logger.warning(f"Query enhancement failed, using basic query: {e}")
-            query_text = (
-                f"{alert.get('title', '')} {alert.get('description', '')} resolution steps runbook"
-            )
+            query_text = f"{alert.get('title', '')} {alert.get('description', '')} resolution steps runbook"
         labels = alert.get("labels", {}) or {}
         service_val = labels.get("service") if isinstance(labels, dict) else None
-        component_val = labels.get("component") if isinstance(labels, dict) else None
+        component_val = (
+            labels.get("component") if isinstance(labels, dict) else None
+        )
 
         logger.debug(
             f"LangGraph: Retrieving context for resolution - service={service_val}, component={component_val}"
@@ -320,7 +342,9 @@ def create_resolution_graph():
             )
 
         # Apply retrieval preferences
-        context_chunks = apply_retrieval_preferences(context_chunks, resolution_retrieval_cfg)
+        context_chunks = apply_retrieval_preferences(
+            context_chunks, resolution_retrieval_cfg
+        )
 
         # Optionally retrieve logs from InfluxDB if configured
         try:
@@ -329,7 +353,10 @@ def create_resolution_graph():
             influxdb_client = get_influxdb_client()
             if influxdb_client.is_configured():
                 logs = influxdb_client.get_logs_for_context(
-                    query_text=query_text, service=service_val, component=component_val, limit=5
+                    query_text=query_text,
+                    service=service_val,
+                    component=component_val,
+                    limit=5,
                 )
                 for log_content in logs:
                     if log_content:
@@ -342,7 +369,9 @@ def create_resolution_graph():
                             }
                         )
         except Exception as e:
-            logger.debug(f"InfluxDB log retrieval not available or failed: {str(e)}")
+            logger.debug(
+                f"InfluxDB log retrieval not available or failed: {str(e)}"
+            )
 
         state["context_chunks"] = context_chunks
         return state
@@ -392,7 +421,10 @@ def create_resolution_graph():
         # Ensure provenance is populated from context chunks if LLM didn't provide it
         if not resolution_output.get("provenance") and context_chunks:
             resolution_output["provenance"] = [
-                {"doc_id": chunk.get("document_id", ""), "chunk_id": chunk.get("chunk_id", "")}
+                {
+                    "doc_id": chunk.get("document_id", ""),
+                    "chunk_id": chunk.get("chunk_id", ""),
+                }
                 for chunk in context_chunks[:10]  # Include top chunks
                 if chunk.get("chunk_id") and chunk.get("document_id")
             ]
@@ -413,7 +445,9 @@ def create_resolution_graph():
             resolution_output, context_chunks=context_chunks
         )
         if not is_valid:
-            error_msg = f"Resolution validation failed: {', '.join(validation_errors)}"
+            error_msg = (
+                f"Resolution validation failed: {', '.join(validation_errors)}"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -445,8 +479,12 @@ def create_resolution_graph():
             context_chunks,
             retrieval_method="hybrid_search",
             retrieval_params={
-                "service": labels.get("service") if isinstance(labels, dict) else None,
-                "component": labels.get("component") if isinstance(labels, dict) else None,
+                "service": (
+                    labels.get("service") if isinstance(labels, dict) else None
+                ),
+                "component": (
+                    labels.get("component") if isinstance(labels, dict) else None
+                ),
             },
         )
 
@@ -472,7 +510,11 @@ def create_resolution_graph():
                     cur = conn.cursor()
                     cur.execute("SELECT COUNT(*) as count FROM documents")
                     result = cur.fetchone()
-                    doc_count = result["count"] if isinstance(result, dict) else result[0]
+                    doc_count = (
+                        result["count"]
+                        if isinstance(result, dict)
+                        else result[0]
+                    )
                     cur.close()
 
                 if doc_count == 0:
@@ -544,7 +586,9 @@ def run_triage_graph(alert: Dict[str, Any]) -> Dict[str, Any]:
         "triage": final_state["triage_output"],
         "evidence": final_state["evidence"],
         "evidence_chunks": final_state.get("evidence", {}).get("chunks", []),
-        "policy_band": final_state["policy_decision"].get("policy_band", "REVIEW"),
+        "policy_band": final_state["policy_decision"].get(
+            "policy_band", "REVIEW"
+        ),
         "policy_decision": final_state["policy_decision"],
         "evidence_warning": final_state.get("evidence_warning"),
         # Include all evidence fields for compatibility
@@ -589,10 +633,14 @@ def run_resolution_graph(
         "resolution": final_state["resolution_output"],
         "evidence": final_state["evidence"],
         "evidence_chunks": final_state.get("evidence", {}).get("chunks", []),
-        "policy_band": final_state["policy_decision"].get("policy_band", "REVIEW"),
+        "policy_band": final_state["policy_decision"].get(
+            "policy_band", "REVIEW"
+        ),
         "policy_decision": final_state["policy_decision"],
         "evidence_warning": final_state.get("evidence_warning"),
-        "resolution_evidence_warning": final_state.get("resolution_evidence_warning"),
+        "resolution_evidence_warning": final_state.get(
+            "resolution_evidence_warning"
+        ),
         # Include all evidence fields for compatibility
         "resolution_evidence": final_state.get("evidence", {}),
     }

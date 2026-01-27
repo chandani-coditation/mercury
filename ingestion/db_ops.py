@@ -14,7 +14,6 @@ from ingestion.chunker import add_chunk_header
 from ingestion.models import RunbookStep, IncidentSignature
 
 
-
 def get_logger(name):
     from ai_service.core import get_logger as _get_logger
 
@@ -93,7 +92,11 @@ def insert_document_and_chunks(
             chunks = chunk_text(content_trimmed)
 
             # Validate chunks are not empty
-            empty_chunks = [i for i, chunk in enumerate(chunks) if not chunk or not chunk.strip()]
+            empty_chunks = [
+                i
+                for i, chunk in enumerate(chunks)
+                if not chunk or not chunk.strip()
+            ]
             if empty_chunks:
                 raise ValueError(
                     f"Found {len(empty_chunks)} empty chunk(s) at indices: {empty_chunks[:5]}"
@@ -101,7 +104,11 @@ def insert_document_and_chunks(
 
             # Prepare chunks with headers for embedding
             chunks_with_headers = []
-            from ingestion.embeddings import count_tokens, EMBEDDING_MODEL_LIMITS, DEFAULT_MODEL
+            from ingestion.embeddings import (
+                count_tokens,
+                EMBEDDING_MODEL_LIMITS,
+                DEFAULT_MODEL,
+            )
 
             embedding_model = DEFAULT_MODEL
             max_tokens = EMBEDDING_MODEL_LIMITS.get(embedding_model, 8191)
@@ -130,10 +137,17 @@ def insert_document_and_chunks(
 
                     # Calculate header token count once
                     header_only = add_chunk_header(
-                        "", doc_type, service, component, title, last_reviewed_str
+                        "",
+                        doc_type,
+                        service,
+                        component,
+                        title,
+                        last_reviewed_str,
                     )
                     header_tokens = count_tokens(header_only, embedding_model)
-                    available_tokens = max_tokens - header_tokens - 100  # Safety margin
+                    available_tokens = (
+                        max_tokens - header_tokens - 100
+                    )  # Safety margin
 
                     # Try splitting by lines first
                     lines = chunk.split("\n")
@@ -141,9 +155,14 @@ def insert_document_and_chunks(
                     current_tokens = 0
 
                     for line in lines:
-                        line_tokens = len(encoding.encode(line + "\n"))  # Include newline
+                        line_tokens = len(
+                            encoding.encode(line + "\n")
+                        )  # Include newline
 
-                        if current_tokens + line_tokens > available_tokens and current_subchunk:
+                        if (
+                            current_tokens + line_tokens > available_tokens
+                            and current_subchunk
+                        ):
                             # Save current subchunk
                             subchunk_text = "\n".join(current_subchunk)
                             chunks_with_headers.append(
@@ -197,7 +216,9 @@ def insert_document_and_chunks(
             except Exception:
                 default_batch_size = 50  # Fallback to default
             batch_size = (
-                default_batch_size if len(chunks_with_headers) > 10 else len(chunks_with_headers)
+                default_batch_size
+                if len(chunks_with_headers) > 10
+                else len(chunks_with_headers)
             )
             embeddings = embed_texts_batch(
                 chunks_with_headers, model=embedding_model, batch_size=batch_size
@@ -233,7 +254,9 @@ def insert_document_and_chunks(
                         doc_id,
                         idx,
                         chunk_with_header,
-                        json.dumps(metadata_dict),  # Convert dict to JSON string for JSONB
+                        json.dumps(
+                            metadata_dict
+                        ),  # Convert dict to JSON string for JSONB
                         embedding_str,  # pgvector string format
                         create_tsvector(chunk_with_header),
                     ),
@@ -391,9 +414,14 @@ def insert_runbook_with_steps(
                     pass
 
                 # Delete chunks first (CASCADE will handle runbook_steps if they exist)
-                cur.execute("DELETE FROM chunks WHERE document_id = %s", (existing_doc_id,))
+                cur.execute(
+                    "DELETE FROM chunks WHERE document_id = %s",
+                    (existing_doc_id,),
+                )
                 # Delete the document
-                cur.execute("DELETE FROM documents WHERE id = %s", (existing_doc_id,))
+                cur.execute(
+                    "DELETE FROM documents WHERE id = %s", (existing_doc_id,)
+                )
                 # Use existing doc_id for replacement
                 doc_id = existing_doc_id
             else:
@@ -436,9 +464,9 @@ def insert_runbook_with_steps(
                     try:
                         from ingestion.normalizers import INGESTION_CONFIG
 
-                        max_action_length = INGESTION_CONFIG.get("formatting", {}).get(
-                            "max_fallback_action_length", 2000
-                        )
+                        max_action_length = INGESTION_CONFIG.get(
+                            "formatting", {}
+                        ).get("max_fallback_action_length", 2000)
                     except Exception:
                         max_action_length = 2000  # Fallback to default
 
@@ -446,7 +474,9 @@ def insert_runbook_with_steps(
                         step_id=f"{tags.get('runbook_id', 'RB-UNKNOWN')}-S1",
                         runbook_id=tags.get("runbook_id", "RB-UNKNOWN"),
                         condition="Runbook applies",
-                        action=content.strip()[:max_action_length],  # Limit from config
+                        action=content.strip()[
+                            :max_action_length
+                        ],  # Limit from config
                         expected_outcome=None,
                         rollback=None,
                         risk_level=None,
@@ -456,7 +486,9 @@ def insert_runbook_with_steps(
                     steps = [fallback_step]
                 else:
                     # Even if no content, create a minimal step
-                    runbook_id = tags.get("runbook_id", f"RB-{uuid.uuid4().hex[:8].upper()}")
+                    runbook_id = tags.get(
+                        "runbook_id", f"RB-{uuid.uuid4().hex[:8].upper()}"
+                    )
                     fallback_step = RunbookStep(
                         step_id=f"{runbook_id}-S1",
                         runbook_id=runbook_id,
@@ -475,7 +507,9 @@ def insert_runbook_with_steps(
                 from ai_service.core import get_logger
 
                 logger = get_logger(__name__)
-                logger.info(f"Inserting {len(steps)} steps for runbook {title} (doc_id={doc_id})")
+                logger.info(
+                    f"Inserting {len(steps)} steps for runbook {title} (doc_id={doc_id})"
+                )
             except:
                 pass
 
@@ -484,7 +518,9 @@ def insert_runbook_with_steps(
 
             for step in steps:
                 # Create embedding text for this step (include prerequisites from runbook)
-                step_text = _create_runbook_step_embedding_text(step, prerequisites=prerequisites)
+                step_text = _create_runbook_step_embedding_text(
+                    step, prerequisites=prerequisites
+                )
                 step_texts.append(step_text)
 
             # Generate embeddings for all steps in batch
@@ -499,7 +535,9 @@ def insert_runbook_with_steps(
             except Exception:
                 default_batch_size = 50  # Fallback to default
             batch_size = min(default_batch_size, len(step_texts))
-            embeddings = embed_texts_batch(step_texts, model=embedding_model, batch_size=batch_size)
+            embeddings = embed_texts_batch(
+                step_texts, model=embedding_model, batch_size=batch_size
+            )
 
             if not embeddings or len(embeddings) != len(step_texts):
                 raise ValueError(
@@ -538,7 +576,9 @@ def insert_runbook_with_steps(
                         from ai_service.core import get_logger
 
                         logger = get_logger(__name__)
-                        logger.debug(f"Inserting step {step.step_id} for runbook {title}")
+                        logger.debug(
+                            f"Inserting step {step.step_id} for runbook {title}"
+                        )
                     except:
                         pass
 
@@ -611,7 +651,8 @@ def insert_runbook_with_steps(
                             (
                                 chunk_id,
                                 doc_id,
-                                inserted_count - 1,  # Use step index as chunk_index
+                                inserted_count
+                                - 1,  # Use step index as chunk_index
                                 step_text,  # Content is the embedding text
                                 json.dumps(chunk_metadata),
                                 embedding_str,
@@ -624,7 +665,9 @@ def insert_runbook_with_steps(
                             from ai_service.core import get_logger
 
                             logger = get_logger(__name__)
-                            logger.debug(f"Created chunk for runbook step {step.step_id}")
+                            logger.debug(
+                                f"Created chunk for runbook step {step.step_id}"
+                            )
                         except:
                             pass
                     except Exception as chunk_error:
@@ -647,7 +690,9 @@ def insert_runbook_with_steps(
                         from ai_service.core import get_logger
 
                         logger = get_logger(__name__)
-                        logger.debug(f"Successfully inserted step {step.step_id}")
+                        logger.debug(
+                            f"Successfully inserted step {step.step_id}"
+                        )
                     except:
                         pass
 
@@ -700,7 +745,9 @@ def insert_runbook_with_steps(
                 if steps:
                     step = steps[0]
                     step_text = _create_runbook_step_embedding_text(step)
-                    embedding = embeddings[0] if embeddings else embed_text(step_text)
+                    embedding = (
+                        embeddings[0] if embeddings else embed_text(step_text)
+                    )
                     if embedding is None:
                         try:
                             from ai_service.core import get_logger
@@ -745,7 +792,9 @@ def insert_runbook_with_steps(
                         from ai_service.core import get_logger
 
                         logger = get_logger(__name__)
-                        logger.info(f"Inserted fallback chunk for runbook {title}")
+                        logger.info(
+                            f"Inserted fallback chunk for runbook {title}"
+                        )
                     except:
                         pass
 
@@ -766,7 +815,9 @@ def insert_runbook_with_steps(
                 from ai_service.core import get_logger
 
                 logger = get_logger(__name__)
-                logger.info(f"Successfully committed runbook {title} with {inserted_count} steps")
+                logger.info(
+                    f"Successfully committed runbook {title} with {inserted_count} steps"
+                )
             except:
                 pass
 
@@ -779,7 +830,8 @@ def insert_runbook_with_steps(
 
                 logger = get_logger(__name__)
                 logger.error(
-                    f"Transaction rolled back for runbook {title}: {str(e)}", exc_info=True
+                    f"Transaction rolled back for runbook {title}: {str(e)}",
+                    exc_info=True,
                 )
             except:
                 pass
@@ -820,7 +872,9 @@ def insert_incident_signature(
             from ingestion.normalizers import clean_description_text
 
             cleaned_description = (
-                clean_description_text(incident_description) if incident_description else None
+                clean_description_text(incident_description)
+                if incident_description
+                else None
             )
 
             # Create embedding text for signature (include original title/description for better matching)
@@ -851,8 +905,12 @@ def insert_incident_signature(
 
             # Prepare arrays for PostgreSQL
             symptoms_array = signature.symptoms if signature.symptoms else []
-            resolution_refs_array = signature.resolution_refs if signature.resolution_refs else []
-            source_incident_ids_array = [source_incident_id] if source_incident_id else []
+            resolution_refs_array = (
+                signature.resolution_refs if signature.resolution_refs else []
+            )
+            source_incident_ids_array = (
+                [source_incident_id] if source_incident_id else []
+            )
 
             # Insert signature into incident_signatures table
             # Build tsv text for full-text search - include title/description FIRST for better matching
@@ -947,7 +1005,8 @@ def insert_incident_signature(
                     source_document_id,
                     datetime.now(),  # last_seen_at
                     tsv_text,  # tsv text for full-text search
-                    incident_title or "",  # For ON CONFLICT UPDATE (tsv - first param)
+                    incident_title
+                    or "",  # For ON CONFLICT UPDATE (tsv - first param)
                     (
                         clean_description_text(incident_description)[:1000]
                         if incident_description

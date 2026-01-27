@@ -69,11 +69,15 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
             # Validate incident_signatures array
             incident_sigs = matched_evidence.get("incident_signatures", [])
             if not isinstance(incident_sigs, list):
-                errors.append("matched_evidence.incident_signatures must be a list")
+                errors.append(
+                    "matched_evidence.incident_signatures must be a list"
+                )
             else:
                 for i, sig_id in enumerate(incident_sigs):
                     if not isinstance(sig_id, str):
-                        errors.append(f"matched_evidence.incident_signatures[{i}] must be a string")
+                        errors.append(
+                            f"matched_evidence.incident_signatures[{i}] must be a string"
+                        )
 
             # Validate runbook_refs array
             runbook_refs = matched_evidence.get("runbook_refs", [])
@@ -82,7 +86,9 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
             else:
                 for i, ref_id in enumerate(runbook_refs):
                     if not isinstance(ref_id, str):
-                        errors.append(f"matched_evidence.runbook_refs[{i}] must be a string")
+                        errors.append(
+                            f"matched_evidence.runbook_refs[{i}] must be a string"
+                        )
     else:
         errors.append("matched_evidence is required")
 
@@ -90,7 +96,9 @@ def validate_triage_output(triage_output: Dict) -> Tuple[bool, List[str]]:
     # They are validated after post-processing, not from LLM output
 
     if errors:
-        logger.warning(f"Triage validation failed with {len(errors)} errors: {errors}")
+        logger.warning(
+            f"Triage validation failed with {len(errors)} errors: {errors}"
+        )
     else:
         logger.debug("Triage validation passed")
 
@@ -120,7 +128,9 @@ def validate_resolution_output(
     runbook_chunk_ids = set()
     if context_chunks:
         for chunk in context_chunks:
-            doc_type = chunk.get("doc_type") or (chunk.get("metadata") or {}).get("doc_type")
+            doc_type = chunk.get("doc_type") or (
+                chunk.get("metadata") or {}
+            ).get("doc_type")
             if doc_type == "runbook":
                 runbook_doc_ids.add(chunk.get("document_id"))
                 runbook_chunk_ids.add(chunk.get("chunk_id"))
@@ -129,7 +139,11 @@ def validate_resolution_output(
     # Note: risk_level, estimated_time_minutes, and requires_approval are deprecated
     # They are not based on historical data and should not be LLM-generated
     # Allow None values for deprecated fields
-    deprecated_fields = {"estimated_time_minutes", "risk_level", "requires_approval"}
+    deprecated_fields = {
+        "estimated_time_minutes",
+        "risk_level",
+        "requires_approval",
+    }
     required_fields = config.get("required_fields", [])
     for field in required_fields:
         if field not in resolution_output:
@@ -139,21 +153,29 @@ def validate_resolution_output(
             errors.append(f"Required field is None: {field}")
 
     # Validate steps (preferred) or resolution_steps (legacy)
-    steps = resolution_output.get("steps", resolution_output.get("resolution_steps", []))
+    steps = resolution_output.get(
+        "steps", resolution_output.get("resolution_steps", [])
+    )
     if not isinstance(steps, list):
         errors.append("steps must be a list")
     else:
         min_steps = config.get("min_resolution_steps", 1)
         max_steps = config.get("max_resolution_steps", 20)
         if len(steps) < min_steps:
-            errors.append(f"Too few resolution steps: {len(steps)} (min: {min_steps})")
+            errors.append(
+                f"Too few resolution steps: {len(steps)} (min: {min_steps})"
+            )
         elif len(steps) > max_steps:
-            errors.append(f"Too many resolution steps: {len(steps)} (max: {max_steps})")
+            errors.append(
+                f"Too many resolution steps: {len(steps)} (max: {max_steps})"
+            )
 
         # Validate each step is a string
         for i, step in enumerate(steps):
             if not isinstance(step, str):
-                errors.append(f"Resolution step {i+1} must be a string, got: {type(step).__name__}")
+                errors.append(
+                    f"Resolution step {i+1} must be a string, got: {type(step).__name__}"
+                )
 
     # Validate commands_by_step (preferred) or commands (legacy)
     commands_by_step = resolution_output.get("commands_by_step")
@@ -190,7 +212,9 @@ def validate_resolution_output(
 
             for step_idx, cmd_list in commands_by_step.items():
                 if not isinstance(cmd_list, list):
-                    errors.append(f"commands_by_step['{step_idx}'] must be a list")
+                    errors.append(
+                        f"commands_by_step['{step_idx}'] must be a list"
+                    )
                 else:
                     for cmd in cmd_list:
                         if not isinstance(cmd, str):
@@ -218,7 +242,9 @@ def validate_resolution_output(
         else:
             max_commands = config.get("max_commands", 10)
             if len(commands) > max_commands:
-                errors.append(f"Too many commands: {len(commands)} (max: {max_commands})")
+                errors.append(
+                    f"Too many commands: {len(commands)} (max: {max_commands})"
+                )
 
             # Check for dangerous commands (but allow if from runbooks via provenance)
             dangerous_commands = config.get("dangerous_commands", [])
@@ -236,7 +262,9 @@ def validate_resolution_output(
 
             for cmd in commands:
                 if not isinstance(cmd, str):
-                    errors.append(f"Command must be a string, got: {type(cmd).__name__}")
+                    errors.append(
+                        f"Command must be a string, got: {type(cmd).__name__}"
+                    )
                 else:
                     cmd_lower = cmd.lower()
                     for dangerous in dangerous_commands:
@@ -255,12 +283,16 @@ def validate_resolution_output(
     confidence = resolution_output.get("confidence")
     if confidence is not None:
         if not isinstance(confidence, (int, float)):
-            errors.append(f"confidence must be a number, got: {type(confidence).__name__}")
+            errors.append(
+                f"confidence must be a number, got: {type(confidence).__name__}"
+            )
         elif not (0.0 <= confidence <= 1.0):
             errors.append(f"confidence {confidence} out of range [0.0, 1.0]")
 
     # Validate reasoning (optional)
-    reasoning = resolution_output.get("reasoning") or resolution_output.get("rationale")
+    reasoning = resolution_output.get("reasoning") or resolution_output.get(
+        "rationale"
+    )
     if reasoning:
         max_reasoning_length = config.get("max_reasoning_length", 1000)
         if len(reasoning) > max_reasoning_length:
@@ -279,7 +311,9 @@ def validate_resolution_output(
                     errors.append(f"provenance[{i}] must be a dict")
                 else:
                     if "doc_id" not in prov or "chunk_id" not in prov:
-                        errors.append(f"provenance[{i}] must contain 'doc_id' and 'chunk_id'")
+                        errors.append(
+                            f"provenance[{i}] must contain 'doc_id' and 'chunk_id'"
+                        )
 
     # Validate rollback_plan (CRITICAL for production safety)
     rollback_plan = resolution_output.get("rollback_plan")
@@ -303,13 +337,17 @@ def validate_resolution_output(
             # New structured format: validate required fields
             rollback_steps = rollback_plan.get("steps")
             if not rollback_steps:
-                errors.append("rollback_plan.steps is required in structured format")
+                errors.append(
+                    "rollback_plan.steps is required in structured format"
+                )
             elif not isinstance(rollback_steps, list):
                 errors.append("rollback_plan.steps must be a list")
             else:
                 max_rollback = config.get("max_rollback_steps", 10)
                 if len(rollback_steps) < 1:
-                    errors.append("rollback_plan.steps must contain at least 1 step")
+                    errors.append(
+                        "rollback_plan.steps must contain at least 1 step"
+                    )
                 elif len(rollback_steps) > max_rollback:
                     errors.append(
                         f"Too many rollback steps: {len(rollback_steps)} (max: {max_rollback})"
@@ -318,13 +356,17 @@ def validate_resolution_output(
                 # Validate each rollback step is a string
                 for i, step in enumerate(rollback_steps):
                     if not isinstance(step, str):
-                        errors.append(f"rollback_plan.steps[{i}] must be a string")
+                        errors.append(
+                            f"rollback_plan.steps[{i}] must be a string"
+                        )
 
             # Validate commands_by_step (optional)
             rollback_commands = rollback_plan.get("commands_by_step")
             if rollback_commands is not None:
                 if not isinstance(rollback_commands, dict):
-                    errors.append("rollback_plan.commands_by_step must be a dict or null")
+                    errors.append(
+                        "rollback_plan.commands_by_step must be a dict or null"
+                    )
                 else:
                     for step_idx, cmd_list in rollback_commands.items():
                         if not isinstance(cmd_list, list):
@@ -342,29 +384,41 @@ def validate_resolution_output(
             preconditions = rollback_plan.get("preconditions")
             if preconditions is not None:
                 if not isinstance(preconditions, list):
-                    errors.append("rollback_plan.preconditions must be a list or null")
+                    errors.append(
+                        "rollback_plan.preconditions must be a list or null"
+                    )
                 else:
                     for i, precond in enumerate(preconditions):
                         if not isinstance(precond, str):
-                            errors.append(f"rollback_plan.preconditions[{i}] must be a string")
+                            errors.append(
+                                f"rollback_plan.preconditions[{i}] must be a string"
+                            )
 
             # Strongly recommend preconditions and triggers for all rollback plans
             if not preconditions:
-                logger.debug("Rollback plan missing preconditions (recommended for safety)")
+                logger.debug(
+                    "Rollback plan missing preconditions (recommended for safety)"
+                )
 
             triggers = rollback_plan.get("triggers")
             if not triggers or not isinstance(triggers, list):
-                logger.debug("Rollback plan missing triggers (recommended for safety)")
+                logger.debug(
+                    "Rollback plan missing triggers (recommended for safety)"
+                )
 
             # Validate triggers (optional)
             triggers = rollback_plan.get("triggers")
             if triggers is not None:
                 if not isinstance(triggers, list):
-                    errors.append("rollback_plan.triggers must be a list or null")
+                    errors.append(
+                        "rollback_plan.triggers must be a list or null"
+                    )
                 else:
                     for i, trigger in enumerate(triggers):
                         if not isinstance(trigger, str):
-                            errors.append(f"rollback_plan.triggers[{i}] must be a string")
+                            errors.append(
+                                f"rollback_plan.triggers[{i}] must be a string"
+                            )
         else:
             errors.append(
                 f"rollback_plan must be a list or dict, got: {type(rollback_plan).__name__}"
@@ -448,7 +502,9 @@ def check_destructive_operations(steps: List[str]) -> List[str]:
                     compiled_pattern = pattern
 
                 if compiled_pattern.search(step_lower):
-                    warnings.append(f"Step {i+1} may be destructive: '{step[:50]}...'")
+                    warnings.append(
+                        f"Step {i+1} may be destructive: '{step[:50]}...'"
+                    )
                     break
             except re.error:
                 # If pattern is invalid, skip it
@@ -510,7 +566,9 @@ def validate_triage_no_hallucination(
 
         # Check if classification matches retrieved evidence
         if retrieved_evidence:
-            incident_signatures = retrieved_evidence.get("incident_signatures", [])
+            incident_signatures = retrieved_evidence.get(
+                "incident_signatures", []
+            )
             runbook_metadata = retrieved_evidence.get("runbook_metadata", [])
 
             # If no evidence retrieved, but triage claims high confidence, flag it
@@ -561,7 +619,9 @@ def validate_triage_no_hallucination(
                 if isinstance(tags, dict):
                     rb_id = tags.get("runbook_id")
             if rb_id:
-                retrieved_runbook_ids.add(str(rb_id))  # Ensure string for comparison
+                retrieved_runbook_ids.add(
+                    str(rb_id)
+                )  # Ensure string for comparison
 
         # Check for references to non-retrieved evidence
         for sig_id in incident_sig_ids:
@@ -586,7 +646,9 @@ def validate_triage_no_hallucination(
     return len(errors) == 0, errors
 
 
-def validate_triage_retrieval_boundaries(retrieved_evidence: Dict) -> Tuple[bool, List[str]]:
+def validate_triage_retrieval_boundaries(
+    retrieved_evidence: Dict,
+) -> Tuple[bool, List[str]]:
     """
     Validate triage retrieval respects architecture boundaries.
 

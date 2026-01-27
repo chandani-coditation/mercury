@@ -14,13 +14,17 @@ Usage:
   python scripts/data/cleanup_data.py --yes --documents --chunks
   python scripts/data/cleanup_data.py --yes --incidents --feedback
 """
+
 import sys
 import os
 import argparse
 from typing import List
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+)
 
 try:
     from ai_service.core import get_logger, setup_logging
@@ -57,7 +61,9 @@ def build_statements(targets: List[str]) -> List[str]:
     if "incidents" in targets:
         ordered.append("TRUNCATE TABLE incidents RESTART IDENTITY CASCADE;")
     if "incident_signatures" in targets:
-        ordered.append("TRUNCATE TABLE incident_signatures RESTART IDENTITY CASCADE;")
+        ordered.append(
+            "TRUNCATE TABLE incident_signatures RESTART IDENTITY CASCADE;"
+        )
     if "runbook_steps" in targets:
         ordered.append("TRUNCATE TABLE runbook_steps RESTART IDENTITY CASCADE;")
     if "agent_state" in targets:
@@ -83,7 +89,9 @@ def cleanup_db(targets: List[str], dry_run: bool = False) -> None:
                 logger.info(f"Executing: {s.strip()}")
                 cur.execute(s)
             conn.commit()
-            logger.info(f"\n Cleanup complete. Deleted all data from: {', '.join(targets)}")
+            logger.info(
+                f"\n Cleanup complete. Deleted all data from: {', '.join(targets)}"
+            )
     except Exception as e:
         logger.error(f"\n Cleanup failed: {type(e).__name__}: {e}")
         raise
@@ -106,12 +114,26 @@ Examples:
   python scripts/data/cleanup_data.py --yes --documents --chunks
         """,
     )
-    parser.add_argument("--yes", action="store_true", help="Confirm destructive action")
-    parser.add_argument("--dry-run", action="store_true", help="Show statements without executing")
-    parser.add_argument("--documents", action="store_true", help="Wipe documents table")
-    parser.add_argument("--chunks", action="store_true", help="Wipe chunks table")
-    parser.add_argument("--incidents", action="store_true", help="Wipe incidents table")
-    parser.add_argument("--feedback", action="store_true", help="Wipe feedback table")
+    parser.add_argument(
+        "--yes", action="store_true", help="Confirm destructive action"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show statements without executing",
+    )
+    parser.add_argument(
+        "--documents", action="store_true", help="Wipe documents table"
+    )
+    parser.add_argument(
+        "--chunks", action="store_true", help="Wipe chunks table"
+    )
+    parser.add_argument(
+        "--incidents", action="store_true", help="Wipe incidents table"
+    )
+    parser.add_argument(
+        "--feedback", action="store_true", help="Wipe feedback table"
+    )
 
     args = parser.parse_args()
 

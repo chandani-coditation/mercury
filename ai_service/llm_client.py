@@ -46,7 +46,9 @@ def _call_llm_with_retry(handler, request_params, agent_type: str, model: str):
     return handler.chat_completions_create(request_params, agent_type=agent_type)
 
 
-def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -> dict:
+def call_llm_for_triage(
+    alert: dict, triage_evidence: dict, model: str = None
+) -> dict:
     """
     Call LLM to triage an alert.
 
@@ -68,7 +70,9 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
     # Use provided model or config, with fallback
     model = model or triage_config.get("model", "gpt-4-turbo-preview")
     temperature = triage_config.get("temperature", 0.3)
-    system_prompt = triage_config.get("system_prompt", TRIAGE_SYSTEM_PROMPT_DEFAULT)
+    system_prompt = triage_config.get(
+        "system_prompt", TRIAGE_SYSTEM_PROMPT_DEFAULT
+    )
     response_format_type = triage_config.get("response_format", "json_object")
     max_tokens = triage_config.get("max_tokens")
 
@@ -113,7 +117,9 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
             )
 
     context_text = (
-        "\n\n---\n\n".join(context_parts) if context_parts else "No matching evidence found."
+        "\n\n---\n\n".join(context_parts)
+        if context_parts
+        else "No matching evidence found."
     )
 
     prompt = TRIAGE_USER_PROMPT_TEMPLATE.format(
@@ -178,8 +184,12 @@ def call_llm_for_resolution(
 
     model = model or resolution_config.get("model", "gpt-4-turbo-preview")
     temperature = resolution_config.get("temperature", 0.2)
-    system_prompt = resolution_config.get("system_prompt", RESOLUTION_SYSTEM_PROMPT_DEFAULT)
-    response_format_type = resolution_config.get("response_format", "json_object")
+    system_prompt = resolution_config.get(
+        "system_prompt", RESOLUTION_SYSTEM_PROMPT_DEFAULT
+    )
+    response_format_type = resolution_config.get(
+        "response_format", "json_object"
+    )
     max_tokens = resolution_config.get("max_tokens")
 
     context_parts = []
@@ -220,7 +230,9 @@ def call_llm_for_resolution(
         request_params["max_tokens"] = max_tokens
 
     try:
-        response = _call_llm_with_retry(handler, request_params, "resolution", model)
+        response = _call_llm_with_retry(
+            handler, request_params, "resolution", model
+        )
 
         usage = response.usage
         if usage:
@@ -232,5 +244,7 @@ def call_llm_for_resolution(
         return result
 
     except Exception as e:
-        logger.error(f"LLM resolution failed after retries: {str(e)}", exc_info=True)
+        logger.error(
+            f"LLM resolution failed after retries: {str(e)}", exc_info=True
+        )
         raise

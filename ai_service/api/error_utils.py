@@ -36,16 +36,22 @@ def format_user_friendly_error(error: Exception, error_type: str = None) -> str:
             "Please check your input data and ensure all required fields are provided correctly."
         )
     elif error_type == "not_found":
-        hints.append("The requested resource may not exist or may have been deleted.")
+        hints.append(
+            "The requested resource may not exist or may have been deleted."
+        )
     elif error_type == "permission_denied" or error_type == "approval_required":
-        hints.append("This operation requires approval. Please review and approve the request.")
+        hints.append(
+            "This operation requires approval. Please review and approve the request."
+        )
 
     # Content-based hints (more specific)
     if "openai" in lower and ("api key" in lower or "authentication" in lower):
         hints.append("Verify OPENAI_API_KEY is set and restart the AI service.")
 
     if "rate limit" in lower or "429" in lower:
-        hints.append("Wait a few seconds before retrying or reduce concurrent requests.")
+        hints.append(
+            "Wait a few seconds before retrying or reduce concurrent requests."
+        )
 
     if (
         "no historical data" in lower
@@ -62,19 +68,31 @@ def format_user_friendly_error(error: Exception, error_type: str = None) -> str:
         or "connection" in lower
         and "failed" in lower
     ):
-        hints.append("Ensure PostgreSQL is running and POSTGRES_HOST/PORT are correct.")
+        hints.append(
+            "Ensure PostgreSQL is running and POSTGRES_HOST/PORT are correct."
+        )
 
     if "timeout" in lower:
-        hints.append("Try again shortly or increase timeout settings if the workload is large.")
+        hints.append(
+            "Try again shortly or increase timeout settings if the workload is large."
+        )
 
     if "embedding" in lower and "failed" in lower:
-        hints.append("Check OpenAI API status and ensure embeddings model is accessible.")
+        hints.append(
+            "Check OpenAI API status and ensure embeddings model is accessible."
+        )
 
-    if "incident" in lower and ("not found" in lower or "does not exist" in lower):
-        hints.append("Verify the incident_id is correct and the incident exists in the database.")
+    if "incident" in lower and (
+        "not found" in lower or "does not exist" in lower
+    ):
+        hints.append(
+            "Verify the incident_id is correct and the incident exists in the database."
+        )
 
     if "triage" in lower and ("required" in lower or "first" in lower):
-        hints.append("Please triage the alert first before requesting resolution.")
+        hints.append(
+            "Please triage the alert first before requesting resolution."
+        )
 
     # Format final message consistently
     if hints:

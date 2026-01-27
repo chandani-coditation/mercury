@@ -31,4 +31,5 @@ jobs:
       - name: Run Python Black
         uses: rodrigogiraoserrao/python-black-check@v3.0
         with:
-          exclude: "(/*.html|/*.mo|/*.po|/*.png|/*.rst|/*.tf|/*.bash|/*.sh)"
+          # Ignore virtualenvs and non-source files
+          exclude: "(venv|\\.venv|/*.html|/*.mo|/*.po|/*.png|/*.rst|/*.tf|/*.bash|/*.sh)"

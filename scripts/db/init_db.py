@@ -4,7 +4,10 @@ import sys
 import os
 
 # Add project root to path (go up 3 levels: scripts/db -> scripts -> project root)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+)
 
 try:
     from ai_service.core import get_logger, setup_logging
@@ -32,7 +35,9 @@ def init_schema():
 
     # Read and execute schema file
     schema_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "db", "schema.sql"
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "db",
+        "schema.sql",
     )
     with open(schema_path, "r") as f:
         schema_sql = f.read()

@@ -8,6 +8,7 @@ Usage:
     python scripts/data/ingest_runbooks.py --dir runbooks
     python scripts/data/ingest_runbooks.py --file "runbooks/Runbook - Database Alerts.docx"
 """
+
 import argparse
 import sys
 import uuid
@@ -29,7 +30,6 @@ from ingestion.models import IngestRunbook
 import requests
 import json
 
-
 # Default ingestion service URL
 INGESTION_SERVICE_URL = "http://localhost:8002"
 
@@ -43,7 +43,9 @@ def clean_text(text: str) -> str:
     text = text.replace("¶", "")  # Remove paragraph markers
     text = text.replace("", "")  # Remove zero-width spaces
     text = text.replace("\u200b", "")  # Remove zero-width spaces (Unicode)
-    text = text.replace("\xa0", " ")  # Replace non-breaking spaces with regular spaces
+    text = text.replace(
+        "\xa0", " "
+    )  # Replace non-breaking spaces with regular spaces
 
     # Remove markdown-style heading markers at the start
     text = text.lstrip("#").strip()
@@ -105,7 +107,8 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                 current_section == "remediation"
                 and ":" in text
                 and len(text.split(":")) == 2
-                and len(text.split(":")[1].strip()) > 10  # Has meaningful action text
+                and len(text.split(":")[1].strip())
+                > 10  # Has meaningful action text
             )
 
             if not is_remediation_step:
@@ -122,10 +125,14 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                     "remediation" in text_lower
                     or "suggest remediation" in text_lower
                     or "remedy" in text_lower
-                    or ("resolution" in text_lower and "output" not in text_lower)
+                    or (
+                        "resolution" in text_lower and "output" not in text_lower
+                    )
                     or "mitigation" in text_lower
                     or "corrective action" in text_lower
-                    or ("fix" in text_lower and len(text) > 10)  # Avoid false positives
+                    or (
+                        "fix" in text_lower and len(text) > 10
+                    )  # Avoid false positives
                     or ("solution" in text_lower and len(text) > 10)
                 ):
                     current_section = "remediation"
@@ -202,7 +209,10 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
                 elif current_section == "prerequisites":
                     prerequisites.append(text)
                     full_content_parts.append(f"  • {text}\n")
-                elif current_section == "rollback" or current_section == "rollback_steps":
+                elif (
+                    current_section == "rollback"
+                    or current_section == "rollback_steps"
+                ):
                     rollback_steps.append(text)
                     full_content_parts.append(f"  • {text}\n")
                 elif current_section == "rollback_commands":
@@ -221,7 +231,9 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
             # Extract text from tables
             table = Table(element, doc)
             for row in table.rows:
-                row_text = " | ".join([clean_text(cell.text) for cell in row.cells])
+                row_text = " | ".join(
+                    [clean_text(cell.text) for cell in row.cells]
+                )
                 if row_text:
                     full_content_parts.append(f"{row_text}\n")
 
@@ -237,11 +249,17 @@ def extract_text_from_docx(docx_path: Path) -> Dict[str, any]:
         rollback_procedures = {
             "steps": rollback_steps,
             "commands": rollback_commands if rollback_commands else None,
-            "preconditions": rollback_preconditions if rollback_preconditions else None,
+            "preconditions": (
+                rollback_preconditions if rollback_preconditions else None
+            ),
             "triggers": rollback_triggers if rollback_triggers else None,
         }
         # If no structured data, fall back to text
-        if not rollback_commands and not rollback_preconditions and not rollback_triggers:
+        if (
+            not rollback_commands
+            and not rollback_preconditions
+            and not rollback_triggers
+        ):
             rollback_procedures = "\n".join(rollback_steps)
 
     return {
@@ -268,7 +286,9 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
     component = None
 
     # Try to extract from filename with config-driven pattern matching
-    filename_clean = docx_path.stem.replace("Runbook -", "").replace("Runbook –", "").strip()
+    filename_clean = (
+        docx_path.stem.replace("Runbook -", "").replace("Runbook –", "").strip()
+    )
     filename_lower = filename_clean.lower()
 
     # Load runbook filename patterns from config
@@ -278,9 +298,13 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
         if mapping_path.exists():
             with open(mapping_path, "r") as f:
                 service_component_mapping = json.load(f)
-            runbook_patterns_config = service_component_mapping.get("runbook_filename_patterns", {})
+            runbook_patterns_config = service_component_mapping.get(
+                "runbook_filename_patterns", {}
+            )
             patterns = runbook_patterns_config.get("patterns", [])
-            default_service = runbook_patterns_config.get("default_service", "General")
+            default_service = runbook_patterns_config.get(
+                "default_service", "General"
+            )
             component_suffixes = runbook_patterns_config.get(
                 "component_suffixes_to_remove", [" Alerts", " Alert"]
             )
@@ -300,7 +324,9 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
         # Check if any keyword matches in filename
         if any(keyword in filename_lower for keyword in keywords):
             service = pattern.get("service", default_service)
-            component_extraction = pattern.get("component_extraction", "remove_keywords")
+            component_extraction = pattern.get(
+                "component_extraction", "remove_keywords"
+            )
 
             if component_extraction == "use_full_filename":
                 component = filename_clean
@@ -373,7 +399,9 @@ def map_docx_to_runbook(docx_path: Path, field_mappings: Dict) -> IngestRunbook:
         component=component,
         content=extracted["content"],
         steps=extracted["steps"] if extracted["steps"] else None,
-        prerequisites=extracted["prerequisites"] if extracted["prerequisites"] else None,
+        prerequisites=(
+            extracted["prerequisites"] if extracted["prerequisites"] else None
+        ),
         rollback_procedures=extracted["rollback_procedures"],
         tags=tags,
         metadata=metadata,
@@ -413,7 +441,9 @@ def ingest_docx_file(
 ) -> tuple[int, int]:
     """Ingest a single DOCX file."""
     logger = get_logger(__name__)
-    file_info = f"[{file_num}/{total_files}] " if file_num and total_files else ""
+    file_info = (
+        f"[{file_num}/{total_files}] " if file_num and total_files else ""
+    )
     logger.info(f"{file_info}Processing: {file_path.name}")
 
     try:
@@ -437,8 +467,12 @@ def main():
     setup_logging(log_level="INFO", service_name="ingestion_script")
     logger = get_logger(__name__)
 
-    parser = argparse.ArgumentParser(description="Ingest runbooks from DOCX files")
-    parser.add_argument("--dir", type=str, help="Directory containing DOCX files")
+    parser = argparse.ArgumentParser(
+        description="Ingest runbooks from DOCX files"
+    )
+    parser.add_argument(
+        "--dir", type=str, help="Directory containing DOCX files"
+    )
     parser.add_argument("--file", type=str, help="Single DOCX file to ingest")
     parser.add_argument(
         "--ingestion-url",
@@ -473,7 +507,9 @@ def main():
             logger.error(f" File is not a DOCX file: {file_path}")
             sys.exit(1)
 
-        success, errors = ingest_docx_file(file_path, runbook_mappings, args.ingestion_url)
+        success, errors = ingest_docx_file(
+            file_path, runbook_mappings, args.ingestion_url
+        )
         total_success += success
         total_errors += errors
 
@@ -491,12 +527,18 @@ def main():
 
         for idx, docx_file in enumerate(docx_files, start=1):
             success, errors = ingest_docx_file(
-                docx_file, runbook_mappings, args.ingestion_url, idx, len(docx_files)
+                docx_file,
+                runbook_mappings,
+                args.ingestion_url,
+                idx,
+                len(docx_files),
             )
             total_success += success
             total_errors += errors
 
-    logger.info(f"Ingestion Summary: {total_success} successful, {total_errors} errors")
+    logger.info(
+        f"Ingestion Summary: {total_success} successful, {total_errors} errors"
+    )
 
     if total_success > 0:
         try:
@@ -506,30 +548,46 @@ def main():
                 cur = conn.cursor()
 
                 # Count runbook documents
-                cur.execute("SELECT COUNT(*) FROM documents WHERE doc_type = 'runbook';")
+                cur.execute(
+                    "SELECT COUNT(*) FROM documents WHERE doc_type = 'runbook';"
+                )
                 doc_result = cur.fetchone()
-                doc_count = doc_result["count"] if isinstance(doc_result, dict) else doc_result[0]
+                doc_count = (
+                    doc_result["count"]
+                    if isinstance(doc_result, dict)
+                    else doc_result[0]
+                )
 
                 # Count runbook steps
                 cur.execute("SELECT COUNT(*) FROM runbook_steps;")
                 step_result = cur.fetchone()
                 step_count = (
-                    step_result["count"] if isinstance(step_result, dict) else step_result[0]
+                    step_result["count"]
+                    if isinstance(step_result, dict)
+                    else step_result[0]
                 )
 
                 # Count runbook steps with embeddings
-                cur.execute("SELECT COUNT(*) FROM runbook_steps WHERE embedding IS NOT NULL;")
+                cur.execute(
+                    "SELECT COUNT(*) FROM runbook_steps WHERE embedding IS NOT NULL;"
+                )
                 embed_result = cur.fetchone()
                 embed_count = (
-                    embed_result["count"] if isinstance(embed_result, dict) else embed_result[0]
+                    embed_result["count"]
+                    if isinstance(embed_result, dict)
+                    else embed_result[0]
                 )
 
                 cur.close()
 
             if embed_count == step_count and step_count > 0:
-                logger.info(f"Verification: {step_count} runbook steps with embeddings")
+                logger.info(
+                    f"Verification: {step_count} runbook steps with embeddings"
+                )
             elif embed_count < step_count:
-                logger.warning(f"Warning: {step_count - embed_count} steps missing embeddings")
+                logger.warning(
+                    f"Warning: {step_count - embed_count} steps missing embeddings"
+                )
             else:
                 logger.warning("Warning: No runbook steps found in database")
 
@@ -537,7 +595,9 @@ def main():
             logger.warning(f"Could not verify embeddings: {str(e)}")
 
     if total_errors > 0:
-        logger.error(f"Completed with {total_errors} error(s). Check logs for details.")
+        logger.error(
+            f"Completed with {total_errors} error(s). Check logs for details."
+        )
         sys.exit(1)
 
 

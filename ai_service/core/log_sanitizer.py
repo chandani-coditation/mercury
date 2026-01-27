@@ -3,7 +3,6 @@
 import re
 from typing import Any, Dict, List, Optional
 
-
 # Patterns for sensitive data that should be redacted
 SENSITIVE_PATTERNS = [
     # API keys

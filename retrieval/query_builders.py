@@ -150,7 +150,9 @@ class HybridSearchQueryBuilder:
         # Component params (3 params)
         params.append(component_val)  # IS NULL check
         params.append(component_val if component_val else "")  # Exact match
-        params.append(f"%{component_val}%" if component_val else "")  # Partial match
+        params.append(
+            f"%{component_val}%" if component_val else ""
+        )  # Partial match
         return params
 
     @staticmethod
@@ -178,16 +180,24 @@ class HybridSearchQueryBuilder:
         # Keep None for IS NULL check (no type cast needed in SQL)
         params.append(service_val)  # IS NULL check
         # Use empty string instead of None for text comparisons to avoid type inference issues
-        params.append(service_val if service_val else "")  # Exact match (service field)
-        params.append(service_val if service_val else "")  # Exact match (affected_service field)
-        params.append(f"%{service_val}%" if service_val else "")  # Partial match (service field)
+        params.append(
+            service_val if service_val else ""
+        )  # Exact match (service field)
+        params.append(
+            service_val if service_val else ""
+        )  # Exact match (affected_service field)
+        params.append(
+            f"%{service_val}%" if service_val else ""
+        )  # Partial match (service field)
         params.append(
             f"%{service_val}%" if service_val else ""
         )  # Partial match (affected_service field)
         # Component params (3 params)
         params.append(component_val)  # IS NULL check
         params.append(component_val if component_val else "")  # Exact match
-        params.append(f"%{component_val}%" if component_val else "")  # Partial match
+        params.append(
+            f"%{component_val}%" if component_val else ""
+        )  # Partial match
         return params
 
     @staticmethod
@@ -233,7 +243,9 @@ class HybridSearchQueryBuilder:
         Returns:
             Limit to use for vector and fulltext candidate collection
         """
-        return max(final_limit * HybridSearchQueryBuilder.RRF_CANDIDATE_MULTIPLIER, 20)
+        return max(
+            final_limit * HybridSearchQueryBuilder.RRF_CANDIDATE_MULTIPLIER, 20
+        )
 
     @staticmethod
     def validate_parameter_count(

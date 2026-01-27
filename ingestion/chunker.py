@@ -55,9 +55,13 @@ def chunk_text(
     target_tokens = target_tokens or chunking_config.get("target_tokens", 250)
     overlap = overlap or chunking_config.get("overlap", 30)
     safe_max_tokens_config = chunking_config.get("safe_max_tokens", 3000)
-    large_paragraph_threshold = chunking_config.get("large_paragraph_threshold", 100000)
+    large_paragraph_threshold = chunking_config.get(
+        "large_paragraph_threshold", 100000
+    )
 
-    encoding = tiktoken.get_encoding("cl100k_base")  # Used by text-embedding-3-small
+    encoding = tiktoken.get_encoding(
+        "cl100k_base"
+    )  # Used by text-embedding-3-small
 
     # Safety limit: ensure chunks never exceed embedding model limit (8191 tokens)
     # We use a conservative limit from config (default 3000) to account for headers and safety margin
@@ -91,9 +95,12 @@ def chunk_text(
             # If still too large, split by character chunks
             if len(sentences) == 1 and para_tokens > SAFE_MAX_TOKENS:
                 # Split into character-based chunks as last resort
-                char_chunk_size = SAFE_MAX_TOKENS * 4  # Rough estimate: ~4 chars per token
+                char_chunk_size = (
+                    SAFE_MAX_TOKENS * 4
+                )  # Rough estimate: ~4 chars per token
                 sentences = [
-                    para[j : j + char_chunk_size] for j in range(0, len(para), char_chunk_size)
+                    para[j : j + char_chunk_size]
+                    for j in range(0, len(para), char_chunk_size)
                 ]
 
             for sentence in sentences:
@@ -106,7 +113,10 @@ def chunk_text(
                     for k in range(0, len(sentence), char_chunk_size):
                         sub_chunk = sentence[k : k + char_chunk_size]
                         sub_tokens = len(encoding.encode(sub_chunk))
-                        if current_tokens + sub_tokens > SAFE_MAX_TOKENS and current_chunk:
+                        if (
+                            current_tokens + sub_tokens > SAFE_MAX_TOKENS
+                            and current_chunk
+                        ):
                             chunk_text = " ".join(current_chunk)
                             chunks.append(chunk_text)
                             current_chunk = [sub_chunk]
@@ -116,7 +126,10 @@ def chunk_text(
                             current_tokens += sub_tokens
                     continue
 
-                if current_tokens + sent_tokens > SAFE_MAX_TOKENS and current_chunk:
+                if (
+                    current_tokens + sent_tokens > SAFE_MAX_TOKENS
+                    and current_chunk
+                ):
                     # Save current chunk
                     chunk_text = " ".join(current_chunk)
                     chunks.append(chunk_text)
