@@ -29,6 +29,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Python Black
-        uses: rodrigogiraoserrao/python-black-check@v4.0
+        uses: rodrigogiraoserrao/python-black-check@v3.0
         with:
           exclude: "(/*.html|/*.mo|/*.po|/*.png|/*.rst|/*.tf|/*.bash|/*.sh)"
