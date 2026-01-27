@@ -111,6 +111,13 @@ def call_llm_for_triage(alert: dict, triage_evidence: dict, model: str = None) -
                 f"Failure Types: {', '.join(failure_types) if failure_types else 'None'}\n"
                 f"Last Reviewed: {rb.get('last_reviewed_at', 'Unknown')}"
             )
+    
+    # Add historical logs if available (similar errors from previous tickets)
+    historical_logs = triage_evidence.get("historical_logs", [])
+    if historical_logs:
+        context_parts.append("\n=== HISTORICAL LOGS (SIMILAR ERRORS FROM PAST TICKETS) ===")
+        for log in historical_logs[:5]:  # Top 5 similar historical logs
+            context_parts.append(log.get("content", ""))
 
     context_text = (
         "\n\n---\n\n".join(context_parts) if context_parts else "No matching evidence found."

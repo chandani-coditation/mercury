@@ -88,28 +88,13 @@ def create_triage_graph():
 
         # Apply retrieval preferences
         context_chunks = apply_retrieval_preferences(context_chunks, retrieval_cfg)
-
-        # Optionally retrieve logs from InfluxDB if configured
-        try:
-            from retrieval.influxdb_client import get_influxdb_client
-
-            influxdb_client = get_influxdb_client()
-            if influxdb_client.is_configured():
-                logs = influxdb_client.get_logs_for_context(
-                    query_text=query_text, service=service_val, component=component_val, limit=5
-                )
-                for log_content in logs:
-                    if log_content:
-                        context_chunks.append(
-                            {
-                                "chunk_id": f"influxdb_log_{len(context_chunks)}",
-                                "content": f"[Log Entry]\n{log_content}",
-                                "doc_type": "log",
-                                "source": "influxdb",
-                            }
-                        )
-        except Exception as e:
-            logger.debug(f"InfluxDB log retrieval not available or failed: {str(e)}")
+        
+        # Add ticket logs and historical logs as context chunks if available
+        historical_log_chunks = alert.get("historical_log_chunks", [])
+        
+        if historical_log_chunks:
+            context_chunks.extend(historical_log_chunks)
+            logger.info(f"Added {len(historical_log_chunks)} historical log chunks to context")
 
         state["context_chunks"] = context_chunks
         return state

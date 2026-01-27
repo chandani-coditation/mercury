@@ -695,9 +695,20 @@ def _triage_agent_internal(alert: Dict[str, Any]) -> Dict[str, Any]:
 
     incident_signatures = triage_evidence.get("incident_signatures", [])
     runbook_metadata = triage_evidence.get("runbook_metadata", [])
+    
+    # Add ticket logs to triage evidence if available
+    historical_log_chunks = alert.get("historical_log_chunks", [])
+
+    if historical_log_chunks:
+        triage_evidence["historical_logs"] = historical_log_chunks
+        logger.info(f"Added {len(historical_log_chunks)} historical log chunks to triage evidence")
 
     evidence_warning = None
-    has_evidence = len(incident_signatures) > 0 or len(runbook_metadata) > 0
+    has_evidence = (
+        len(incident_signatures) > 0 or 
+        len(runbook_metadata) > 0 or 
+        len(historical_log_chunks) > 0
+    )
     evidence_status = "success" if has_evidence else "no_evidence"
 
     if not has_evidence:

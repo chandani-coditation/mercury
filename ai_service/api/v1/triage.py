@@ -9,6 +9,7 @@ from ai_service.agents.triager_state import triage_agent_state
 from ai_service.core import get_logger, ValidationError
 from ai_service.api.error_utils import format_user_friendly_error
 from ai_service.services import IncidentService
+from ai_service.utils.log_processing import process_ticket_logs_for_triage
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -77,6 +78,9 @@ async def triage(
         if "affected_services" not in alert_dict and hasattr(alert, "__dict__"):
             if hasattr(alert, "affected_services"):
                 logger.debug(f"Alert.affected_services attribute: {alert.affected_services}")
+
+        # Process and add ticket logs to alert context for triage
+        process_ticket_logs_for_triage(alert_dict)
 
         # Call triager agent (LangGraph, state-based, or synchronous)
         if use_lg:

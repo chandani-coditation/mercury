@@ -97,6 +97,13 @@ async def _triage_agent_state_internal(
         fulltext_weight=fulltext_weight,
     )
     context_chunks = apply_retrieval_preferences(context_chunks, retrieval_cfg)
+    
+    # Add ticket logs and historical logs as context chunks if available
+    historical_log_chunks = alert.get("historical_log_chunks", [])
+    
+    if historical_log_chunks:
+        context_chunks.extend(historical_log_chunks)
+        logger.info(f"Added {len(historical_log_chunks)} historical log chunks to context")
 
     # Update state: context retrieved
     state.current_step = AgentStep.CONTEXT_RETRIEVED
