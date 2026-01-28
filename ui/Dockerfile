@@ -17,7 +17,8 @@ COPY . .
 # Create non-root user - use UID/GID 10001 to avoid conflicts with existing users
 RUN addgroup -g 10001 appuser && \
     adduser -D -u 10001 -G appuser appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app
 USER appuser
 
 # Expose Vite dev server port

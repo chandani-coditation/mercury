@@ -70,7 +70,7 @@ jobs:
 
       - name: Prepare logs directory
         run: |
-          mkdir -p logs && chmod 755 logs
+          mkdir -p logs && chmod 777 logs
 
       - name: Build and start services
         run: |

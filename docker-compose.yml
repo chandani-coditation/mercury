@@ -23,6 +23,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: noc-ai-service
+    user: "1000:1000"
     env_file:
       - ${ENV_FILE:-.env}
     environment:
@@ -44,6 +45,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: noc-ai-ingestion
+    user: "1000:1000"
     command: uvicorn ingestion.main:app --host 0.0.0.0 --port 8002
     env_file:
       - ${ENV_FILE:-.env}
@@ -66,6 +68,7 @@ services:
       context: ./ui
       dockerfile: Dockerfile
     container_name: noc-ai-frontend
+    user: "10001:10001"
     env_file:
       - ${ENV_FILE:-.env}
     ports:
@@ -74,9 +77,6 @@ services:
       - ai-service
     networks:
       - noc-ai-network
-    volumes:
-      - ./ui:/app
-      - /app/node_modules
     restart: unless-stopped
 
 volumes:
