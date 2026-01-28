@@ -8,12 +8,20 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci
 
+# Install wget for healthcheck
+RUN apk add --no-cache wget
+
 # Copy source code
 COPY . .
 
-# Create non-root user
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser && \
+# Create non-root user (use different GID/UID if 1000 is already taken)
+RUN if getent group 1000 > /dev/null 2>&1; then \
+        addgroup -g 1001 appuser; \
+        adduser -D -u 1001 -G appuser appuser; \
+    else \
+        addgroup -g 1000 appuser; \
+        adduser -D -u 1000 -G appuser appuser; \
+    fi && \
     chown -R appuser:appuser /app
 USER appuser
 
