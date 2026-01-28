@@ -15,11 +15,11 @@ RUN apk add --no-cache wget
 COPY . .
 
 # Create non-root user (use different GID/UID if 1000 is already taken)
-RUN if getent group 1000 > /dev/null 2>&1; then \
-        addgroup -g 1001 appuser; \
+# Try GID 1000 first, fall back to 1001 if it exists
+RUN if ! addgroup -g 1000 appuser 2>/dev/null; then \
+        addgroup -g 1001 appuser && \
         adduser -D -u 1001 -G appuser appuser; \
     else \
-        addgroup -g 1000 appuser; \
         adduser -D -u 1000 -G appuser appuser; \
     fi && \
     chown -R appuser:appuser /app
